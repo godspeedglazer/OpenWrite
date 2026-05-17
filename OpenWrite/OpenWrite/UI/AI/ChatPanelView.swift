@@ -123,13 +123,13 @@ struct AIActivityIndicator: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let message = state.statusMessage {
                         Text(message)
-                            .font(.caption)
+                            .font(OWTypography.caption)
                             .foregroundStyle(stateLabelColor)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if let retrievalSummary, state == .retrieving || state == .streaming {
                         Text(retrievalSummary)
-                            .font(.caption2)
+                            .font(OWTypography.caption2)
                             .foregroundStyle(.secondary)
                     }
                     if state == .streaming {
@@ -171,7 +171,7 @@ private struct StreamingDots: View {
                     .frame(width: 5, height: 5)
             }
             Text("Receiving tokens")
-                .font(.caption2)
+                .font(OWTypography.caption2)
                 .foregroundStyle(.tertiary)
         }
         .onAppear { startCycle() }
@@ -216,19 +216,22 @@ struct ChatPanelView: View {
     }
 
     private var agentPickerPanel: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
+        VStack(spacing: 0) {
+            OWAIPanelHeader(title: "Chat", compact: true)
+            ScrollView {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 Text("Choose an agent")
-                    .font(DesignTokens.Typography.callout.weight(.semibold))
-                Text("Each agent uses your local index with different retrieval settings.")
-                    .font(DesignTokens.Typography.caption)
-                    .foregroundStyle(DesignTokens.Color.textTertiary)
+                    .font(OWTypography.calloutEmphasis)
+                    Text("Each agent uses your local index with different retrieval settings.")
+                        .font(OWTypography.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
 
-                ForEach(AgentRegistry.pickerAgents) { agent in
-                    agentRow(agent)
+                    ForEach(AgentRegistry.pickerAgents) { agent in
+                        agentRow(agent)
+                    }
                 }
+                .padding(DesignTokens.Spacing.spacing3)
             }
-            .padding(DesignTokens.Spacing.spacing3)
         }
     }
 
@@ -245,10 +248,10 @@ struct ChatPanelView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(agent.name)
-                        .font(DesignTokens.Typography.callout.weight(.medium))
+                        .font(OWTypography.calloutEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                     Text(agentHelp(agent))
-                        .font(DesignTokens.Typography.caption)
+                        .font(OWTypography.caption)
                         .foregroundStyle(DesignTokens.Color.textSecondary)
                         .multilineTextAlignment(.leading)
                 }
@@ -271,7 +274,6 @@ struct ChatPanelView: View {
     private var conversationPanel: some View {
         VStack(spacing: 0) {
             conversationHeader
-            Divider()
             AIActivityIndicator(
                 state: aiServices.activityState,
                 retrievalSummary: model.retrievalSummary
@@ -286,45 +288,49 @@ struct ChatPanelView: View {
     }
 
     private var conversationHeader: some View {
-        HStack(spacing: 8) {
-            if navigation.current != .chatThread {
-                Button {
-                    navigation.closeChatThread()
-                } label: {
-                    OWIconView(icon: .back, size: 14)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(DesignTokens.Color.textSecondary)
-                .help("Back to agents")
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
+        OWAIPanelHeader(
+            title: "Ask vault",
+            canGoBack: showsInPanelBack,
+            backAccessibilityLabel: "Back to agents",
+            onBack: showsInPanelBack ? { navigation.closeChatThread() } : nil,
+            compact: true,
+            center: {
+                VStack(alignment: .leading, spacing: 2) {
                 Text("Ask vault")
-                    .font(DesignTokens.Typography.callout.weight(.semibold))
-                HStack(spacing: 6) {
-                    AgentPickerView(selectedAgentID: $aiServices.selectedAgentID)
-                    Text(aiServices.lmConfig.chatModelDisplay)
-                        .font(DesignTokens.Typography.caption)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
-                        .lineLimit(1)
+                    .font(OWTypography.calloutEmphasis)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    HStack(spacing: 6) {
+                        AgentPickerView(selectedAgentID: $aiServices.selectedAgentID)
+                        Text(aiServices.lmConfig.chatModelDisplay)
+                            .font(OWTypography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                            .lineLimit(1)
+                    }
+                }
+            },
+            trailing: {
+                HStack(spacing: 8) {
+                    if aiServices.activityState != .idle {
+                        Text(aiServices.activityState.shortLabel)
+                            .font(OWTypography.caption)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(DesignTokens.Color.surface)
+                            .clipShape(Capsule())
+                    }
+                    Button("Clear") { model.clear(services: aiServices) }
+                        .font(OWTypography.caption)
+                        .disabled(model.messages.isEmpty)
                 }
             }
-            Spacer()
-            if aiServices.activityState != .idle {
-                Text(aiServices.activityState.shortLabel)
-                    .font(DesignTokens.Typography.caption)
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(DesignTokens.Color.surface)
-                    .clipShape(Capsule())
-            }
-            Button("Clear") { model.clear(services: aiServices) }
-                .font(DesignTokens.Typography.caption)
-                .disabled(model.messages.isEmpty)
-        }
-        .padding(.horizontal, DesignTokens.Spacing.spacing3)
-        .padding(.vertical, DesignTokens.Spacing.spacing2)
+        )
+    }
+
+    /// Strip toolbar owns back at root; full-screen `.chatThread` uses strip back only.
+    private var showsInPanelBack: Bool {
+        navigation.chatPanelScreen == .conversation
+            && navigation.current == .chatThread
     }
 
     private var messageList: some View {
@@ -336,9 +342,9 @@ struct ChatPanelView: View {
                             OWIconView(icon: .sparkles, size: 22)
                                 .foregroundStyle(DesignTokens.Color.textTertiary)
                             Text("Ask about your notes")
-                                .font(DesignTokens.Typography.callout.weight(.medium))
+                                .font(OWTypography.calloutEmphasis)
                             Text("Answers cite indexed chunks on this Mac.")
-                                .font(DesignTokens.Typography.caption)
+                                .font(OWTypography.caption)
                                 .foregroundStyle(DesignTokens.Color.textTertiary)
                                 .multilineTextAlignment(.center)
                         }
@@ -382,6 +388,7 @@ struct ChatPanelView: View {
                         ProgressView()
                             .controlSize(.small)
                         Text(aiServices.activityState.statusMessage ?? "Waiting for model…")
+                            .font(OWTypography.callout)
                             .foregroundStyle(.secondary)
                     }
                 } else {
@@ -390,7 +397,7 @@ struct ChatPanelView: View {
                 }
             }
             .padding(DesignTokens.Spacing.spacing2)
-            .font(DesignTokens.Typography.callout)
+            .font(OWTypography.callout)
             .background(bubbleColor(for: message.role))
             .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium))
             .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
@@ -399,7 +406,7 @@ struct ChatPanelView: View {
                 HStack(spacing: 4) {
                     OWIconView(icon: .waveform, size: 12, color: DesignTokens.Color.textTertiary)
                     Text("Streaming")
-                        .font(.caption2)
+                        .font(OWTypography.caption2)
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -413,18 +420,18 @@ struct ChatPanelView: View {
     private func sourcesView(_ hits: [RetrievalHit]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Sources")
-                .font(.caption.weight(.semibold))
+                .font(OWTypography.captionEmphasis)
                 .foregroundStyle(.secondary)
             ForEach(hits.prefix(6)) { hit in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(hit.documentTitle)
-                        .font(.caption.weight(.medium))
+                        .font(OWTypography.captionEmphasis)
                     Text(hit.snippet)
-                        .font(.caption2)
+                        .font(OWTypography.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                     Text("chunk:\(hit.id.uuidString.prefix(8))…")
-                        .font(.caption2.monospaced())
+                        .font(OWTypography.codeSmall)
                         .foregroundStyle(.tertiary)
                 }
                 .padding(6)
@@ -450,13 +457,14 @@ struct ChatPanelView: View {
         VStack(alignment: .leading, spacing: 8) {
             if let lastChatError = aiServices.lastChatError, case .error = aiServices.activityState {
                 Text(lastChatError)
-                    .font(.caption)
+                    .font(OWTypography.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(alignment: .bottom, spacing: 8) {
                 TextField("Ask about your notes…", text: $model.draft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
+                    .font(OWTypography.body)
                     .lineLimit(1 ... 4)
                     .onSubmit { model.send(services: aiServices, agent: aiServices.selectedAgent) }
 

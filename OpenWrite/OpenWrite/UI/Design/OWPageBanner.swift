@@ -4,6 +4,8 @@ import SwiftUI
 
 /// Playground-style page header: optional type-tinted gradient band with icon anchored on the strip.
 struct OWPageBanner<Metadata: View>: View {
+    @Environment(\.openWritePalette) private var palette
+
     let title: String
     let icon: OWIcon
     var pageType: PageType?
@@ -26,7 +28,7 @@ struct OWPageBanner<Metadata: View>: View {
                 OWPageTypeIconWell(icon: icon, pageType: pageType, size: iconSize)
                     .overlay {
                         RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-                            .strokeBorder(DesignTokens.Color.editorCanvas, lineWidth: 2)
+                            .strokeBorder(palette.editorCanvas, lineWidth: 2)
                     }
                     .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
                     .padding(.leading, DesignTokens.Spacing.spacing3)
@@ -61,8 +63,8 @@ struct OWPageBanner<Metadata: View>: View {
         .overlay(alignment: .bottom) {
             LinearGradient(
                 colors: [
-                    DesignTokens.Color.editorCanvas.opacity(0),
-                    DesignTokens.Color.editorCanvas
+                    palette.editorCanvas.opacity(0),
+                    palette.editorCanvas
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -76,7 +78,7 @@ struct OWPageBanner<Metadata: View>: View {
         return [
             accent.opacity(0.42),
             accent.opacity(0.18),
-            DesignTokens.Color.editorCanvas.opacity(0.05)
+            palette.editorCanvas.opacity(0.05)
         ]
     }
 }

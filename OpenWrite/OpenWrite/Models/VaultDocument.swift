@@ -66,6 +66,11 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
             NoteBlock(kind: .bullet, text: "Encrypted vault at rest (stub in Phase 1)"),
             NoteBlock(kind: .bullet, text: "Pick a page type — note, task, reference, journal, project"),
             NoteBlock(kind: .bullet, text: "Use + in the sidebar to add more objects"),
+            NoteBlock(
+                kind: .callout,
+                text: "Toggle Blocks in the editor action bar to edit headings, bullets, and callouts inline.",
+                attributes: ["callout": "note"]
+            ),
             NoteBlock(kind: .quote, text: "Your corpus stays on this Mac by default.")
         ]
     )

@@ -18,6 +18,25 @@ extension View {
     func openWritePalette(_ palette: ThemePalette) -> some View {
         environment(\.openWritePalette, palette)
     }
+
+    /// Applies palette + system chrome from `ThemeManager` without resetting view identity.
+    func openWriteThemeAppearance() -> some View {
+        modifier(OpenWriteThemeAppearanceModifier())
+    }
+}
+
+private struct OpenWriteThemeAppearanceModifier: ViewModifier {
+    @Environment(ThemeManager.self) private var themeManager
+
+    func body(content: Content) -> some View {
+        // Read `selectedTheme` so @Observable invalidates this subtree on cycle/pick.
+        let theme = themeManager.selectedTheme
+        let palette = themeManager.palette
+        return content
+            .environment(\.openWritePalette, palette)
+            .preferredColorScheme(theme.prefersDarkAppearance ? .dark : .light)
+            .tint(palette.accent)
+    }
 }
 
 // MARK: - Manager

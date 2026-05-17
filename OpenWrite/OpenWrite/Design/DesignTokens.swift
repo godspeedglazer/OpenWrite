@@ -143,9 +143,13 @@ enum DesignTokens {
         static let heading3 = OWTypography.heading3
         static let body = OWTypography.body
         static let bodyEmphasis = OWTypography.bodyEmphasis
+        static let panelTitle = OWTypography.panelTitle
+        static let subheadlineEmphasis = OWTypography.subheadlineEmphasis
         static let callout = OWTypography.callout
+        static let calloutEmphasis = OWTypography.calloutEmphasis
         static let caption = OWTypography.caption
         static let captionEmphasis = OWTypography.captionEmphasis
+        static let caption2 = OWTypography.caption2
         static let footnote = OWTypography.footnote
         static let code = OWTypography.code
         static let codeSmall = OWTypography.codeSmall
@@ -302,7 +306,7 @@ enum DesignTokens {
         static let windowDefaultWidth: CGFloat = 1200
         static let windowDefaultHeight: CGFloat = 800
         /// Readable measure — Anytype-inspired ~704px reference, tuned for OpenWrite.
-        static let editorMaxContentWidth: CGFloat = 680
+        static let editorMaxContentWidth: CGFloat = 720
         static let captureSheetWidth: CGFloat = 520
         static let captureSheetMinHeight: CGFloat = 200
         static let graphNodeMinSize: CGFloat = 44
@@ -321,9 +325,24 @@ extension View {
         return shadow(color: spec.color, radius: spec.radius, x: spec.x, y: spec.y)
     }
 
-    func openWriteEditorContentWidth() -> some View {
-        frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth)
-            .frame(maxWidth: .infinity)
+    /// Constrains copy to a readable measure while the column background can span full width.
+    func openWriteEditorContentWidth(alignment: Alignment = .leading) -> some View {
+        frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth, alignment: alignment)
+            .frame(maxWidth: .infinity, alignment: alignment)
+    }
+
+    /// Full-width editor canvas with an inner readable column (fills vertical space).
+    func openWriteEditorColumn<Content: View>(
+        canvasColor: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+                .openWriteEditorContentWidth()
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(canvasColor)
     }
 
     func owRect(

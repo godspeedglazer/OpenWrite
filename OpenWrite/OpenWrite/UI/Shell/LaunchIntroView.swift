@@ -82,14 +82,16 @@ struct LaunchIntroView: View {
 
     @State private var wordmarkOpacity: Double = 0
     @State private var overlayOpacity: Double = 1
+    @State private var introTask: Task<Void, Never>?
 
     var body: some View {
+        let _ = themeManager.selectedTheme
         ZStack {
             themeManager.palette.background
                 .ignoresSafeArea()
 
             Text("OpenWrite")
-                .font(DesignTokens.Typography.documentTitle)
+                .font(OWTypography.documentTitle)
                 .tracking(-0.4)
                 .foregroundStyle(themeManager.palette.textPrimary)
                 .opacity(wordmarkOpacity)
@@ -97,22 +99,34 @@ struct LaunchIntroView: View {
         .opacity(overlayOpacity)
         .allowsHitTesting(overlayOpacity > 0.01)
         .onAppear(perform: runIntroSequence)
+        .onDisappear {
+            introTask?.cancel()
+            introTask = nil
+        }
     }
 
     private func runIntroSequence() {
-        withAnimation(.easeOut(duration: LaunchIntroTiming.wordmarkFadeIn)) {
-            wordmarkOpacity = 1
-        }
+        introTask?.cancel()
+        introTask = Task { @MainActor in
+            withAnimation(.easeOut(duration: LaunchIntroTiming.wordmarkFadeIn)) {
+                wordmarkOpacity = 1
+            }
 
-        let crossfadeStart = LaunchIntroTiming.wordmarkFadeIn + LaunchIntroTiming.holdBeforeCrossfade
-        DispatchQueue.main.asyncAfter(deadline: .now() + crossfadeStart) {
+            let crossfadeStart = LaunchIntroTiming.wordmarkFadeIn + LaunchIntroTiming.holdBeforeCrossfade
+            let crossfadeNanos = UInt64(crossfadeStart * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: crossfadeNanos)
+            guard !Task.isCancelled else { return }
+
             onCrossfade()
             withAnimation(.easeInOut(duration: LaunchIntroTiming.crossfade)) {
                 overlayOpacity = 0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + LaunchIntroTiming.crossfade) {
-                onFinished()
-            }
+
+            let fadeNanos = UInt64(LaunchIntroTiming.crossfade * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: fadeNanos)
+            guard !Task.isCancelled else { return }
+
+            onFinished()
         }
     }
 }

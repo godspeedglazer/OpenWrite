@@ -62,6 +62,9 @@ enum NDLParser {
         if line.hasPrefix("- ") {
             return NoteBlock(kind: .bullet, text: String(line.dropFirst(2)))
         }
+        if let callout = parseCalloutLine(line) {
+            return callout
+        }
         if line.hasPrefix("> ") {
             return NoteBlock(kind: .quote, text: String(line.dropFirst(2)))
         }
@@ -70,6 +73,20 @@ enum NDLParser {
             return NoteBlock(kind: .wikilink, text: String(inner))
         }
         return nil
+    }
+
+    private static func parseCalloutLine(_ line: String) -> NoteBlock? {
+        guard line.hasPrefix("> [!"), let close = line.firstIndex(of: "]") else { return nil }
+        let typeStart = line.index(line.startIndex, offsetBy: 4)
+        guard typeStart < close else { return nil }
+        let calloutType = String(line[typeStart..<close]).trimmingCharacters(in: .whitespaces)
+        guard !calloutType.isEmpty else { return nil }
+        var body = ""
+        let afterClose = line.index(after: close)
+        if afterClose < line.endIndex {
+            body = String(line[afterClose...]).trimmingCharacters(in: .whitespaces)
+        }
+        return NoteBlock(kind: .callout, text: body, attributes: ["callout": calloutType])
     }
 
     private static func parsePropertyLine(_ line: String) -> NoteBlock? {

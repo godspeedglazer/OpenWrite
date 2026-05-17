@@ -15,6 +15,7 @@ struct PropertyInspectorView: View {
                 inspectorContent(document)
             } else {
                 Text("Document not found")
+                    .font(OWTypography.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -26,7 +27,7 @@ struct PropertyInspectorView: View {
 
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
             Text("Properties")
-                .font(DesignTokens.Typography.captionEmphasis)
+                .font(OWTypography.captionEmphasis)
 
             ForEach(schema) { key in
                 fieldRow(key: key, document: document)
@@ -34,7 +35,7 @@ struct PropertyInspectorView: View {
 
             if schema.isEmpty {
                 Text("No properties for this type.")
-                    .font(.caption)
+                    .font(OWTypography.caption)
                     .foregroundStyle(.secondary)
             }
         }
@@ -99,7 +100,7 @@ struct PropertyInspectorView: View {
         LabeledContent(key.displayName) {
             TextField("yyyy-MM-dd", text: bindingText(key: key))
                 .textFieldStyle(.roundedBorder)
-                .font(.system(.body, design: .monospaced))
+                .font(OWTypography.code)
         }
     }
 
@@ -162,8 +163,10 @@ struct PropertyInspectorView: View {
 }
 
 #Preview {
-    PropertyInspectorView(documentID: VaultStore.preview.documents.first!.id)
-        .environmentObject(VaultStore.preview)
+    let store = VaultStore.preview
+    let documentID = store.documents.first?.id ?? VaultDocument.welcomeSample.id
+    PropertyInspectorView(documentID: documentID)
+        .environmentObject(store)
         .padding()
         .frame(width: 360)
 }

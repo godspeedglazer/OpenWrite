@@ -30,7 +30,7 @@ struct AgentPickerView: View {
                 OWIconView(icon: .chevronDown, size: 10)
                     .foregroundStyle(.secondary)
             }
-            .font(.subheadline.weight(.medium))
+            .font(OWTypography.subheadlineEmphasis)
         }
         .menuStyle(.borderlessButton)
         .help(agentHelp(selection))

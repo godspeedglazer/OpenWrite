@@ -131,27 +131,38 @@ actor IngestionPipeline {
         blocks: [NoteBlock],
         isRebuild: Bool
     ) async throws {
-        try throwIfCancelled()
-        await vectorStore.remove(documentID: documentID)
-
-        await withHealth { $0.setPhase(.chunking) }
-        let chunks = TextChunker.chunks(documentID: documentID, title: title, blocks: blocks)
-        guard !chunks.isEmpty else { return }
-
-        await withHealth { $0.beginDocumentIngest(chunkCount: chunks.count, isRebuild: isRebuild) }
-
-        for chunk in chunks {
-            try Task.checkCancellation()
+        do {
             try throwIfCancelled()
+            await vectorStore.remove(documentID: documentID)
 
-            await withHealth { $0.setPhase(.embedding) }
-            let vector = try await embeddings.embed(text: chunk.text)
+            await withHealth { $0.setPhase(.chunking) }
+            let chunks = TextChunker.chunks(documentID: documentID, title: title, blocks: blocks)
+            guard !chunks.isEmpty else { return }
 
-            try throwIfCancelled()
-            await withHealth { $0.setPhase(.storing) }
-            await vectorStore.upsert(chunk: chunk, vector: vector)
+            await withHealth { $0.beginDocumentIngest(chunkCount: chunks.count, isRebuild: isRebuild) }
 
-            await withHealth { $0.advanceChunk() }
+            for chunk in chunks {
+                try Task.checkCancellation()
+                try throwIfCancelled()
+
+                await withHealth { $0.setPhase(.embedding) }
+                let vector = try await embeddings.embed(text: chunk.text)
+
+                try throwIfCancelled()
+                await withHealth { $0.setPhase(.storing) }
+                await vectorStore.upsert(chunk: chunk, vector: vector)
+
+                await withHealth { $0.advanceChunk() }
+            }
+        } catch {
+            if error is CancellationError {
+                await withHealth { $0.markCancelled() }
+            } else if let pipelineError = error as? IngestionPipelineError, case .cancelled = pipelineError {
+                await withHealth { $0.markCancelled() }
+            } else {
+                await withHealth { $0.recordError(error.localizedDescription) }
+            }
+            throw error
         }
     }
 

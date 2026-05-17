@@ -26,29 +26,47 @@ private struct PersistedChunkRecord: Codable, Sendable {
 }
 
 enum VectorStorePersistence {
-    static let subdirectory = "OpenWrite"
-    static let filename = "vector_index.json"
+    static let subdirectory = "openwrite"
+    static let filename = "index.json"
+    static let legacySubdirectory = "OpenWrite"
+    static let legacyFilename = "vector_index.json"
     static let formatVersion = 1
 
-    static var defaultURL: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+    private static var applicationSupportBase: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        return base
+    }
+
+    static var defaultURL: URL {
+        applicationSupportBase
             .appendingPathComponent(subdirectory, isDirectory: true)
             .appendingPathComponent(filename)
     }
+
+    static var legacyURL: URL {
+        applicationSupportBase
+            .appendingPathComponent(legacySubdirectory, isDirectory: true)
+            .appendingPathComponent(legacyFilename)
+    }
 }
 
-/// MVP in-memory vector index with cosine similarity and JSON persistence stub.
+/// MVP in-memory vector index with cosine similarity and JSON persistence.
 actor InMemoryVectorStore {
     private var chunksByID: [UUID: IndexChunk] = [:]
     private var vectorsByID: [UUID: [Float]] = [:]
     private let persistenceURL: URL
     private var persistenceEnabled: Bool
 
+    /// MainActor monitor; reports load/save failures into the rail footer.
+    nonisolated(unsafe) private weak var health: IngestionHealthMonitor?
+
     init(persistenceURL: URL = VectorStorePersistence.defaultURL) {
         self.persistenceURL = persistenceURL
         self.persistenceEnabled = true
+    }
+
+    nonisolated func attachHealth(_ monitor: IngestionHealthMonitor) {
+        health = monitor
     }
 
     var chunkCount: Int { chunksByID.count }
@@ -104,11 +122,26 @@ actor InMemoryVectorStore {
     }
 
     func loadFromDiskIfPresent() {
-        guard FileManager.default.fileExists(atPath: persistenceURL.path) else { return }
+        if loadSnapshot(from: persistenceURL) {
+            return
+        }
+        if loadSnapshot(from: VectorStorePersistence.legacyURL) {
+            persistToDisk()
+        }
+    }
+
+    @discardableResult
+    private func loadSnapshot(from url: URL) -> Bool {
+        guard FileManager.default.fileExists(atPath: url.path) else { return false }
         do {
-            let data = try Data(contentsOf: persistenceURL)
+            let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode(PersistedVectorIndex.self, from: data)
-            guard decoded.version == VectorStorePersistence.formatVersion else { return }
+            guard decoded.version == VectorStorePersistence.formatVersion else {
+                reportPersistenceFailure(
+                    "Index format is unsupported. Use Rebuild index in Settings."
+                )
+                return false
+            }
             chunksByID.removeAll()
             vectorsByID.removeAll()
             for record in decoded.chunks {
@@ -123,8 +156,12 @@ actor InMemoryVectorStore {
                 chunksByID[record.id] = chunk
                 vectorsByID[record.id] = record.vector
             }
+            return true
         } catch {
-            // MVP: ignore corrupt snapshots; in-memory index rebuilds from vault.
+            reportPersistenceFailure(
+                "Could not load saved index (\(url.lastPathComponent)). Rebuild index in Settings."
+            )
+            return false
         }
     }
 
@@ -148,7 +185,14 @@ actor InMemoryVectorStore {
             let data = try JSONEncoder().encode(payload)
             try data.write(to: persistenceURL, options: .atomic)
         } catch {
-            // MVP stub: silent failure; health monitor surfaces ingest errors separately.
+            reportPersistenceFailure("Could not save index: \(error.localizedDescription)")
+        }
+    }
+
+    private func reportPersistenceFailure(_ message: String) {
+        let monitor = health
+        Task { @MainActor in
+            monitor?.recordError(message)
         }
     }
 

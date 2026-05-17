@@ -39,9 +39,9 @@ struct PastWritesTimelineView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Past Writes")
-                .font(.headline)
+                .font(OWTypography.panelTitle)
             Text("Writing sessions from vault edits (optional rem+ import).")
-                .font(.caption)
+                .font(OWTypography.caption)
                 .foregroundStyle(.secondary)
             Picker("Window", selection: $sinceHours) {
                 Text("6 h").tag(6.0)
@@ -56,16 +56,16 @@ struct PastWritesTimelineView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(entry.noteTitle)
-                    .font(.subheadline.weight(.semibold))
+                    .font(OWTypography.subheadlineEmphasis)
                 Spacer()
                 sourceBadge(entry.source)
             }
             Text(entry.intervalStart, style: .time)
-                .font(.caption2)
+                .font(OWTypography.caption2)
                 .foregroundStyle(.secondary)
             if !entry.summary.isEmpty {
                 Text(entry.summary)
-                    .font(.caption)
+                    .font(OWTypography.caption)
                     .lineLimit(3)
                     .foregroundStyle(.secondary)
             }
@@ -78,14 +78,14 @@ struct PastWritesTimelineView: View {
         switch source {
         case .vaultEdits:
             Text("Vault")
-                .font(.caption2)
+                .font(OWTypography.caption2)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Color.secondary.opacity(0.15))
                 .clipShape(Capsule())
         case .remImport:
             Text("rem+")
-                .font(.caption2)
+                .font(OWTypography.caption2)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Color.accentColor.opacity(0.15))

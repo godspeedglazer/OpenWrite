@@ -79,7 +79,7 @@ struct RelatedNotesView: View {
     private var header: some View {
         HStack {
             Text("Related notes")
-                .font(.headline)
+                .font(OWTypography.panelTitle)
             Spacer()
             if model.isLoading {
                 ProgressView()
@@ -118,15 +118,15 @@ struct RelatedNotesView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(hit.documentTitle)
-                                .font(.body.weight(.medium))
+                                .font(OWTypography.bodyEmphasis)
                             Spacer()
                             Text(String(format: "%.0f%%", hit.score * 100))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
+                                .font(OWTypography.caption)
+                                .foregroundStyle(DesignTokens.Color.textTertiary)
                         }
                         Text(hit.snippet)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(OWTypography.caption)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
                             .lineLimit(3)
                     }
                     .padding(.vertical, 4)

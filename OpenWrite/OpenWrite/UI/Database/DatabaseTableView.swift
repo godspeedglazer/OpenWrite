@@ -16,10 +16,18 @@ struct DatabaseTableView: View {
         VStack(alignment: .leading, spacing: 0) {
             tableHeader
             Divider()
-            if entries.isEmpty {
+            if database.fields.isEmpty {
+                schemaEmptyState
+            } else if entries.isEmpty {
                 emptyState
             } else {
                 tableBody
+            }
+        }
+        .onChange(of: entries.map(\.id)) { _, _ in
+            if let editing = editingEntry,
+               !entries.contains(where: { $0.id == editing.id }) {
+                editingEntry = nil
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -66,6 +74,22 @@ struct DatabaseTableView: View {
         }
         .padding(.horizontal, DesignTokens.Spacing.spacing5)
         .padding(.vertical, DesignTokens.Spacing.spacing2)
+        .background(DesignTokens.Color.editorCanvas)
+    }
+
+    private var schemaEmptyState: some View {
+        VStack {
+            Spacer()
+            OWPageHero(
+                title: "No fields defined",
+                subtitle: "This database has no columns yet. Add fields in a future schema editor, or create a new database from a preset.",
+                icon: .collection,
+                style: .emptyState,
+                compact: true
+            )
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DesignTokens.Color.editorCanvas)
     }
 
@@ -162,7 +186,7 @@ struct DatabaseTableView: View {
         let text = entry.value(for: field)?.displayString ?? "—"
         if field.kind == .code {
             Text(text)
-                .font(.system(.caption, design: .monospaced))
+                .font(DesignTokens.Typography.codeSmall)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .lineLimit(2)
         } else if field.kind == .url, let url = URL(string: text), !text.isEmpty {
@@ -228,7 +252,7 @@ private struct DatabaseEntryEditorSheet: View {
         case .code:
             Section(field.label) {
                 TextEditor(text: textBinding(binding))
-                    .font(.system(.body, design: .monospaced))
+                    .font(DesignTokens.Typography.code)
                     .frame(minHeight: 120)
             }
         case .tags:
@@ -313,7 +337,8 @@ private struct DatabaseEntryEditorSheet: View {
 
 #Preview {
     let store = VaultStore.preview
-    return DatabaseTableView(database: store.databases[0])
+    let database = store.databases.first ?? store.createDatabase(preset: .codeSnippets)
+    return DatabaseTableView(database: database)
         .environmentObject(store)
         .frame(width: 720, height: 480)
 }

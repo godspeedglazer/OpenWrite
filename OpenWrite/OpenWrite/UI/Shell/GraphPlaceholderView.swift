@@ -9,11 +9,11 @@ struct GraphPlaceholderView: View {
             OWIconView(icon: .graph, size: 56, color: DesignTokens.Color.accent.opacity(0.35))
 
             Text("Vault graph")
-                .font(DesignTokens.Typography.heading2)
+                .font(OWTypography.heading2)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
 
-            Text("Link notes with [[wikilinks]] to see your local topology here. Force-directed graph ships in a later epic.")
-                .font(DesignTokens.Typography.callout)
+            Text("Link notes with [[wikilinks]] to see your local topology here. Open Graph in the center tab to explore connections.")
+                .font(OWTypography.callout)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
@@ -21,9 +21,9 @@ struct GraphPlaceholderView: View {
             OWRoundedRect(style: .elevated, padding: DesignTokens.Spacing.spacing4) {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
                     OWLabel(title: "Try linking", icon: .link)
-                        .font(DesignTokens.Typography.bodyEmphasis)
+                        .font(OWTypography.bodyEmphasis)
                     Text("[[Welcome to OpenWrite]] connects pages in your encrypted vault.")
-                        .font(DesignTokens.Typography.caption)
+                        .font(OWTypography.caption)
                         .foregroundStyle(DesignTokens.Color.textSecondary)
                 }
             }

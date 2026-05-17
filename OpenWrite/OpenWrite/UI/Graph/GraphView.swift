@@ -37,16 +37,21 @@ struct GraphView: View {
 
                 if documents.isEmpty {
                     emptyVaultState
-                } else if snapshot.nodes.isEmpty {
-                    emptyGraphState
                 } else {
                     graphCanvas(snapshot: snapshot)
+                    if snapshot.edges.isEmpty {
+                        emptyGraphOverlay
+                    }
                 }
 
                 graphChrome(snapshot: snapshot)
             }
             .onAppear { canvasSize = size }
             .onChange(of: size) { _, newSize in canvasSize = newSize }
+            .onChange(of: documents.count) { _, _ in
+                panOffset = .zero
+                zoom = 1
+            }
         }
         .background(DesignTokens.Color.editorCanvas)
         .accessibilityIdentifier("openwrite.graph.canvas")
@@ -222,7 +227,7 @@ struct GraphView: View {
         )
     }
 
-    private var emptyGraphState: some View {
+    private var emptyGraphOverlay: some View {
         OWPageHero(
             title: "No links yet",
             subtitle: "Connect notes with [[wikilinks]] in the editor. Unresolved titles appear once a matching page exists.",
@@ -230,6 +235,8 @@ struct GraphView: View {
             style: .emptyState,
             compact: true
         )
+        .padding(DesignTokens.Spacing.spacing6)
+        .allowsHitTesting(false)
     }
 }
 

@@ -28,6 +28,26 @@ final class AIAssistNavigationState: ObservableObject {
     var canGoBack: Bool { !isAtRoot }
     var canGoForward: Bool { !forwardStack.isEmpty }
 
+    /// Strip / panel back when stack depth ≥ 1 or chat has drilled into a thread at root.
+    var stripCanGoBack: Bool {
+        if !isAtRoot { return true }
+        return chatPanelScreen == .conversation
+    }
+
+    var stripBackAccessibilityLabel: String {
+        if isAtRoot, chatPanelScreen == .conversation {
+            return "Back to agents"
+        }
+        switch current {
+        case .root:
+            return "Back"
+        case .chatThread:
+            return "Back to AI assist"
+        case .relatedDetail:
+            return "Back to related notes"
+        }
+    }
+
     var toolbarTitle: String {
         switch current {
         case .root:
@@ -37,6 +57,14 @@ final class AIAssistNavigationState: ObservableObject {
         case .relatedDetail(let hit):
             return hit.documentTitle
         }
+    }
+
+    /// Title for assist-strip chrome (accounts for in-panel chat depth at root).
+    var stripToolbarTitle: String {
+        if isAtRoot, chatPanelScreen == .conversation {
+            return "Chat"
+        }
+        return toolbarTitle
     }
 
     func push(_ screen: AIAssistScreen) {
@@ -73,17 +101,25 @@ final class AIAssistNavigationState: ObservableObject {
         chatPanelScreen = .agentPicker
     }
 
+    /// In-panel drill-in: agent list → conversation (strip stays at root with tab picker).
     func openChatThread() {
         chatPanelScreen = .conversation
-        if current == .root {
-            push(.chatThread)
-        }
     }
 
     func closeChatThread() {
         chatPanelScreen = .agentPicker
         if current == .chatThread {
             pop()
+        }
+    }
+
+    func stripBack() {
+        if !isAtRoot {
+            backFromToolbar()
+            return
+        }
+        if chatPanelScreen == .conversation {
+            closeChatThread()
         }
     }
 

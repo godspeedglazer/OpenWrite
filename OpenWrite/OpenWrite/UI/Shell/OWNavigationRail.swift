@@ -10,8 +10,8 @@ struct OWNavigationRailSectionLabel: View {
 
     var body: some View {
         Text(title.uppercased())
-            .font(DesignTokens.Typography.railSectionLabel)
-            .tracking(DesignTokens.Typography.railSectionTracking)
+            .font(OWTypography.railSectionLabel)
+            .tracking(OWTypography.railSectionTracking)
             .foregroundStyle(DesignTokens.Color.textTertiary)
             .padding(.horizontal, DesignTokens.Spacing.spacing2)
             .padding(.top, DesignTokens.Spacing.spacing1)
@@ -37,7 +37,7 @@ struct OWRailSearchField: View {
 
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
-                .font(DesignTokens.Typography.sidebarItem)
+                .font(OWTypography.sidebarItem)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .focused($isFocused)
 
@@ -73,6 +73,7 @@ struct OWRailSearchField: View {
 
 struct OWNavigationRail: View {
     @Environment(ThemeManager.self) private var themeManager
+    @Environment(\.openWritePalette) private var palette
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var aiServices: OpenWriteAIServices
 
@@ -96,6 +97,7 @@ struct OWNavigationRail: View {
     }
 
     var body: some View {
+        let _ = themeManager.selectedTheme
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
@@ -125,10 +127,10 @@ struct OWNavigationRail: View {
 
     private var railBackground: some View {
         ZStack {
-            DesignTokens.Color.sidebarBackground
+            palette.sidebarBackground
             LinearGradient(
                 colors: [
-                    DesignTokens.Color.textPrimary.opacity(0.03),
+                    palette.textPrimary.opacity(0.03),
                     Color.clear
                 ],
                 startPoint: .topLeading,
@@ -143,10 +145,10 @@ struct OWNavigationRail: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("OpenWrite")
-                    .font(DesignTokens.Typography.bodyEmphasis)
+                    .font(OWTypography.bodyEmphasis)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 Text("Local vault")
-                    .font(DesignTokens.Typography.caption)
+                    .font(OWTypography.caption)
                     .foregroundStyle(DesignTokens.Color.textTertiary)
             }
 
@@ -177,10 +179,13 @@ struct OWNavigationRail: View {
                             dense: true,
                             isSelected: workbench.vaultTypeFilter == type
                         ) {
-                            if workbench.vaultTypeFilter == type {
-                                workbench.vaultTypeFilter = nil
-                            } else {
-                                workbench.vaultTypeFilter = type
+                            withAnimation(DesignTokens.Motion.animationStandard) {
+                                if workbench.vaultTypeFilter == type {
+                                    workbench.vaultTypeFilter = nil
+                                } else {
+                                    workbench.vaultTypeFilter = type
+                                    workbench.showEditor()
+                                }
                             }
                         }
                     }
@@ -214,31 +219,14 @@ struct OWNavigationRail: View {
                     Button("Clear filter") {
                         workbench.vaultTypeFilter = nil
                     }
-                    .font(DesignTokens.Typography.caption)
+                    .font(OWTypography.caption)
                     .buttonStyle(.plain)
                     .foregroundStyle(DesignTokens.Color.accent)
                 }
             }
 
             if filteredDocuments.isEmpty {
-                Button {
-                    showNewPageSheet = true
-                } label: {
-                    HStack(spacing: DesignTokens.Spacing.spacing2) {
-                        OWIconView(icon: .plus, size: 14, color: DesignTokens.Color.accent)
-                        Text("+ New page")
-                            .font(DesignTokens.Typography.sidebarItem.weight(.medium))
-                            .foregroundStyle(DesignTokens.Color.accent)
-                    }
-                    .padding(.horizontal, DesignTokens.Spacing.spacing2)
-                    .padding(.vertical, DesignTokens.Spacing.spacing1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        DesignTokens.Color.selectionPill.opacity(0.75),
-                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-                    )
-                }
-                .buttonStyle(.plain)
+                vaultEmptyCTA
             } else {
                 ForEach(filteredDocuments) { doc in
                     OWSidebarRow(
@@ -256,13 +244,89 @@ struct OWNavigationRail: View {
         }
     }
 
+    @ViewBuilder
+    private var vaultEmptyCTA: some View {
+        if let filter = workbench.vaultTypeFilter {
+            let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            if q.isEmpty {
+                Text("No \(filter.displayName.lowercased()) pages yet.")
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+            } else {
+                Text("No matches for “\(q)” in \(filter.displayName.lowercased()) pages.")
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+            }
+
+            Button {
+                let doc = vaultStore.createDocument(pageType: filter, title: nil)
+                vaultStore.selectedDocumentID = doc.id
+                vaultStore.selectedDatabaseID = nil
+                workbench.showEditor()
+            } label: {
+                vaultCTALabel("+ New \(filter.displayName.lowercased())")
+            }
+            .buttonStyle(.plain)
+        } else {
+            let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !q.isEmpty {
+                Text("No vault pages match “\(q)”.")
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+            }
+
+            Button {
+                showNewPageSheet = true
+            } label: {
+                vaultCTALabel("+ New page")
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func vaultCTALabel(_ title: String) -> some View {
+        HStack(spacing: DesignTokens.Spacing.spacing2) {
+            OWIconView(icon: .plus, size: 14, color: palette.accent)
+            Text(title)
+                .font(OWTypography.sidebarItemEmphasis)
+                .foregroundStyle(palette.accent)
+        }
+        .padding(.horizontal, DesignTokens.Spacing.spacing2)
+        .padding(.vertical, DesignTokens.Spacing.spacing1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            palette.selectionPill.opacity(0.75),
+            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+        )
+    }
+
     private var pinnedStub: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
             OWNavigationRailSectionLabel(title: "Pinned")
             OWRoundedRect(style: .sidebarCard, padding: DesignTokens.Spacing.spacing2) {
-                Text("Pin pages here soon.")
-                    .font(DesignTokens.Typography.caption)
-                    .foregroundStyle(DesignTokens.Color.textTertiary)
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                    Text("Keep important pages at the top of your vault.")
+                        .font(OWTypography.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+
+                    if let doc = vaultStore.selectedDocument {
+                        OWSidebarRow(
+                            title: doc.displayTitle,
+                            pageType: doc.pageType,
+                            dense: true,
+                            isSelected: true
+                        ) {
+                            workbench.showEditor()
+                        }
+                    } else {
+                        Button {
+                            showNewPageSheet = true
+                        } label: {
+                            vaultCTALabel("Open a page to pin")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
         }
     }
@@ -296,8 +360,8 @@ struct OWNavigationRail: View {
         .background(
             LinearGradient(
                 colors: [
-                    DesignTokens.Color.sidebarBackground.opacity(0),
-                    DesignTokens.Color.sidebarBackground
+                    palette.sidebarBackground.opacity(0),
+                    palette.sidebarBackground
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -307,41 +371,59 @@ struct OWNavigationRail: View {
 
     private var ingestionRailFooter: some View {
         let health = aiServices.ingestionHealth.health
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: DesignTokens.Spacing.spacing2) {
-                Text("Ingestion")
-                    .font(DesignTokens.Typography.captionEmphasis)
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                Spacer()
-                Text(health.statusLabel)
-                    .font(DesignTokens.Typography.caption)
-                    .foregroundStyle(DesignTokens.Color.textTertiary)
-            }
-
-            if health.isActive || aiServices.isIndexing {
-                if let summary = health.progressSummary {
-                    Text(summary)
-                        .font(DesignTokens.Typography.caption)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
+        return OWRoundedRect(style: .sidebarCard, padding: DesignTokens.Spacing.spacing2) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Spacing.spacing2) {
+                    Text("Ingestion")
+                        .font(OWTypography.captionEmphasis)
+                        .foregroundStyle(palette.textSecondary)
+                    Spacer(minLength: DesignTokens.Spacing.spacing1)
+                    Text(health.statusLabel)
+                        .font(OWTypography.captionEmphasis)
+                        .foregroundStyle(palette.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
-                ProgressView(value: health.progressFraction)
-                    .controlSize(.small)
-            } else {
-                Text("\(aiServices.indexedChunkCount) chunks indexed")
-                    .font(DesignTokens.Typography.caption)
-                    .foregroundStyle(DesignTokens.Color.textTertiary)
-            }
 
-            if let error = health.lastError, !error.isEmpty {
-                Text(error)
-                    .font(DesignTokens.Typography.caption)
-                    .foregroundStyle(DesignTokens.Color.danger)
-                    .lineLimit(2)
+                if health.status == .failed, let error = health.lastError, !error.isEmpty {
+                    Text(error)
+                        .font(OWTypography.caption)
+                        .foregroundStyle(palette.danger)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .help(error)
+                } else if health.isActive || aiServices.isIndexing {
+                    if let summary = health.progressSummary {
+                        Text(summary)
+                            .font(OWTypography.caption)
+                            .foregroundStyle(palette.textSecondary)
+                            .lineLimit(2)
+                    }
+                    ProgressView(value: health.progressFraction)
+                        .controlSize(.small)
+                        .tint(palette.accent)
+                } else {
+                    Text("\(aiServices.indexedChunkCount) chunks indexed")
+                        .font(OWTypography.caption)
+                        .foregroundStyle(palette.textSecondary)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Vault ingestion \(health.statusLabel)")
+        .accessibilityLabel(ingestionAccessibilityLabel(health: health))
+    }
+
+    private func ingestionAccessibilityLabel(health: IngestionHealth) -> String {
+        var parts = ["Vault ingestion", health.statusLabel]
+        if health.isActive, let summary = health.progressSummary {
+            parts.append(summary)
+        } else {
+            parts.append("\(aiServices.indexedChunkCount) chunks indexed")
+        }
+        if let error = health.lastError, !error.isEmpty {
+            parts.append(error)
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func railBottomButton(icon: OWIcon, help: String, action: @escaping () -> Void) -> some View {

@@ -1,12 +1,15 @@
 import SwiftUI
 
 struct EditorView: View {
+    @Environment(\.openWritePalette) private var palette
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var pastWrites: InMemoryPastWritesService
     @EnvironmentObject private var aiServices: OpenWriteAIServices
 
     let documentID: UUID
     @State private var editingText: String = ""
+    @State private var editingBlocks: [NoteBlock] = []
+    @State private var useBlockEditor: Bool = false
     @State private var showRenderedPreview: Bool = false
     @State private var showProperties: Bool = false
     @State private var showTypePicker: Bool = false
@@ -42,8 +45,25 @@ struct EditorView: View {
         }
         .onChange(of: document?.updatedAt) { _, _ in
             guard !showRenderedPreview, let doc = self.document else { return }
-            if doc.plainText != editingText {
+            if useBlockEditor {
+                let body = doc.rootBlocks.filter { $0.kind != .property }
+                if body != editingBlocks {
+                    syncFromDocument(doc)
+                }
+            } else if doc.plainText != editingText {
                 syncFromDocument(doc)
+            }
+        }
+        .onChange(of: useBlockEditor) { _, enabled in
+            guard let doc = document else { return }
+            if enabled {
+                if editingText != doc.plainText {
+                    editingBlocks = NDLParser.parse(editingText)
+                } else {
+                    editingBlocks = doc.rootBlocks.filter { $0.kind != .property }
+                }
+            } else {
+                editingText = NDLSerializer.serialize(blocks: editingBlocks)
             }
         }
     }
@@ -134,6 +154,12 @@ struct EditorView: View {
 
     private func editorActionBar(_: VaultDocument) -> some View {
         HStack(spacing: DesignTokens.Spacing.spacing3) {
+            Toggle("Blocks", isOn: $useBlockEditor)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .disabled(showRenderedPreview)
+                .help("Edit NDL blocks inline instead of plain text")
+
             Spacer()
 
             Toggle("Preview", isOn: $showRenderedPreview)
@@ -164,22 +190,33 @@ struct EditorView: View {
     private func editorMain(_ document: VaultDocument) -> some View {
         if showRenderedPreview {
             renderedPreview(document)
-        } else {
-            SelectablePlainTextEditor(text: $editingText) { range in
-                inlineAssist.scheduleSelectionCapture(
-                    documentID: document.id,
-                    fullText: editingText,
-                    selectedRange: range
-                )
+        } else if useBlockEditor {
+            openWriteEditorColumn(canvasColor: palette.editorCanvas) {
+                OWBlockEditorView(blocks: $editingBlocks)
+                    .padding(.horizontal, DesignTokens.Spacing.spacing3)
+                    .padding(.top, DesignTokens.Spacing.spacing1)
+                    .padding(.bottom, DesignTokens.Spacing.spacing3)
+                    .onChange(of: editingBlocks) { _, newBlocks in
+                        commitBlocks(document: document, blocks: newBlocks)
+                    }
             }
-            .font(OWTypography.body)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .openWriteEditorContentWidth()
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, DesignTokens.Spacing.spacing3)
-            .padding(.bottom, DesignTokens.Spacing.spacing3)
-            .onChange(of: editingText) { _, newValue in
-                commitEdit(document: document, plainText: newValue)
+        } else {
+            openWriteEditorColumn(canvasColor: palette.editorCanvas) {
+                SelectablePlainTextEditor(text: $editingText) { range in
+                    inlineAssist.scheduleSelectionCapture(
+                        documentID: document.id,
+                        fullText: editingText,
+                        selectedRange: range
+                    )
+                }
+                .font(OWTypography.body)
+                .frame(maxWidth: .infinity, minHeight: 240, alignment: .topLeading)
+                .padding(.horizontal, DesignTokens.Spacing.spacing3)
+                .padding(.top, DesignTokens.Spacing.spacing1)
+                .padding(.bottom, DesignTokens.Spacing.spacing3)
+                .onChange(of: editingText) { _, newValue in
+                    commitEdit(document: document, plainText: newValue)
+                }
             }
         }
     }
@@ -192,6 +229,7 @@ struct EditorView: View {
     private func syncFromDocument(_ document: VaultDocument?) {
         guard let document else { return }
         editingText = document.plainText
+        editingBlocks = document.rootBlocks.filter { $0.kind != .property }
     }
 
     @ViewBuilder
@@ -203,12 +241,14 @@ struct EditorView: View {
                     VStack(spacing: 12) {
                         ProgressView()
                         Text("Refining selection…")
+                            .font(OWTypography.callout)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .ready(let text):
                     ScrollView {
                         Text(text)
+                            .font(OWTypography.body)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding()
@@ -221,6 +261,7 @@ struct EditorView: View {
                     )
                 default:
                     Text("No result")
+                        .font(OWTypography.callout)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -243,6 +284,16 @@ struct EditorView: View {
         )
     }
 
+    private func commitBlocks(document: VaultDocument, blocks: [NoteBlock]) {
+        vaultStore.updateRootBlocks(for: document.id, bodyBlocks: blocks)
+        let excerpt = blocks.map(\.text).joined(separator: "\n")
+        pastWrites.recordEdit(
+            noteID: document.id,
+            noteTitle: document.displayTitle,
+            plainText: excerpt
+        )
+    }
+
     private func renderedPreview(_ document: VaultDocument) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
@@ -251,10 +302,11 @@ struct EditorView: View {
                 }
             }
             .openWriteEditorContentWidth()
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.top, DesignTokens.Spacing.spacing1)
             .padding(.bottom, DesignTokens.Spacing.spacing3)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(palette.editorCanvas)
     }
 }

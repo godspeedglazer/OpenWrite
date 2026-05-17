@@ -32,6 +32,7 @@ final class OpenWriteAIServices: ObservableObject {
         indexer = NoOpIndexerService()
         retrieval = NoOpRetrievalService()
         rag = PlaceholderRAGService(retrieval: NoOpRetrievalService())
+        vectorStore.attachHealth(ingestionHealth)
         rebuildPipeline()
         Task {
             await vectorStore.loadFromDiskIfPresent()
@@ -148,9 +149,10 @@ final class OpenWriteAIServices: ObservableObject {
 
     func reindex(documents: [VaultDocument]) async {
         indexingTask?.cancel()
+        await indexer.cancel()
         isIndexing = true
         setActivity(.indexing)
-        ingestionHealth.reloadFromPersistence()
+        ingestionHealth.clearError()
 
         let payload = documents.map { (id: $0.id, title: $0.title, blocks: $0.rootBlocks) }
 

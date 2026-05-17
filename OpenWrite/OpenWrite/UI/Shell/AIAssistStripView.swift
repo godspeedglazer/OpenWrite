@@ -25,6 +25,7 @@ struct AIAssistStripView: View {
             maxWidth: DesignTokens.Layout.assistStripMaxWidth
         )
         .background(DesignTokens.Color.surfaceElevated)
+        .aiAssistKeyboardBack(navigation)
     }
 
     @ViewBuilder
@@ -55,39 +56,54 @@ struct AIAssistStripView: View {
     }
 
     private var assistToolbar: some View {
-        HStack(spacing: DesignTokens.Spacing.spacing2) {
-            if navigation.canGoBack {
-                assistNavButton(icon: .back, help: "Back") {
-                    navigation.backFromToolbar()
+        Group {
+            if navigation.isAtRoot, !navigation.stripCanGoBack {
+                OWAIPanelHeader(
+                    title: "AI assist",
+                    showsSeparator: false
+                ) {
+                    Picker("Assist", selection: $workbench.inspectorTab) {
+                        ForEach(InspectorTab.allCases) { tab in
+                            Text(tab.title).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                } trailing: {
+                    assistToolbarTrailing
                 }
             } else {
+                OWAIPanelHeader(
+                    title: navigation.stripToolbarTitle,
+                    canGoBack: navigation.stripCanGoBack,
+                    backAccessibilityLabel: navigation.stripBackAccessibilityLabel,
+                    onBack: { navigation.stripBack() },
+                    showsSeparator: false
+                ) {
+                    assistToolbarTrailing
+                }
+            }
+        }
+        .padding(.horizontal, DesignTokens.Spacing.spacing1)
+    }
+
+    @ViewBuilder
+    private var assistToolbarTrailing: some View {
+        HStack(spacing: DesignTokens.Spacing.spacing1) {
+            if navigation.isAtRoot, !navigation.stripCanGoBack {
                 OWIconView(icon: .sparkles, size: 14, color: DesignTokens.Color.accent)
             }
-
-            if navigation.isAtRoot {
-                Picker("Assist", selection: $workbench.inspectorTab) {
-                    ForEach(InspectorTab.allCases) { tab in
-                        Text(tab.title).tag(tab)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-            } else {
-                Text(navigation.toolbarTitle)
-                    .font(DesignTokens.Typography.captionEmphasis)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
             if navigation.canGoForward {
-                assistNavButton(icon: .forward, help: "Forward") {
+                Button {
                     navigation.goForward()
+                } label: {
+                    OWIconView(icon: .forward, size: 14)
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+                .help("Forward")
             }
-
             Button(action: onCollapse) {
                 OWIconView(icon: .chevronRight, size: 12)
             }
@@ -95,17 +111,6 @@ struct AIAssistStripView: View {
             .foregroundStyle(DesignTokens.Color.textSecondary)
             .help("Collapse AI assist")
         }
-        .padding(.horizontal, DesignTokens.Spacing.spacing2)
-        .padding(.vertical, DesignTokens.Spacing.spacing2)
-    }
-
-    private func assistNavButton(icon: OWIcon, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            OWIconView(icon: icon, size: 14)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(DesignTokens.Color.textSecondary)
-        .help(help)
     }
 }
 
@@ -120,10 +125,10 @@ struct AIAssistBottomBar: View {
                 HStack(spacing: DesignTokens.Spacing.spacing1) {
                     OWIconView(icon: .sparkles, size: 12, color: DesignTokens.Color.accent)
                     Text("AI assist")
-                        .font(DesignTokens.Typography.captionEmphasis)
+                        .font(OWTypography.captionEmphasis)
                         .foregroundStyle(DesignTokens.Color.accent)
                     Text("· \(contextHint)")
-                        .font(DesignTokens.Typography.caption)
+                        .font(OWTypography.caption)
                         .foregroundStyle(DesignTokens.Color.textTertiary)
                         .lineLimit(1)
                 }
@@ -163,6 +168,9 @@ struct AIAssistBottomBar: View {
         if !nav.isAtRoot {
             return nav.toolbarTitle
         }
+        if nav.chatPanelScreen == .conversation {
+            return "Chat"
+        }
         return "Chat · Related · Past Writes"
     }
 }
@@ -177,19 +185,19 @@ struct RelatedNoteDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 Text(hit.documentTitle)
-                    .font(DesignTokens.Typography.callout.weight(.semibold))
+                    .font(OWTypography.calloutEmphasis)
 
                 Text(String(format: "%.0f%% match", hit.score * 100))
-                    .font(DesignTokens.Typography.caption.monospacedDigit())
+                    .font(OWTypography.caption.monospacedDigit())
                     .foregroundStyle(DesignTokens.Color.textSecondary)
 
                 Text(hit.snippet)
-                    .font(DesignTokens.Typography.callout)
+                    .font(OWTypography.callout)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .textSelection(.enabled)
 
                 Text("chunk:\(hit.id.uuidString)")
-                    .font(DesignTokens.Typography.caption.monospaced())
+                    .font(OWTypography.caption.monospaced())
                     .foregroundStyle(DesignTokens.Color.textTertiary)
 
                 Button("Open in editor") {

@@ -29,6 +29,8 @@ struct NoteBlock: Identifiable, Codable, Hashable, Sendable {
         case heading3
         case bullet
         case quote
+        /// Admonition / callout — `> [!type]` in NDL v0; tint via `attributes["callout"]`.
+        case callout
         case code
         case divider
         case wikilink
@@ -72,6 +74,7 @@ extension NoteBlock.Kind {
         case .heading3: return "### "
         case .bullet: return "- "
         case .quote: return "> "
+        case .callout: return "> [!note] "
         case .code: return "```"
         case .divider: return "---"
         case .wikilink: return "[["
@@ -95,6 +98,9 @@ enum NDLSerializer {
             return "```\(lang)\n\(block.text)\n```"
         case .divider:
             return "---"
+        case .callout:
+            let type = block.attributes["callout"] ?? "note"
+            return "> [!\(type)] \(block.text)"
         case .property:
             let key = block.propertyKey?.rawValue ?? block.text
             let value = block.propertyValuePayload

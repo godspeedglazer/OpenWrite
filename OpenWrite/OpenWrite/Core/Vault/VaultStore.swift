@@ -158,6 +158,15 @@ final class VaultStore: ObservableObject {
         documents[index] = doc
     }
 
+    func updateRootBlocks(for documentID: UUID, bodyBlocks: [NoteBlock]) {
+        guard let index = documents.firstIndex(where: { $0.id == documentID }) else { return }
+        var doc = documents[index]
+        let propertyBlocks = doc.rootBlocks.filter { $0.kind == .property }
+        doc.rootBlocks = propertyBlocks + bodyBlocks
+        doc.touchUpdatedAt()
+        documents[index] = doc
+    }
+
     /// Stub: encode document → seal → would write to `.owdoc` on disk.
     func sealedPayload(for document: VaultDocument) throws -> Data {
         let encoder = JSONEncoder()
@@ -200,9 +209,7 @@ final class VaultStore: ObservableObject {
     func deleteDatabase(id: UUID) {
         databases.removeAll { $0.id == id }
         databaseEntries.removeAll { $0.databaseID == id }
-        if selectedDatabaseID == id {
-            selectedDatabaseID = databases.first?.id
-        }
+        reconcileSelections()
     }
 
     @discardableResult
@@ -241,13 +248,24 @@ final class VaultStore: ObservableObject {
         documents = snapshot.documents
         databases = snapshot.databases
         databaseEntries = snapshot.databaseEntries
-        if selectedDocumentID != nil,
-           !documents.contains(where: { $0.id == selectedDocumentID }) {
+        reconcileSelections()
+    }
+
+    /// Clears stale document/database selection after deletes, snapshot import, or empty vault.
+    func reconcileSelections() {
+        if let id = selectedDocumentID,
+           !documents.contains(where: { $0.id == id }) {
             selectedDocumentID = documents.first?.id
         }
-        if selectedDatabaseID != nil,
-           !databases.contains(where: { $0.id == selectedDatabaseID }) {
+        if let id = selectedDatabaseID,
+           !databases.contains(where: { $0.id == id }) {
             selectedDatabaseID = databases.first?.id
+        }
+        if documents.isEmpty {
+            selectedDocumentID = nil
+        }
+        if databases.isEmpty {
+            selectedDatabaseID = nil
         }
     }
 

@@ -22,10 +22,31 @@ struct DatabaseListView: View {
 
             if vaultStore.databases.isEmpty {
                 OWRoundedRect(style: .sidebarCard, padding: DesignTokens.Spacing.spacing2) {
-                    Text("Create a structured collection — snippets, bookmarks, reading lists, or your own schema.")
-                        .font(DesignTokens.Typography.caption)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                        Text("Create a structured collection — snippets, bookmarks, reading lists, or your own schema.")
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Button {
+                            showCreateDatabaseSheet = true
+                        } label: {
+                            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                                OWIconView(icon: .plus, size: 14, color: DesignTokens.Color.accent)
+                                Text("+ New database")
+                                    .font(DesignTokens.Typography.sidebarItem.weight(.medium))
+                                    .foregroundStyle(DesignTokens.Color.accent)
+                            }
+                            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+                            .padding(.vertical, DesignTokens.Spacing.spacing1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                DesignTokens.Color.selectionPill.opacity(0.75),
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             } else {
                 OWRoundedRect(style: .sidebarCard, padding: DesignTokens.Spacing.spacing2) {

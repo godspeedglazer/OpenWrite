@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var backlinkIndex = BacklinkIndex()
 
     var body: some View {
+        let _ = themeManager.selectedTheme
         AnytypeShellView(
             workbench: workbench,
             backlinkIndex: backlinkIndex,
@@ -43,9 +44,9 @@ struct ContentView: View {
                     }
             }
             .environment(themeManager)
-            .openWritePalette(themeManager.palette)
-            .preferredColorScheme(themeManager.selectedTheme.prefersDarkAppearance ? .dark : .light)
-            .id(themeManager.selectedTheme)
+            .environmentObject(vaultStore)
+            .environmentObject(aiServices)
+            .openWriteThemeAppearance()
             .frame(minWidth: 480, minHeight: 520)
         }
         .background(DesignTokens.Color.background)

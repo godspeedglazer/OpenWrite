@@ -25,19 +25,20 @@ struct TypePickerView: View {
         VStack(alignment: .leading, spacing: layout == .compact ? DesignTokens.Spacing.spacing1 : DesignTokens.Spacing.spacing2) {
             if layout == .standard {
                 Text(mode == .create ? "Quick page type" : "Page type")
-                    .font(.headline)
+                    .font(OWTypography.panelTitle)
             }
 
             if mode == .create {
                 TextField("Title", text: $newTitle)
                     .textFieldStyle(.roundedBorder)
+                    .font(OWTypography.body)
             }
 
             typePickerRow
 
             if mode == .switchType, documentID != nil, layout == .standard {
                 Toggle("Apply default layout", isOn: $applyTemplateOnSwitch)
-                    .font(.caption)
+                    .font(OWTypography.caption)
                     .toggleStyle(.checkbox)
             }
         }
@@ -94,7 +95,7 @@ struct TypePickerView: View {
             VStack(spacing: compact ? 2 : 4) {
                 OWIconView(icon: pageType.owIcon, size: iconSize, color: DesignTokens.ObjectType.accent(for: pageType))
                 Text(pageType.displayName)
-                    .font(compact ? DesignTokens.Typography.caption : .caption)
+                    .font(OWTypography.caption)
                     .lineLimit(1)
             }
             .frame(minWidth: minWidth)

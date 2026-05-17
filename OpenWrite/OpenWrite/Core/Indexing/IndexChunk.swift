@@ -63,9 +63,8 @@ enum TextChunker {
             switch block.kind {
             case .heading1, .heading2, .heading3:
                 flush()
-                buffer.append(block.text)
-                bufferBlockID = block.id
-                flush()
+                buffer.append(plainLine(for: block))
+                if bufferBlockID == nil { bufferBlockID = block.id }
             case .divider:
                 flush()
             default:
@@ -222,6 +221,9 @@ enum TextChunker {
             return "- \(block.text)"
         case .quote:
             return "> \(block.text)"
+        case .callout:
+            let type = block.attributes["callout"] ?? "note"
+            return "> [!\(type)] \(block.text)"
         default:
             return block.text
         }

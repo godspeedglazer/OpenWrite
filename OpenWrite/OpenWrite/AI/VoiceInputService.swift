@@ -11,7 +11,7 @@ final class VoiceInputService: ObservableObject {
     init() {
         // TODO: Probe SFSpeechRecognizer authorization and locale support.
         isAvailable = false
-        statusMessage = "Voice input coming soon"
+        statusMessage = "Enable Speech Recognition in System Settings to use voice input."
     }
 
     func toggleListening(appendTo draft: inout String) {
@@ -35,6 +35,6 @@ final class VoiceInputService: ObservableObject {
 
     func stopListening() {
         isListening = false
-        statusMessage = isAvailable ? nil : "Voice input coming soon"
+        statusMessage = isAvailable ? nil : "Enable Speech Recognition in System Settings to use voice input."
     }
 }

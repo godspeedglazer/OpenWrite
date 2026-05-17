@@ -112,6 +112,7 @@ struct OWLabel: View {
     HStack(spacing: DesignTokens.Spacing.spacing1) {
       OWIconView(icon: icon, size: iconSize)
       Text(title)
+        .font(OWTypography.captionEmphasis)
     }
   }
 }
@@ -125,11 +126,11 @@ struct OWEmptyState: View {
     VStack(spacing: DesignTokens.Spacing.spacing3) {
       OWIconView(icon: icon, size: 40, color: DesignTokens.Color.textTertiary)
       Text(title)
-        .font(DesignTokens.Typography.captionEmphasis)
+        .font(OWTypography.captionEmphasis)
         .foregroundStyle(DesignTokens.Color.textPrimary)
       if let description {
         description
-          .font(DesignTokens.Typography.caption)
+          .font(OWTypography.caption)
           .foregroundStyle(DesignTokens.Color.textSecondary)
           .multilineTextAlignment(.center)
       }

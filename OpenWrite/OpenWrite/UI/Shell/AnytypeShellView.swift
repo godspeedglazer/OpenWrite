@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct AnytypeShellView: View {
+    @Environment(\.openWritePalette) private var palette
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var pastWrites: InMemoryPastWritesService
     @ObservedObject var workbench: WorkbenchState
@@ -34,7 +35,13 @@ struct AnytypeShellView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .animation(DesignTokens.Motion.animationStandard, value: workbench.sidebarVisible)
-        .background(DesignTokens.Color.background)
+        .background(palette.background)
+        .onChange(of: vaultStore.databases.map(\.id)) { _, databaseIDs in
+            if case .database(let active) = workbench.centerTab,
+               !databaseIDs.contains(active.id) {
+                workbench.showEditor()
+            }
+        }
     }
 
     // MARK: - Center workbench
@@ -70,7 +77,7 @@ struct AnytypeShellView: View {
         }
         .animation(DesignTokens.Motion.animationStandard, value: workbench.aiAssistExpanded)
         .padding(DesignTokens.Layout.centerCardOuterPadding)
-        .background(DesignTokens.Color.workbenchChrome)
+        .background(palette.workbenchChrome)
     }
 
     private var centerEditorColumn: some View {
@@ -138,7 +145,7 @@ struct AnytypeShellView: View {
         .padding(.horizontal, DesignTokens.Spacing.spacing2)
         .padding(.top, DesignTokens.Spacing.spacing1)
         .padding(.bottom, DesignTokens.Spacing.spacing1)
-        .background(DesignTokens.Color.editorCanvas)
+        .background(palette.editorCanvas)
     }
 
     private func isCenterTabSelected(_ tab: CenterWorkbenchTab) -> Bool {

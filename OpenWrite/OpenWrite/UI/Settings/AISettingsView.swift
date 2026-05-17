@@ -63,9 +63,10 @@ struct AISettingsView: View {
                 .disabled(aiServices.activityState == .connecting)
 
                 Button("Rebuild index") {
+                    commitBaseURL()
                     Task { await aiServices.reindex(documents: vaultStore.documents) }
                 }
-                .disabled(aiServices.isIndexing)
+                .disabled(aiServices.isIndexing || vaultStore.documents.isEmpty)
 
                 if aiServices.isIndexing {
                     Button("Cancel indexing", role: .destructive) {
