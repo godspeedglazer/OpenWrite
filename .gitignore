@@ -1,0 +1,85 @@
+# =============================================================================
+# OpenWrite mega-repo — track product + docs; reference trees stay local only
+# =============================================================================
+
+# --- Reference / vendor clones (do not commit; use submodules or local clones) ---
+reor-main/
+AFFiNE-canary/
+anytype-ts-develop/
+logseq-master/
+massCode-main/
+rem-main/
+rem/
+REM*/
+
+# If you add other upstream copies later, match: *-main/ or vendor name folders
+# and list them here before `git add`.
+
+# --- Local binaries & placeholders ---
+buffer/
+Obsidian*/
+OpenWrite Project Folder/
+
+# --- Secrets & environment ---
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.mobileprovision
+credentials.json
+secrets/
+**/secrets/
+
+# --- macOS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# --- Node / JS (reference trees and any future tooling) ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+.turbo/
+dist/
+build/
+out/
+.next/
+.nuxt/
+coverage/
+*.tsbuildinfo
+
+# --- Xcode / Swift ---
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+timeline.xctimeline
+playground.xctimeline
+.swiftpm/
+.build/
+Packages/
+Package.pins
+Package.resolved
+
+# --- Editors & IDE (optional local; product uses Xcode) ---
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Rust / other stacks inside reference repos (belt-and-suspenders) ---
+target/
+Cargo.lock
+
+# --- Logs & caches ---
+*.log
+.cache/

@@ -1,0 +1,358 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA0001010000000000000001 /* OpenWriteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000001 /* OpenWriteApp.swift */; };
+		AA0001010000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000002 /* ContentView.swift */; };
+		AA0001010000000000000003 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000003 /* EditorView.swift */; };
+		AA0001010000000000000004 /* VaultDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000004 /* VaultDocument.swift */; };
+		AA0001010000000000000005 /* NoteBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000005 /* NoteBlock.swift */; };
+		AA0001010000000000000006 /* EncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000006 /* EncryptionService.swift */; };
+		AA0001010000000000000007 /* VaultStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000007 /* VaultStore.swift */; };
+		AA0001010000000000000008 /* LMStudioConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000008 /* LMStudioConfig.swift */; };
+		AA0001010000000000000009 /* LMStudioClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000009 /* LMStudioClient.swift */; };
+		AA000101000000000000000A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000000A /* Assets.xcassets */; };
+		AA000101000000000000000B /* IndexerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000000B /* IndexerService.swift */; };
+		AA000101000000000000000C /* RetrievalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000000C /* RetrievalService.swift */; };
+		AA000101000000000000000D /* HybridRanker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000000D /* HybridRanker.swift */; };
+		AA000101000000000000000E /* BacklinkIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000000E /* BacklinkIndex.swift */; };
+		AA000101000000000000000F /* WorkbenchState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000000F /* WorkbenchState.swift */; };
+		AA0001010000000000000010 /* SidebarSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000010 /* SidebarSection.swift */; };
+		AA0001010000000000000011 /* QuickCaptureController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000011 /* QuickCaptureController.swift */; };
+		AA0001010000000000000012 /* NDLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000012 /* NDLParser.swift */; };
+		AA0001010000000000000013 /* RAGService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000013 /* RAGService.swift */; };
+		AA0001010000000000000014 /* MarkdownImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000014 /* MarkdownImporter.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		BB0001010000000000000001 /* OpenWriteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWriteApp.swift; sourceTree = "<group>"; };
+		BB0001010000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		BB0001010000000000000003 /* EditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorView.swift; sourceTree = "<group>"; };
+		BB0001010000000000000004 /* VaultDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultDocument.swift; sourceTree = "<group>"; };
+		BB0001010000000000000005 /* NoteBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteBlock.swift; sourceTree = "<group>"; };
+		BB0001010000000000000006 /* EncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionService.swift; sourceTree = "<group>"; };
+		BB0001010000000000000007 /* VaultStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultStore.swift; sourceTree = "<group>"; };
+		BB0001010000000000000008 /* LMStudioConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LMStudioConfig.swift; sourceTree = "<group>"; };
+		BB0001010000000000000009 /* LMStudioClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LMStudioClient.swift; sourceTree = "<group>"; };
+		BB000101000000000000000A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CC0001010000000000000001 /* OpenWrite.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenWrite.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DD0001010000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		EE0001010000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				EE0001010000000000000002 /* OpenWrite */,
+				EE0001010000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000002 /* OpenWrite */ = {
+			isa = PBXGroup;
+			children = (
+				EE0001010000000000000010 /* App */,
+				EE0001010000000000000011 /* Core */,
+				EE0001010000000000000012 /* Models */,
+				EE0001010000000000000013 /* NoteDSL */,
+				EE0001010000000000000014 /* AI */,
+				EE0001010000000000000015 /* UI */,
+				BB000101000000000000000A /* Assets.xcassets */,
+			);
+			path = OpenWrite;
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				CC0001010000000000000001 /* OpenWrite.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000010 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				BB0001010000000000000001 /* OpenWriteApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000011 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				EE0001010000000000000020 /* Vault */,
+				EE0001010000000000000021 /* Crypto */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000012 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				BB0001010000000000000004 /* VaultDocument.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000013 /* NoteDSL */ = {
+			isa = PBXGroup;
+			children = (
+				BB0001010000000000000005 /* NoteBlock.swift */,
+			);
+			path = NoteDSL;
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000014 /* AI */ = {
+			isa = PBXGroup;
+			children = (
+				BB0001010000000000000008 /* LMStudioConfig.swift */,
+				BB0001010000000000000009 /* LMStudioClient.swift */,
+			);
+			path = AI;
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000015 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				BB0001010000000000000002 /* ContentView.swift */,
+				BB0001010000000000000003 /* EditorView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000020 /* Vault */ = {
+			isa = PBXGroup;
+			children = (
+				BB0001010000000000000007 /* VaultStore.swift */,
+			);
+			path = Vault;
+			sourceTree = "<group>";
+		};
+		EE0001010000000000000021 /* Crypto */ = {
+			isa = PBXGroup;
+			children = (
+				BB0001010000000000000006 /* EncryptionService.swift */,
+			);
+			path = Crypto;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		FF0001010000000000000001 /* OpenWrite */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FF0001020000000000000002 /* Build configuration list for PBXNativeTarget "OpenWrite" */;
+			buildPhases = (
+				FF0001010000000000000002 /* Sources */,
+				DD0001010000000000000001 /* Frameworks */,
+				FF0001010000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = OpenWrite;
+			productName = OpenWrite;
+			productReference = CC0001010000000000000001 /* OpenWrite.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		GG0001010000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					FF0001010000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = GG0001020000000000000001 /* Build configuration list for PBXProject "OpenWrite" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = EE0001010000000000000001;
+			productRefGroup = EE0001010000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FF0001010000000000000001 /* OpenWrite */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		FF0001010000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000101000000000000000A /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		FF0001010000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA0001010000000000000001 /* OpenWriteApp.swift in Sources */,
+				AA0001010000000000000002 /* ContentView.swift in Sources */,
+				AA0001010000000000000003 /* EditorView.swift in Sources */,
+				AA0001010000000000000004 /* VaultDocument.swift in Sources */,
+				AA0001010000000000000005 /* NoteBlock.swift in Sources */,
+				AA0001010000000000000006 /* EncryptionService.swift in Sources */,
+				AA0001010000000000000007 /* VaultStore.swift in Sources */,
+				AA0001010000000000000008 /* LMStudioConfig.swift in Sources */,
+				AA0001010000000000000009 /* LMStudioClient.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		HH0001010000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		HH0001010000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		HH0001010000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWrite;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.openwrite.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		HH0001010000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenWrite;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.openwrite.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		FF0001020000000000000002 /* Build configuration list for PBXNativeTarget "OpenWrite" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				HH0001010000000000000003 /* Debug */,
+				HH0001010000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		GG0001020000000000000001 /* Build configuration list for PBXProject "OpenWrite" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				HH0001010000000000000001 /* Debug */,
+				HH0001010000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = GG0001010000000000000001 /* Project object */;
+}
