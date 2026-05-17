@@ -20,7 +20,7 @@ struct OWObjectTypeChip: View {
         .frame(minHeight: DesignTokens.Layout.objectTypeChipHeight)
         .background(
             DesignTokens.ObjectType.chipBackground(for: pageType),
-            in: Capsule(style: .continuous)
+            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.metadataChip, style: .continuous)
         )
         .accessibilityLabel("\(pageType.displayName) type")
     }

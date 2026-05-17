@@ -132,14 +132,14 @@ struct OWSidebarObjectTypeRow: View {
                     .frame(minHeight: 28)
                     .background {
                         if isFilterActive || isHovered {
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                                 .fill(rowBackgroundColor)
                                 .padding(1)
                         }
                     }
                     .overlay {
                         if isFilterActive {
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                                 .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
                                 .padding(1)
                         }

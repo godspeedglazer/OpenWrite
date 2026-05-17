@@ -6,6 +6,7 @@ struct AISettingsView: View {
     @EnvironmentObject private var vaultStore: VaultStore
 
     @State private var baseURLString: String = LMStudioConfig.default.baseURL.absoluteString
+    @State private var useCustomEmbeddingID = false
 
     var body: some View {
         Form {
@@ -20,15 +21,11 @@ struct AISettingsView: View {
                     placeholder: "local-model"
                 )
 
-                modelRoleRow(
-                    title: "Embedding model",
-                    selection: embeddingModelBinding,
-                    placeholder: "Same as chat model"
-                )
+                embeddingModelSection
             } header: {
                 Text("LM Studio")
             } footer: {
-                Text("OpenAI-compatible endpoint on this Mac. Load models in LM Studio before chatting.")
+                Text(lmStudioFooter)
             }
 
             Section("Status") {
@@ -36,6 +33,7 @@ struct AISettingsView: View {
                 LabeledContent("Activity", value: aiServices.activityState.shortLabel)
                 LabeledContent("Ingestion", value: aiServices.ingestionHealth.health.statusLabel)
                 LabeledContent("Indexed chunks", value: "\(aiServices.indexedChunkCount)")
+                LabeledContent("Embedding", value: aiServices.lmConfig.embeddingModelDisplay)
 
                 if let progress = aiServices.ingestionHealth.health.progressSummary {
                     LabeledContent("Progress", value: progress)
@@ -79,7 +77,79 @@ struct AISettingsView: View {
         .padding()
         .onAppear {
             baseURLString = aiServices.lmConfig.baseURL.absoluteString
+            let id = aiServices.lmConfig.embeddingModel
+            useCustomEmbeddingID = !EmbeddingModelPreset.allCases.contains { $0.rawValue == id }
         }
+    }
+
+    private var lmStudioFooter: String {
+        """
+        OpenAI-compatible endpoint on this Mac. Load chat and embedding models in LM Studio before chatting or rebuilding the index. \
+        Recommended embedding: \(EmbeddingModelPreset.defaultPreset.menuTitle) (\(LMStudioConfig.defaultEmbeddingModelID)) — download the GGUF in LM Studio; OpenWrite does not bundle model weights. \
+        After changing the embedding model, rebuild the index so vectors match.
+        """
+    }
+
+    @ViewBuilder
+    private var embeddingModelSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Embedding model")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if aiServices.availableModels.isEmpty {
+                if useCustomEmbeddingID {
+                    TextField("Model id", text: embeddingModelBinding)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Use recommended presets") {
+                        useCustomEmbeddingID = false
+                        aiServices.updateEmbeddingModel(EmbeddingModelPreset.defaultPreset.rawValue)
+                    }
+                    .font(.caption)
+                } else {
+                    Picker("Preset", selection: offlineEmbeddingPresetBinding) {
+                        ForEach(EmbeddingModelPreset.allCases) { preset in
+                            Text(preset.menuTitle).tag(preset)
+                        }
+                    }
+                    .labelsHidden()
+                    Button("Custom model id…") { useCustomEmbeddingID = true }
+                        .font(.caption)
+                }
+            } else {
+                Picker("Embedding model", selection: embeddingModelBinding) {
+                    Text("Same as chat model").tag("")
+                    ForEach(EmbeddingModelPreset.allCases, id: \.rawValue) { preset in
+                        Text(preset.menuTitle).tag(preset.rawValue)
+                    }
+                    ForEach(aiServices.availableModels) { model in
+                        if !EmbeddingModelPreset.allCases.map(\.rawValue).contains(model.id) {
+                            Text(model.id).tag(model.id)
+                        }
+                    }
+                }
+                .labelsHidden()
+            }
+
+            Text(embeddingHelp)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var embeddingHelp: String {
+        "Vector search uses this model at /v1/embeddings. Default: \(LMStudioConfig.defaultEmbeddingModelID)."
+    }
+
+    private var offlineEmbeddingPresetBinding: Binding<EmbeddingModelPreset> {
+        Binding(
+            get: {
+                let id = aiServices.lmConfig.embeddingModel
+                return EmbeddingModelPreset.allCases.first { $0.rawValue == id } ?? .defaultPreset
+            },
+            set: { aiServices.updateEmbeddingModel($0.rawValue) }
+        )
     }
 
     private func commitBaseURL() {
@@ -115,9 +185,6 @@ struct AISettingsView: View {
                     .textFieldStyle(.roundedBorder)
             } else {
                 Picker(title, selection: selection) {
-                    if title == "Embedding model" {
-                        Text(placeholder).tag("")
-                    }
                     ForEach(aiServices.availableModels) { model in
                         Text(model.id).tag(model.id)
                     }
@@ -132,5 +199,5 @@ struct AISettingsView: View {
     AISettingsView()
         .environmentObject(OpenWriteAIServices())
         .environmentObject(VaultStore.preview)
-        .frame(width: 440, height: 420)
+        .frame(width: 440, height: 520)
 }

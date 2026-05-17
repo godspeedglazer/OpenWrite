@@ -13,8 +13,13 @@ enum InlineAssistPhase: Equatable {
     case idle
     case capturing
     case refining
-    case ready(String)
+    case ready(String, sourceHits: [RetrievalHit])
     case failed(String)
+
+    var sourceHits: [RetrievalHit] {
+        if case .ready(_, let hits) = self { return hits }
+        return []
+    }
 }
 
 /// Debounced selection capture and async refine via `RAGService` — never blocks the text view.
@@ -111,7 +116,7 @@ final class InlineAssistController: ObservableObject {
                 )
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    phase = .ready(answer)
+                    phase = .ready(answer.text, sourceHits: answer.hits)
                 }
             } catch {
                 guard !Task.isCancelled else { return }
@@ -147,7 +152,7 @@ final class InlineAssistController: ObservableObject {
         rag: RAGService,
         query: String,
         agent: AgentConfig
-    ) async throws -> String {
+    ) async throws -> RAGAnswer {
         try await withCheckedThrowingContinuation { continuation in
             Self.assistQueue.async {
                 Task {
@@ -157,7 +162,13 @@ final class InlineAssistController: ObservableObject {
                         if trimmed.isEmpty {
                             continuation.resume(throwing: LMStudioError.emptyResponse)
                         } else {
-                            continuation.resume(returning: trimmed)
+                            continuation.resume(
+                                returning: RAGAnswer(
+                                    text: trimmed,
+                                    citationChunkIDs: answer.citationChunkIDs,
+                                    hits: answer.hits
+                                )
+                            )
                         }
                     } catch {
                         continuation.resume(throwing: error)
@@ -288,19 +299,12 @@ final class PasteAwareTextView: NSTextView {
 /// Wraps a SwiftUI host and intercepts image paste for the block editor.
 final class BlockEditorPasteCaptureView: NSControl {
     var onPasteImageBlock: ((NoteBlock) -> Void)?
-    private let hostedView: NSView
+    let hostedView: NSView
 
     init(hostedView: NSView) {
         self.hostedView = hostedView
         super.init(frame: .zero)
-        hostedView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(hostedView)
-        NSLayoutConstraint.activate([
-            hostedView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            hostedView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            hostedView.topAnchor.constraint(equalTo: topAnchor),
-            hostedView.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
     }
 
     @available(*, unavailable)
@@ -309,6 +313,43 @@ final class BlockEditorPasteCaptureView: NSControl {
     }
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// Lays out the SwiftUI host at `width` so TextFields wrap instead of collapsing to one column.
+    func layoutDocument(width: CGFloat) {
+        let safeWidth = max(width, 320)
+        if bounds.width != safeWidth || bounds.height < 1 {
+            frame.size.width = safeWidth
+        }
+        hostedView.frame = CGRect(origin: .zero, size: CGSize(width: safeWidth, height: bounds.height))
+        hostedView.needsLayout = true
+        hostedView.layoutSubtreeIfNeeded()
+        invalidateIntrinsicContentSize()
+    }
+
+    override var intrinsicContentSize: NSSize {
+        let layoutWidth = max(bounds.width, 320)
+        if hostedView.frame.width != layoutWidth {
+            hostedView.frame.size.width = layoutWidth
+            hostedView.needsLayout = true
+            hostedView.layoutSubtreeIfNeeded()
+        }
+        let fitting = hostedView.fittingSize
+        return NSSize(width: layoutWidth, height: max(fitting.height, 1))
+    }
+
+    override func layout() {
+        super.layout()
+        let layoutWidth = max(bounds.width, 320)
+        hostedView.frame = CGRect(origin: .zero, size: CGSize(width: layoutWidth, height: bounds.height))
+        invalidateIntrinsicContentSize()
+    }
+
+    override func resize(withOldSuperviewSize oldSize: NSSize) {
+        super.resize(withOldSuperviewSize: oldSize)
+        if bounds.width > 1 {
+            layoutDocument(width: bounds.width)
+        }
+    }
 
     @objc func paste(_ sender: Any?) {
         if let block = ImagePasteSupport.ingestPastedImage() {

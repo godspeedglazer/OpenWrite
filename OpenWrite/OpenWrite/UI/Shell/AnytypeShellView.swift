@@ -47,33 +47,41 @@ struct AnytypeShellView: View {
     // MARK: - Center workbench
 
     private var centerWorkbench: some View {
-        HStack(spacing: 0) {
-            centerEditorColumn
-                .frame(
-                    minWidth: DesignTokens.Layout.editorMinWidth,
-                    maxWidth: .infinity,
-                    maxHeight: .infinity
-                )
-                .layoutPriority(1)
+        GeometryReader { geometry in
+            let editorMin = max(
+                DesignTokens.Layout.editorMinWidth,
+                geometry.size.width * DesignTokens.Layout.editorMinWidthFraction
+            )
 
-            if workbench.aiAssistExpanded {
-                Rectangle()
-                    .fill(DesignTokens.Color.borderSubtle)
-                    .frame(width: DesignTokens.Layout.borderWidth)
-                    .layoutPriority(0)
+            HStack(spacing: 0) {
+                centerEditorColumn
+                    .frame(
+                        minWidth: editorMin,
+                        maxWidth: .infinity,
+                        maxHeight: .infinity
+                    )
+                    .layoutPriority(1)
 
-                AIAssistStripView(workbench: workbench, pastWrites: pastWrites) {
-                    withAnimation(DesignTokens.Motion.animationStandard) {
-                        workbench.aiAssistExpanded = false
+                if workbench.aiAssistExpanded {
+                    Rectangle()
+                        .fill(DesignTokens.Color.borderSubtle)
+                        .frame(width: DesignTokens.Layout.borderWidth)
+                        .layoutPriority(0)
+
+                    AIAssistStripView(workbench: workbench, pastWrites: pastWrites) {
+                        withAnimation(DesignTokens.Motion.animationStandard) {
+                            workbench.aiAssistExpanded = false
+                        }
                     }
+                    .frame(
+                        minWidth: DesignTokens.Layout.assistStripMinWidth,
+                        maxWidth: DesignTokens.Layout.assistStripMaxWidth
+                    )
+                    .layoutPriority(0)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
-                .frame(
-                    minWidth: DesignTokens.Layout.assistStripMinWidth,
-                    maxWidth: DesignTokens.Layout.assistStripMaxWidth
-                )
-                .layoutPriority(0)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
         }
         .animation(DesignTokens.Motion.animationStandard, value: workbench.aiAssistExpanded)
         .padding(DesignTokens.Layout.centerCardOuterPadding)
@@ -218,29 +226,76 @@ struct AnytypeShellView: View {
     }
 
     private var emptyEditorState: some View {
-        VStack(spacing: DesignTokens.Spacing.spacing4) {
-            OWPageHero(
-                title: "No page open",
-                subtitle: "Choose a note from the vault or create a new object.",
-                icon: .editCompose,
-                style: .emptyState,
-                compact: true
-            )
+        ScrollView {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing4) {
+                OWPageHero(
+                    title: "No page open",
+                    subtitle: "Choose a note from the vault or create a new object.",
+                    icon: .editCompose,
+                    style: .emptyState,
+                    compact: true
+                )
+                .frame(maxWidth: .infinity)
 
-            Button {
-                showNewPageSheet = true
-            } label: {
                 HStack(spacing: DesignTokens.Spacing.spacing2) {
-                    OWUnicodeIconView(icon: .plus, size: 16, color: DesignTokens.Color.accent)
-                    Text("+ New object")
-                        .font(OWTypography.bodyEmphasis)
+                    Button {
+                        showNewPageSheet = true
+                    } label: {
+                        HStack(spacing: DesignTokens.Spacing.spacing2) {
+                            OWUnicodeIconView(icon: .plus, size: 16, color: DesignTokens.Color.accent)
+                            Text("New object")
+                                .font(OWTypography.bodyEmphasis)
+                        }
+                        .padding(.horizontal, DesignTokens.Spacing.spacing4)
+                        .padding(.vertical, DesignTokens.Spacing.spacing2)
+                        .background(
+                            DesignTokens.Color.selectionPill.opacity(0.9),
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    if let welcome = vaultStore.documents.first(where: { $0.id == VaultDocument.welcomeDocumentID }) {
+                        Button {
+                            vaultStore.selectedDocumentID = welcome.id
+                            workbench.showEditor()
+                        } label: {
+                            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                                Text(welcome.resolvedPageIcon)
+                                    .font(.system(size: 16))
+                                Text("Open welcome tour")
+                                    .font(OWTypography.bodyEmphasis)
+                            }
+                            .padding(.horizontal, DesignTokens.Spacing.spacing4)
+                            .padding(.vertical, DesignTokens.Spacing.spacing2)
+                            .background(
+                                DesignTokens.Color.surfaceElevated.opacity(0.95),
+                                in: Capsule()
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .padding(.horizontal, DesignTokens.Spacing.spacing4)
-                .padding(.vertical, DesignTokens.Spacing.spacing2)
-                .background(DesignTokens.Color.selectionPill.opacity(0.9), in: Capsule())
+                .frame(maxWidth: .infinity, alignment: .center)
+
+                if let welcome = vaultStore.documents.first(where: { $0.id == VaultDocument.welcomeDocumentID }) {
+                    VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                        Text("Starter layout")
+                            .font(OWTypography.captionEmphasis)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+
+                        ForEach(welcome.rootBlocks.filter { $0.kind != .property }.prefix(4)) { block in
+                            OWPreviewBlockRow(block: block)
+                        }
+                    }
+                    .openWriteEditorContentWidth()
+                    .padding(.top, DesignTokens.Spacing.spacing2)
+                }
             }
-            .buttonStyle(.plain)
+            .padding(DesignTokens.Spacing.spacing5)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(palette.editorCanvas)
     }
 }

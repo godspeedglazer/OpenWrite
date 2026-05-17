@@ -28,7 +28,6 @@ struct OWPageHeaderEditor<Metadata: View>: View {
     @State private var showDescriptionField = false
     @State private var descriptionText = ""
     @State private var showEmojiPicker = false
-    @State private var showMoreMenu = false
     @State private var dragBaseOffset = CGSize.zero
 
     private var document: VaultDocument? {
@@ -40,13 +39,11 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             bannerSection
 
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-                if !OWTypography.isBundledSerifAvailable {
+                if OWTypography.showsBundledSerifWarningInUI {
                     OWTypographyFontWarningBanner()
                 }
 
-                headerToolbar
-
-                titleField
+                titleRow
 
                 if showDescriptionField {
                     descriptionField
@@ -68,37 +65,23 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                 commitHeaderFields()
             }
         }
-        .popover(isPresented: $showEmojiPicker, arrowEdge: .bottom) {
-            OWEmojiPickerGrid { emoji in
-                pageIcon = emoji
-                showEmojiPicker = false
-                commitHeaderFields()
-            }
-            .padding(DesignTokens.Spacing.spacing2)
-        }
-        .confirmationDialog("Page options", isPresented: $showMoreMenu, titleVisibility: .visible) {
-            Button("Reset icon position") {
-                pageIconOffsetX = 0
-                pageIconOffsetY = 0
-                commitHeaderFields()
-            }
-            Button("Remove cover", role: .destructive) {
-                coverStyle = nil
-                commitHeaderFields()
-            }
-            Button("Cancel", role: .cancel) {}
-        }
     }
 
     // MARK: - Banner
 
     private var bannerSection: some View {
         ZStack(alignment: .bottomLeading) {
-            OWPageBannerGradient(
-                coverStyle: coverStyle,
-                pageType: document?.pageType,
-                stripHeight: OWPageBannerMetrics.stripHeight
-            )
+            Button {
+                showCoverPicker = true
+            } label: {
+                OWPageBannerGradient(
+                    coverStyle: coverStyle,
+                    pageType: document?.pageType,
+                    stripHeight: OWPageBannerMetrics.stripHeight
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Change cover")
 
             pageIconChip
                 .padding(.leading, DesignTokens.Spacing.spacing3 + pageIconOffsetX)
@@ -111,7 +94,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
 
     private var pageIconChip: some View {
         let displayIcon = pageIcon.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? (document?.resolvedPageIcon ?? "📝")
+            ? (document?.resolvedPageIcon ?? PageType.note.unicodeCharacter)
             : pageIcon
 
         return Button {
@@ -132,6 +115,15 @@ struct OWPageHeaderEditor<Metadata: View>: View {
         }
         .buttonStyle(.plain)
         .help("Change page icon")
+        .popover(isPresented: $showEmojiPicker, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
+            OWEmojiPickerGrid { emoji in
+                pageIcon = emoji
+                showEmojiPicker = false
+                commitHeaderFields()
+            }
+            .padding(DesignTokens.Spacing.spacing2)
+        }
+        .accessibilityLabel("Page icon")
     }
 
     private var iconDragGesture: some Gesture {
@@ -157,18 +149,23 @@ struct OWPageHeaderEditor<Metadata: View>: View {
         OWPageBannerMetrics.iconOverlap + DesignTokens.Spacing.spacing2
     }
 
-    // MARK: - Toolbar & fields
+    // MARK: - Title & page options
 
-    private var headerToolbar: some View {
-        HStack(spacing: DesignTokens.Spacing.spacing2) {
-            OWPageHeaderToolbarChip(title: "Cover", icon: .grid) {
+    private var titleRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Spacing.spacing2) {
+            titleField
+                .layoutPriority(1)
+
+            pageOptionsMenu
+        }
+    }
+
+    private var pageOptionsMenu: some View {
+        Menu {
+            Button("Change cover…") {
                 showCoverPicker = true
             }
-
-            OWPageHeaderToolbarChip(
-                title: showDescriptionField ? "Hide description" : "Add description",
-                icon: .editCompose
-            ) {
+            Button(showDescriptionField ? "Hide description" : "Add description") {
                 withAnimation(.easeOut(duration: 0.18)) {
                     showDescriptionField.toggle()
                     if showDescriptionField, descriptionText.isEmpty {
@@ -176,21 +173,36 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                     }
                 }
             }
-
-            OWPageHeaderToolbarChip(title: "More", prefix: "⋯") {
-                showMoreMenu = true
+            Button("Change icon…") {
+                showEmojiPicker = true
             }
-
-            Spacer()
-
-            Button("Emoji panel") {
-                NSApp.orderFrontCharacterPalette(nil)
+            Divider()
+            Button("Reset icon position") {
+                pageIconOffsetX = 0
+                pageIconOffsetY = 0
+                commitHeaderFields()
             }
-            .buttonStyle(.plain)
-            .font(OWTypography.caption)
-            .foregroundStyle(DesignTokens.Color.textTertiary)
-            .help("Open macOS emoji picker")
+            Button("Remove cover", role: .destructive) {
+                coverStyle = nil
+                commitHeaderFields()
+            }
+        } label: {
+            Text("⋯")
+                .font(OWTypography.captionEmphasis)
+                .foregroundStyle(DesignTokens.Color.textTertiary)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(DesignTokens.Color.surface.opacity(0.85))
+                )
+                .overlay {
+                    Circle()
+                        .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 0.5)
+                }
         }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Page options")
     }
 
     private var titleField: some View {
@@ -200,6 +212,8 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             .foregroundStyle(DesignTokens.Color.textPrimary)
             .textFieldStyle(.plain)
             .lineLimit(1 ... 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
             .onSubmit { commitTitle() }
             .onChange(of: title) { _, _ in commitTitle() }
     }
@@ -317,47 +331,6 @@ struct OWPageBannerGradient: View {
     }
 }
 
-// MARK: - Toolbar chip
-
-private struct OWPageHeaderToolbarChip: View {
-    let title: String
-    var icon: OWUnicodeIcon?
-    var prefix: String?
-    let action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: DesignTokens.Spacing.spacing1) {
-                if let prefix {
-                    Text(prefix)
-                        .font(DesignTokens.Typography.captionEmphasis)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
-                }
-                if let icon {
-                    OWUnicodeIconView(icon, size: 12, color: DesignTokens.Color.textTertiary)
-                }
-                Text(title)
-                    .font(DesignTokens.Typography.captionEmphasis)
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-            }
-            .padding(.horizontal, DesignTokens.Spacing.spacing3)
-            .padding(.vertical, DesignTokens.Spacing.spacing2)
-            .background(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.metadataChip, style: .continuous)
-                    .fill(isHovered ? DesignTokens.Color.selectionPill : DesignTokens.Color.surface.opacity(0.85))
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.metadataChip, style: .continuous)
-                    .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 0.5)
-            }
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-    }
-}
-
 // MARK: - Cover picker sheet
 
 struct OWCoverStylePickerSheet: View {
@@ -395,6 +368,7 @@ struct OWCoverStylePickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
+                        .buttonStyle(OWToolbarActionButtonStyle(isEnabled: true))
                 }
             }
         }

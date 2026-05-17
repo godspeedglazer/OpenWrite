@@ -87,7 +87,7 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
         properties: PageProperties.defaults(for: .note, title: "Welcome to OpenWrite"),
         rootBlocks: welcomeRootBlocks,
         metadata: [MetadataKey.prefersBlockEditor: "true"],
-        pageIcon: "🌐",
+        pageIcon: "◎",
         coverStyle: .anytypeCalm
     )
 
@@ -115,8 +115,13 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
             text: "Use the Graph row under Objects to switch the center column to your vault topology — links appear as you add [[wikilinks]] between pages."
         ),
         NoteBlock(
+            kind: .code,
+            text: "[[wikilinks]] connect pages in your graph.",
+            attributes: ["language": "ndl"]
+        ),
+        NoteBlock(
             kind: .callout,
-            text: "Blocks mode is on: each row below is a filled preview you can edit inline. Turn it off in the bar to edit raw NDL text.",
+            text: "Click any filled block to edit inline — code snippets show a language label; callout icons open a type menu.",
             attributes: ["callout": "note"]
         ),
         NoteBlock(kind: .quote, text: "Your corpus stays on this Mac by default — no account required.")
@@ -201,16 +206,6 @@ extension VaultDocument {
 
 extension PageType {
     var defaultPageIcon: String {
-        switch self {
-        case .note: return "🌐"
-        case .task: return "✅"
-        case .reference: return "🔖"
-        case .journal: return "📓"
-        case .project: return "📁"
-        case .book: return "📚"
-        case .document: return "📄"
-        case .wikiSite: return "🌐"
-        case .collection: return "🗂️"
-        }
+        unicodeCharacter
     }
 }

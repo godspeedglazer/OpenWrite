@@ -44,4 +44,10 @@ struct AgentConfig: Identifiable, Hashable, Sendable, Codable {
             ? min(800, AISafetyLimits.maxSnippetCharsPerChunk * 2)
             : AISafetyLimits.maxSnippetCharsPerChunk
     }
+
+    func withVaultRetrieval(_ enabled: Bool) -> AgentConfig {
+        var copy = self
+        copy.toolFlags.useVaultRetrieval = enabled
+        return copy
+    }
 }

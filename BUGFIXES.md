@@ -46,6 +46,7 @@ Brief log from the Debug build / UI edge-case sweep.
 
 ## Typography / anti-patterns
 
+- **Source Serif 4:** macOS ignores `UIAppFonts` alone — added `ATSApplicationFontsPath` = `Fonts`, folder-reference copy into `Resources/Fonts/`, and `CTFontManagerRegisterFontsForURL` in `OWTypography.verifyBundledFontsAtLaunch()` (PostScript names already matched TTFs).
 - Grep: no `Image(systemName:)`, `systemImage`, or bare `Font.body` in product Swift (code blocks use `OWTypography.code*`).
 - `RelatedNotesView` and `PropertyInspectorView` aligned to design tokens.
 

@@ -1,5 +1,27 @@
 import Foundation
 
+/// Recommended embedding models for LM Studio (user downloads separately).
+enum EmbeddingModelPreset: String, CaseIterable, Identifiable, Sendable {
+    case uaeLargeV1 = "WhereIsAI/UAE-Large-V1"
+    case nomicEmbedText = "text-embedding-nomic-embed-text-v1.5"
+    case bgeSmall = "BAAI/bge-small-en-v1.5"
+
+    var id: String { rawValue }
+
+    var menuTitle: String {
+        switch self {
+        case .uaeLargeV1:
+            return "UAE-Large-V1 (recommended)"
+        case .nomicEmbedText:
+            return "Nomic Embed Text v1.5"
+        case .bgeSmall:
+            return "BGE Small EN v1.5"
+        }
+    }
+
+    static var defaultPreset: EmbeddingModelPreset { .uaeLargeV1 }
+}
+
 /// User-configurable LM Studio (OpenAI-compatible) endpoint.
 struct LMStudioConfig: Codable, Hashable, Sendable {
     var baseURL: URL
@@ -12,7 +34,7 @@ struct LMStudioConfig: Codable, Hashable, Sendable {
     init(
         baseURL: URL = URL(string: "http://127.0.0.1:1234")!,
         chatModel: String = "local-model",
-        embeddingModel: String = "",
+        embeddingModel: String = EmbeddingModelPreset.defaultPreset.rawValue,
         apiKey: String? = nil,
         timeoutSeconds: TimeInterval = 60,
         streamingEnabled: Bool = true
@@ -26,6 +48,9 @@ struct LMStudioConfig: Codable, Hashable, Sendable {
     }
 
     static let `default` = LMStudioConfig()
+
+    /// Default embedding model id (Reor-style UAE-Large-V1 via LM Studio).
+    static let defaultEmbeddingModelID = EmbeddingModelPreset.defaultPreset.rawValue
 
     /// OpenAI-compatible `/v1` root.
     var apiV1BaseURL: URL {

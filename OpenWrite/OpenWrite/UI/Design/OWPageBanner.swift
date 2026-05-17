@@ -75,7 +75,7 @@ struct OWPageTitleBand: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-            if showsFontWarning, !OWTypography.isBundledSerifAvailable {
+            if showsFontWarning, OWTypography.showsBundledSerifWarningInUI {
                 OWTypographyFontWarningBanner()
             }
 

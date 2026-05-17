@@ -1,11 +1,11 @@
 # OpenWrite Frontend Priorities
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Last updated:** 2026-05-17  
 **Audience:** Design, engineering, agents  
-**Status:** **P0 for downloads** — backend/RAG viability is assumed; ship perception and daily-use polish in the shell first.
+**Status:** **P0 largely pass** — Refactor Phase 0 complete; P1 density/graph polish remains. Canonical spec: [UIRefactorBrief.md](./UIRefactorBrief.md) · audit: [CurrentUIAudit.md](./CurrentUIAudit.md) · handoff: [../HANDOFF.md](../HANDOFF.md).
 
-**Related:** [../ProductDirection.md](../ProductDirection.md) · [ProductDirection.md](./ProductDirection.md) · [AntiPatterns.md](./AntiPatterns.md) · [Typography.md](./Typography.md) · [OWIcons.md](./OWIcons.md) · [AnytypeUIInspiration.md](./AnytypeUIInspiration.md) · [Motion.md](./Motion.md) · [BrandAndLogo.md](./BrandAndLogo.md)
+**Related:** [../ProductDirection.md](../ProductDirection.md) · [ProductDirection.md](./ProductDirection.md) · [AntiPatterns.md](./AntiPatterns.md) · [Typography.md](./Typography.md) · [OWIcons.md](./OWIcons.md) · [AnytypeUIInspiration.md](./AnytypeUIInspiration.md) · [Motion.md](./Motion.md) · [BrandAndLogo.md](./BrandAndLogo.md) · [UIRefactorBrief.md](./UIRefactorBrief.md)
 
 ---
 
@@ -53,18 +53,16 @@ Implementation hub: `AnytypeShellView.swift`, `OWNavigationRail` (when landed). 
 
 ---
 
-## 3. Open icons (Lucide / Phosphor)
+## 3. Open icons (Unicode only — refactor policy)
 
-**Intent:** Icons with **more character** than SF Symbols — slightly richer strokes, not forced into Apple’s symmetric grid. Use **open licenses**, not hand-rolled “fake SF.”
+**Intent:** Distinct glyphs without SF Symbols or Electron-era asset pipelines. **Shipped policy (2026-05-17):** **`OWUnicodeIcon` / `OWUnicodeIconView` only** — see [OWIcons.md](./OWIcons.md).
 
-| Option | License | Action |
-|--------|---------|--------|
-| **[Lucide](https://lucide.dev)** | MIT | Preferred default — bundle SVGs for nav, types, AI, graph |
-| **[Phosphor](https://phosphoricons.com)** | MIT | Acceptable alternative — pick **one** family per app, no mixing |
+| Do | Don't |
+|----|--------|
+| `OWUnicodeIconView` for nav, types, AI, graph | `Image(systemName:)` / Lucide / Phosphor in product UI |
+| Page **emoji** on banner / hero only | Emoji in sidebar nav wells |
 
-**Policy:** No `Image(systemName:)` / `Label(..., systemImage:)` in `OpenWrite/UI/**`. Render via `OWIcon` + asset catalog or path import from chosen set ([OWIcons.md](./OWIcons.md)).
-
-Hand-authored `OWIconShape` paths remain valid for gaps until SVG assets land; **end state** is bundled open glyphs, not SF Symbols and not Apple HIG metaphor.
+**Deprecated:** `OWIcon` / `OWIconView` path shapes — reference only, no new call sites. Lucide/Phosphor were removed from P0; do not reintroduce without explicit product decision.
 
 ---
 
@@ -104,19 +102,21 @@ Spec: [Motion.md](./Motion.md) (`durationEmphasis` is upper bound for unlock onl
 
 ## 6. Filled UI checklist
 
-Use before calling a build “download-ready.” Check in Debug at default window **1200×800**.
+Use before calling a build “download-ready.” Check in Debug at default window **1200×800**. Status from user feedback + [CurrentUIAudit.md](./CurrentUIAudit.md) (2026-05-17).
 
 ### P0 — Must feel true in screenshots
 
-- [ ] **Launch:** Bloom intro ≤ 0.5s, then editor-forward shell
-- [ ] **Sidebar:** Custom rail — no system `List` selection blue; section headers in serif small caps
-- [ ] **Typography:** Serif on hero, sidebar, and section labels — not SF chrome
-- [ ] **Icons:** Lucide or Phosphor bundled — zero `systemName:` in `OpenWrite/UI/**`
-- [ ] **Editor:** `OWPageHero` + optional gradient banner; center column is widest
-- [ ] **Inspector:** Collapsed by default; ≤ 320pt when open
-- [ ] **Empty database:** “+ New row” (or equivalent) under toolbar — not a lone paragraph in a void
-- [ ] **Dead space:** No full-height empty column; content uses vertical space (max width ~680–720, but **fill** height)
-- [ ] **LM Studio:** Not a giant block in left rail — Settings or footer strip
+- [x] **Launch:** Bloom intro ≤ 0.5s, then editor-forward shell — **pass** (~0.4s; once per app version)
+- [ ] **Sidebar:** Custom rail — no system `List` selection blue; section headers in serif small caps — **partial** (`OWNavigationRail` landed; vault list caps vs Anytype reference)
+- [x] **Typography:** Serif on hero, sidebar, and section labels — **pass** (macOS bundle registration; warning banner Debug-only)
+- [ ] **Icons:** Unicode only via `OWUnicodeIcon` — zero `systemName:` in `OpenWrite/UI/**` — **pass**
+- [x] **Editor:** `OWPageHero` + gradient banner + cover gallery; center column widest — **pass** (banner tap → cover sheet; editor ≥55% with assist open)
+- [x] **Page header:** Movable icon, emoji picker placement, submenu chrome — **pass** (icon-anchored popover; options menu)
+- [x] **Blocks:** Filled preview rows without clipped text — **pass**
+- [x] **Inspector / AI:** Collapsed by default; ≤ 320pt when open — **pass**
+- [x] **Empty database:** “+ New row” under toolbar — **pass**
+- [x] **Dead space:** No full-height empty column — **pass** (empty editor + type-picker hints)
+- [x] **LM Studio:** Not a giant block in left rail — **pass** (Settings for config; ingestion card when active only)
 
 ### P1 — Anytype-density parity
 
@@ -146,11 +146,28 @@ User quote: *“I'll work on the logo. Whatever. Screw it.”* — treat wordmar
 
 ---
 
+## Refactor Phase 0 (active)
+
+**Canonical spec:** [UIRefactorBrief.md](./UIRefactorBrief.md) · **Audit:** [CurrentUIAudit.md](./CurrentUIAudit.md) · **Agent entry:** [../AGENT_PROMPT_UI_REFACTOR.md](../AGENT_PROMPT_UI_REFACTOR.md)
+
+| Step | Focus | Exit criteria |
+|------|--------|---------------|
+| 0a | macOS Source Serif bundling | No font warning banner in Release; `isBundledSerifAvailable` true |
+| 0b | Block layout | `OWPreviewBlockRow` / editor: no clipped multi-line text |
+| 0c | Page header | Emoji popover placement; cover gallery; icon drag; submenu chrome |
+| 0d | Welcome fill | Template body or CTA row — no type-card void |
+| 0e | Checklist burn-down | P0 rows above move from failed/partial → pass |
+
+Reference captures: [../assets/ui-refactor/](../assets/ui-refactor/).
+
+---
+
 ## Sequencing (recommended)
 
 | Week | Focus |
 |------|--------|
-| 1 | HIG ordering exit: `OWNavigationRail`, inspector default, serif + open icons landed |
+| 0 | **Refactor Phase 0** — fonts, blocks, page header, welcome fill ([UIRefactorBrief.md](./UIRefactorBrief.md)) |
+| 1 | HIG ordering exit: rail density, inspector default, serif verified on all surfaces |
 | 2 | Anytype aesthetic density: banner, filled empty states, row wells |
 | 3 | Bloom intro + checklist burn-down + user logo drop-in when provided |
 

@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import SwiftUI
 
 // MARK: - OpenWrite typography roles
@@ -79,10 +80,52 @@ enum OWTypography {
 
     @discardableResult
     static func verifyBundledFontsAtLaunch() -> Bool {
+        registerBundledSerifFontsIfNeeded()
         isBundledSerifAvailable = NSFont(name: Family.regular, size: 12) != nil
             && NSFont(name: Family.semibold, size: 12) != nil
             && NSFont(name: Family.bold, size: 12) != nil
         return isBundledSerifAvailable
+    }
+
+    /// macOS does not auto-register `UIAppFonts` the way iOS does; register from the bundle when needed.
+    private static func registerBundledSerifFontsIfNeeded() {
+        let bundledNames = [Family.regular, Family.semibold, Family.bold]
+        guard bundledNames.contains(where: { NSFont(name: $0, size: 12) == nil }) else { return }
+
+        for url in bundledSerifFontURLs() {
+            var error: Unmanaged<CFError>?
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error)
+        }
+    }
+
+    private static func bundledSerifFontURLs() -> [URL] {
+        let names = [Family.regular, Family.semibold, Family.bold]
+        var urls: [URL] = []
+        for name in names {
+            if let url = Bundle.main.url(forResource: name, withExtension: "ttf", subdirectory: "Fonts")
+                ?? Bundle.main.url(forResource: name, withExtension: "ttf") {
+                urls.append(url)
+            }
+        }
+        if urls.count == names.count { return urls }
+
+        if let fontsDir = Bundle.main.url(forResource: "Fonts", withExtension: nil),
+           let contents = try? FileManager.default.contentsOfDirectory(
+            at: fontsDir,
+            includingPropertiesForKeys: nil
+           ) {
+            return contents.filter { $0.pathExtension.lowercased() == "ttf" && $0.lastPathComponent.hasPrefix("SourceSerif4") }
+        }
+        return urls
+    }
+
+    /// Surfaces the yellow fallback strip only in Debug when registration failed.
+    static var showsBundledSerifWarningInUI: Bool {
+        #if DEBUG
+        return !isBundledSerifAvailable
+        #else
+        return false
+        #endif
     }
 
     // MARK: Display

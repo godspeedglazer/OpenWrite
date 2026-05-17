@@ -2,11 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>ATSApplicationFontsPath</key>
+	<string>Fonts</string>
 	<key>UIAppFonts</key>
 	<array>
-		<string>SourceSerif4-Regular.ttf</string>
-		<string>SourceSerif4-Semibold.ttf</string>
-		<string>SourceSerif4-Bold.ttf</string>
+		<string>Fonts/SourceSerif4-Regular.ttf</string>
+		<string>Fonts/SourceSerif4-Semibold.ttf</string>
+		<string>Fonts/SourceSerif4-Bold.ttf</string>
 	</array>
 </dict>
 </plist>

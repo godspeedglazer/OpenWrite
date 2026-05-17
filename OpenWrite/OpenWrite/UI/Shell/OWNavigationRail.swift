@@ -305,7 +305,7 @@ struct OWNavigationRail: View {
                 vaultStore.selectedDatabaseID = nil
                 workbench.showEditor()
             } label: {
-                vaultCTALabel("+ New \(filter.displayName.lowercased())")
+                vaultCTALabel("New \(filter.displayName.lowercased())")
             }
             .buttonStyle(.plain)
         } else {
@@ -319,7 +319,7 @@ struct OWNavigationRail: View {
             Button {
                 showNewPageSheet = true
             } label: {
-                vaultCTALabel("+ New page")
+                vaultCTALabel("New page")
             }
             .buttonStyle(.plain)
         }
@@ -337,7 +337,7 @@ struct OWNavigationRail: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             palette.selectionPill.opacity(0.75),
-            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
         )
     }
 
@@ -373,7 +373,9 @@ struct OWNavigationRail: View {
 
     private var railBottomActions: some View {
         VStack(spacing: DesignTokens.Spacing.spacing2) {
-            ingestionRailFooter
+            if showsIngestionRailFooter {
+                ingestionRailFooter
+            }
 
             HStack(spacing: DesignTokens.Spacing.spacing3) {
                 railBottomButton(icon: .settings, help: "Settings") {
@@ -408,6 +410,12 @@ struct OWNavigationRail: View {
                 endPoint: .bottom
             )
         )
+    }
+
+    /// Ingestion progress only when active or failed — LM Studio config stays in Settings.
+    private var showsIngestionRailFooter: Bool {
+        let health = aiServices.ingestionHealth.health
+        return health.status == .failed || health.isActive || aiServices.isIndexing
     }
 
     private var ingestionRailFooter: some View {
@@ -521,13 +529,13 @@ struct OWNavigationRail: View {
         }
 
         if aiServices.isLMStudioConnected {
-            return "LM Studio connected · \(health.statusLabel.lowercased())"
+            return "Local AI connected · \(health.statusLabel.lowercased())"
         }
 
         if aiServices.lmStatus == "Not checked" {
-            return "LM Studio not checked — open Settings to connect"
+            return "Local AI not configured — open Settings"
         }
 
-        return aiServices.lmStatus
+        return "Local AI · \(aiServices.lmStatus)"
     }
 }

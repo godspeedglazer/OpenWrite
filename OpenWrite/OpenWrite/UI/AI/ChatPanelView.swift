@@ -19,6 +19,14 @@ final class ChatPanelModel: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var draft: String = ""
     @Published var retrievalSummary: String?
+    @Published var searchVaultEnabled: Bool = ChatPanelModel.initialSearchVaultEnabled()
+
+    private static let searchVaultDefaultsKey = "com.openwrite.chat.searchVault"
+
+    private static func initialSearchVaultEnabled() -> Bool {
+        if UserDefaults.standard.object(forKey: searchVaultDefaultsKey) == nil { return true }
+        return UserDefaults.standard.bool(forKey: searchVaultDefaultsKey)
+    }
 
     private var streamTask: Task<Void, Never>?
 
@@ -30,18 +38,21 @@ final class ChatPanelModel: ObservableObject {
         guard let query = AIInput.sanitizeQuery(draft) else { return }
         draft = ""
         streamTask?.cancel()
+        UserDefaults.standard.set(searchVaultEnabled, forKey: Self.searchVaultDefaultsKey)
+
+        let effectiveAgent = agent.withVaultRetrieval(searchVaultEnabled)
 
         messages.append(ChatMessage(role: .user, text: query, sourceHits: [], isStreaming: false))
         let assistantIndex = messages.count
         messages.append(ChatMessage(role: .assistant, text: "", sourceHits: [], isStreaming: true))
         retrievalSummary = nil
-        services.setActivity(agent.toolFlags.useVaultRetrieval ? .retrieving : .connecting)
+        services.setActivity(effectiveAgent.toolFlags.useVaultRetrieval ? .retrieving : .connecting)
 
         streamTask = Task {
             do {
                 let context = try await services.rag.buildContext(
                     query: query,
-                    agent: agent
+                    agent: effectiveAgent
                 )
                 await MainActor.run {
                     if assistantIndex < messages.count {
@@ -52,7 +63,7 @@ final class ChatPanelModel: ObservableObject {
                         : "\(context.hits.count) source\(context.hits.count == 1 ? "" : "s") · \(agent.name)"
                 }
 
-                for try await event in services.rag.streamAnswer(context: context, agent: agent) {
+                for try await event in services.rag.streamAnswer(context: context, agent: effectiveAgent) {
                     try Task.checkCancellation()
                     await MainActor.run {
                         guard assistantIndex < messages.count else { return }
@@ -192,6 +203,7 @@ private struct StreamingDots: View {
 
 struct ChatPanelView: View {
     @EnvironmentObject private var aiServices: OpenWriteAIServices
+    @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var workbench: WorkbenchState
     @StateObject private var model = ChatPanelModel()
 
@@ -381,7 +393,13 @@ struct ChatPanelView: View {
 
     @ViewBuilder
     private func messageBubble(_ message: ChatMessage) -> some View {
-        VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
+        VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
+            if message.role == .assistant, !message.sourceHits.isEmpty {
+                RAGSourcePillsView(hits: message.sourceHits) { documentID in
+                    vaultStore.selectedDocumentID = documentID
+                }
+            }
+
             Group {
                 if message.isStreaming, message.text.isEmpty {
                     HStack(spacing: 6) {
@@ -410,36 +428,7 @@ struct ChatPanelView: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-
-            if !message.sourceHits.isEmpty {
-                sourcesView(message.sourceHits)
-            }
         }
-    }
-
-    private func sourcesView(_ hits: [RetrievalHit]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Sources")
-                .font(OWTypography.captionEmphasis)
-                .foregroundStyle(.secondary)
-            ForEach(hits.prefix(6)) { hit in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(hit.documentTitle)
-                        .font(OWTypography.captionEmphasis)
-                    Text(hit.snippet)
-                        .font(OWTypography.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    Text("chunk:\(hit.id.uuidString.prefix(8))…")
-                        .font(OWTypography.codeSmall)
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(6)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func bubbleColor(for role: ChatMessage.Role) -> Color {
@@ -461,6 +450,19 @@ struct ChatPanelView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            HStack(spacing: 8) {
+                Toggle("Search notes", isOn: $model.searchVaultEnabled)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .font(OWTypography.caption)
+                Spacer(minLength: 0)
+                Text(aiServices.lmConfig.embeddingModelDisplay)
+                    .font(OWTypography.caption2)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+                    .lineLimit(1)
+            }
+
             HStack(alignment: .bottom, spacing: 8) {
                 TextField("Ask about your notes…", text: $model.draft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)

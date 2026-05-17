@@ -7,10 +7,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        _ = OWTypography.verifyBundledFontsAtLaunch()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        _ = OWTypography.verifyBundledFontsAtLaunch()
         presentMainWindow()
     }
 

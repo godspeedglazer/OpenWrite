@@ -1,23 +1,50 @@
 import Foundation
 
 enum NDLParser {
-    /// Parses NDL v0 source into blocks; recognizes `@key value` property lines.
+    /// Parses NDL v0 source into blocks; recognizes `@key value` property lines and fenced code.
     static func parse(_ source: String) -> [NoteBlock] {
-        let lines = source
-            .split(whereSeparator: \.isNewline)
-            .map { String($0).trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-
-        guard !lines.isEmpty else {
+        let rawLines = source.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .map(String.init)
+        guard !rawLines.isEmpty else {
             return [NoteBlock(kind: .paragraph, text: "")]
         }
 
-        return lines.compactMap { line in
-            if let block = parsePrefixedLine(line) {
-                return block
+        var blocks: [NoteBlock] = []
+        var index = 0
+        while index < rawLines.count {
+            let trimmed = rawLines[index].trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("```") {
+                let language = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                index += 1
+                var bodyLines: [String] = []
+                while index < rawLines.count {
+                    if rawLines[index].trimmingCharacters(in: .whitespaces) == "```" {
+                        index += 1
+                        break
+                    }
+                    bodyLines.append(rawLines[index])
+                    index += 1
+                }
+                var attributes: [String: String] = [:]
+                if !language.isEmpty {
+                    attributes["language"] = language
+                }
+                blocks.append(NoteBlock(kind: .code, text: bodyLines.joined(separator: "\n"), attributes: attributes))
+                continue
             }
-            return NoteBlock(kind: .paragraph, text: line)
+            if trimmed.isEmpty {
+                index += 1
+                continue
+            }
+            if let block = parsePrefixedLine(trimmed) {
+                blocks.append(block)
+            } else {
+                blocks.append(NoteBlock(kind: .paragraph, text: trimmed))
+            }
+            index += 1
         }
+
+        return blocks.isEmpty ? [NoteBlock(kind: .paragraph, text: "")] : blocks
     }
 
     /// Split property blocks from body content and hydrate a property bag.

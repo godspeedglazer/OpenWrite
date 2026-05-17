@@ -28,11 +28,11 @@ OpenWrite does **not** use [SF Symbols](https://developer.apple.com/sf-symbols/)
 
 | Semantic | Character | Notes |
 |----------|-----------|--------|
-| Note | 📝 | Plain note; alternate ◻ acceptable for minimal themes |
+| Note | ◆ | Plain note |
 | Task | ✓ | |
-| Journal | 📓 | |
-| Project | 📁 | |
-| Reference | 🔗 | **Required** — do not use broken path reference glyph |
+| Journal | ◇ | |
+| Project | ▣ | |
+| Reference | ⧉ | Wikilink / reference |
 | Collection | ⊞ | |
 | Graph | ◉ | |
 | Search | ⌕ | |

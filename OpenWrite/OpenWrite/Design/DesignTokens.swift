@@ -215,11 +215,14 @@ enum DesignTokens {
         static let none: CGFloat = 0
         static let small: CGFloat = 6
         static let medium: CGFloat = 8
-        /// OW Rect — sidebar cards, property strips (10–12pt range).
+        /// OW Rect — sidebar selection, CTAs, modals, toolbar actions (canonical tier).
         static let owRect: CGFloat = 11
         static let large: CGFloat = 12
-        /// Featured metadata cells (~20px CSS radius).
+        /// Metadata / type chips under the page title.
         static let metadataChip: CGFloat = 10
+        /// Alias — prefer `owRect` for new surfaces.
+        static let shellCard: CGFloat = owRect
+        static let toolbarAction: CGFloat = owRect
         static let xlarge: CGFloat = 16
         static let pill: CGFloat = 9999
         static let full: CGFloat = pill
@@ -293,7 +296,7 @@ enum DesignTokens {
         static let sidebarPreferredWidth: CGFloat = 248
         /// Fixed navigation rail — not user-resizable (anti–NavigationSplitView sidebar).
         static let navigationRailWidth: CGFloat = 248
-        static let sidebarRowHeight: CGFloat = 30
+        static let sidebarRowHeight: CGFloat = 36
         static let sidebarRowIconSize: CGFloat = 18
         static let objectIconWellSize: CGFloat = 28
         static let sidebarBottomButtonSize: CGFloat = 32
@@ -301,6 +304,8 @@ enum DesignTokens {
         static let objectTypeChipHeight: CGFloat = 24
         /// Center workbench column (editor + graph card) — absorbs horizontal growth.
         static let editorMinWidth: CGFloat = 400
+        /// Minimum share of the center workbench when the assist strip is open (ProductDirection).
+        static let editorMinWidthFraction: CGFloat = 0.55
         /// Slim Reor-style assist strip — secondary to the editor column.
         static let assistStripMinWidth: CGFloat = 240
         static let assistStripMaxWidth: CGFloat = 320

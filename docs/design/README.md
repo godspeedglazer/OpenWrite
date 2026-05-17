@@ -27,7 +27,9 @@ These documents are written for:
 
 | Document | Contents |
 |----------|----------|
-| [**FrontendPriorities.md**](./FrontendPriorities.md) | **P0:** downloads depend on frontend — HIG exit, serif, Lucide/Phosphor, Anytype aesthetics, Bloom, checklist |
+| [**UIRefactorBrief.md**](./UIRefactorBrief.md) | **Canonical refactor spec** — failures, Anytype target, component order, fonts, Unicode icons |
+| [**CurrentUIAudit.md**](./CurrentUIAudit.md) | Brutal audit table (area \| status \| fix) |
+| [**FrontendPriorities.md**](./FrontendPriorities.md) | **P0 failed/partial** — HIG exit, serif, Unicode icons, Anytype aesthetics, Bloom, Refactor Phase 0 |
 | [**BrandAndLogo.md**](./BrandAndLogo.md) | Logo concept directions (user-owned final mark), accent colors, app icon sizes |
 | [**ProductDirection.md**](./ProductDirection.md) | Design non-negotiables: abandon HIG ordering, serif + open icons, AI back nav, resize rules |
 | [**AntiPatterns.md**](./AntiPatterns.md) | Forbidden UI: HIG sidebar, hollow shell, SF Symbols, Anytype framework copy, etc. |

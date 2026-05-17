@@ -30,6 +30,7 @@ struct OWMetadataChip: View {
                     .lineLimit(1)
             }
         }
+        .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, DesignTokens.Spacing.spacing3)
         .padding(.vertical, DesignTokens.Spacing.spacing2)
         .background(chipBackground, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.metadataChip, style: .continuous))

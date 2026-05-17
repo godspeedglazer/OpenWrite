@@ -39,9 +39,10 @@ struct GraphView: View {
                     emptyVaultState
                 } else {
                     graphCanvas(snapshot: snapshot)
-                    graphNodeCards(snapshot: snapshot)
                     if snapshot.edges.isEmpty {
                         emptyGraphOverlay
+                    } else {
+                        graphNodeCards(snapshot: snapshot)
                     }
                 }
 
@@ -215,11 +216,11 @@ struct GraphView: View {
             .padding(.vertical, DesignTokens.Spacing.spacing2)
             .frame(maxWidth: DesignTokens.Layout.graphFloatingBarMaxWidth)
             .background {
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                     .fill(DesignTokens.Color.surfaceElevated)
                     .shadow(color: .black.opacity(0.10), radius: 12, y: 4)
                     .overlay {
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                             .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 0.5)
                     }
             }

@@ -68,14 +68,14 @@ struct OWSidebarRow: View {
             .frame(minHeight: dense ? 28 : DesignTokens.Layout.sidebarRowHeight)
             .background {
                 if isSelected || isHovered {
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                         .fill(rowBackgroundColor)
                         .padding(1)
                 }
             }
             .overlay {
                 if isSelected {
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                         .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
                         .padding(1)
                 }

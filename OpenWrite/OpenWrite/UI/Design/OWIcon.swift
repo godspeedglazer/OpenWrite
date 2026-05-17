@@ -119,6 +119,31 @@ struct OWLabel: View {
   }
 }
 
+/// Toolbar / action-bar control — OW Rect, not stadium pill.
+struct OWToolbarActionButtonStyle: ButtonStyle {
+  var isEnabled: Bool
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(OWTypography.captionEmphasis)
+      .foregroundStyle(isEnabled ? DesignTokens.Color.accent : DesignTokens.Color.textTertiary)
+      .padding(.horizontal, DesignTokens.Spacing.spacing2)
+      .padding(.vertical, DesignTokens.Spacing.spacing1)
+      .background(
+        isEnabled ? DesignTokens.Color.accentMuted : DesignTokens.Color.surfaceElevated,
+        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+          .strokeBorder(
+            isEnabled ? DesignTokens.Color.accent.opacity(0.4) : DesignTokens.Color.borderHairline,
+            lineWidth: DesignTokens.Layout.borderWidth
+          )
+      }
+      .opacity(configuration.isPressed ? 0.88 : 1)
+  }
+}
+
 struct OWEmptyState: View {
   let title: String
   var icon: OWIcon

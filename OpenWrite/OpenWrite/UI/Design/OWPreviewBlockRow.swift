@@ -8,6 +8,8 @@ struct OWPreviewBlockRow: View {
     let block: NoteBlock
     var text: Binding<String>? = nil
     var checked: Binding<Bool>? = nil
+    var language: Binding<String>? = nil
+    var calloutType: Binding<String>? = nil
 
     private var isEditing: Bool { text != nil }
 
@@ -48,7 +50,8 @@ struct OWPreviewBlockRow: View {
             foreground: DesignTokens.Color.textPrimary
         )
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, DesignTokens.Spacing.spacing1)
+            .padding(DesignTokens.Spacing.spacing3)
+            .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
     private var paragraphRow: some View {
@@ -128,8 +131,7 @@ struct OWPreviewBlockRow: View {
 
     private var calloutRow: some View {
         HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
-            OWUnicodeIconView(icon: calloutIcon, size: 16, color: calloutAccent)
-                .padding(.top, 2)
+            calloutLeading
             inlineText(
                 font: DesignTokens.Typography.body,
                 lineSpacing: DesignTokens.Typography.bodyLineSpacing,
@@ -145,6 +147,28 @@ struct OWPreviewBlockRow: View {
         }
     }
 
+    @ViewBuilder
+    private var calloutLeading: some View {
+        if let calloutType, isEditing {
+            Menu {
+                ForEach(Self.calloutVariants, id: \.self) { variant in
+                    Button(variant.capitalized) {
+                        calloutType.wrappedValue = variant
+                    }
+                }
+            } label: {
+                OWUnicodeIconView(icon: calloutIcon, size: 16, color: calloutAccent)
+            }
+            .menuStyle(.borderlessButton)
+            .padding(.top, 2)
+        } else {
+            OWUnicodeIconView(icon: calloutIcon, size: 16, color: calloutAccent)
+                .padding(.top, 2)
+        }
+    }
+
+    private static let calloutVariants = ["note", "tip", "warning", "important", "danger"]
+
     private var quoteRow: some View {
         HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
@@ -159,21 +183,52 @@ struct OWPreviewBlockRow: View {
     }
 
     private var codeRow: some View {
-        Group {
-            if isEditing, let text {
-                TextField("Code", text: text, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(DesignTokens.Typography.code)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-            } else {
-                Text(block.text)
-                    .font(DesignTokens.Typography.code)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                Text("⌘")
+                    .font(DesignTokens.Typography.captionEmphasis)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+                if isEditing, let language {
+                    TextField("language", text: language)
+                        .textFieldStyle(.plain)
+                        .font(DesignTokens.Typography.captionEmphasis)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .frame(maxWidth: 120)
+                } else {
+                    Text(resolvedLanguageLabel)
+                        .font(DesignTokens.Typography.captionEmphasis)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                }
+                Spacer(minLength: 0)
             }
+            Group {
+                if isEditing, let text {
+                    TextField("Code snippet", text: text, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(DesignTokens.Typography.code)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(block.text)
+                        .font(DesignTokens.Typography.code)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DesignTokens.Spacing.spacing3)
         .background(DesignTokens.Color.codeBackground, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 1)
+        }
+    }
+
+    private var resolvedLanguageLabel: String {
+        let lang = language?.wrappedValue ?? block.attributes["language"] ?? ""
+        return lang.isEmpty ? "code" : lang
     }
 
     private var linkRow: some View {
@@ -240,12 +295,14 @@ struct OWPreviewBlockRow: View {
                 .font(font)
                 .lineSpacing(lineSpacing)
                 .foregroundStyle(foreground)
-                .lineLimit(1...8)
+                .fixedSize(horizontal: false, vertical: true)
         } else {
             Text(block.text)
                 .font(font)
                 .lineSpacing(lineSpacing)
                 .foregroundStyle(foreground)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -254,7 +311,8 @@ struct OWPreviewBlockRow: View {
     }
 
     private var calloutVariant: String {
-        block.attributes["callout"] ?? "note"
+        let bound = calloutType?.wrappedValue ?? block.attributes["callout"] ?? "note"
+        return bound.isEmpty ? "note" : bound
     }
 
     private var calloutAccent: Color {

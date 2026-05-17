@@ -33,7 +33,9 @@ final class OpenWriteAIServices: ObservableObject {
     }
 
     init() {
-        lmClient = LMStudioClient(config: .default)
+        let stored = LMStudioConfigPersistence.load() ?? .default
+        lmConfig = stored
+        lmClient = LMStudioClient(config: stored)
         embeddings = LocalHashEmbeddingService()
         indexer = NoOpIndexerService()
         retrieval = NoOpRetrievalService()
@@ -54,16 +56,19 @@ final class OpenWriteAIServices: ObservableObject {
 
     func applyConfig(_ config: LMStudioConfig) {
         lmConfig = config
+        LMStudioConfigPersistence.save(config)
         rebuildPipeline()
     }
 
     func updateChatModel(_ modelID: String) {
         lmConfig.chatModel = modelID
+        LMStudioConfigPersistence.save(lmConfig)
         rebuildPipeline()
     }
 
     func updateEmbeddingModel(_ modelID: String) {
         lmConfig.embeddingModel = modelID
+        LMStudioConfigPersistence.save(lmConfig)
         rebuildPipeline()
     }
 

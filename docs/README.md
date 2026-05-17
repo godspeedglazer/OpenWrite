@@ -14,6 +14,7 @@ Welcome to the canonical documentation index for OpenWrite. This hub is the entr
 
 | Audience | Read first | Then |
 |----------|------------|------|
+| **UI refactor agent** | [**HANDOFF.md**](./HANDOFF.md) · [**AGENT_PROMPT_UI_REFACTOR.md**](./AGENT_PROMPT_UI_REFACTOR.md) | [design/UIRefactorBrief.md](./design/UIRefactorBrief.md), [design/CurrentUIAudit.md](./design/CurrentUIAudit.md) |
 | New contributor | [OpenWriteMasterPlan.md](./OpenWriteMasterPlan.md) (vision, do not duplicate in full) | [Architecture/Overview.md](./Architecture/Overview.md) |
 | iOS/macOS engineer | [Architecture/Overview.md](./Architecture/Overview.md) | [Architecture/DataModel.md](./Architecture/DataModel.md), Swift tree under `OpenWrite/OpenWrite/` |
 | NDL / editor work | [NDL/Specification.md](./NDL/Specification.md) | [NDL/Migration.md](./NDL/Migration.md) |
@@ -64,6 +65,11 @@ Master plan NDL summary (shorter): [OpenWriteMasterPlan.md § Note DSL](./OpenWr
 
 | Document | Description |
 |----------|-------------|
+| [**HANDOFF.md**](./HANDOFF.md) | UI refactor handoff index (Phase 0). |
+| [**AGENT_PROMPT_UI_REFACTOR.md**](./AGENT_PROMPT_UI_REFACTOR.md) | Copy-paste agent prompt for UI refactor sessions. |
+| [**design/UIRefactorBrief.md**](./design/UIRefactorBrief.md) | Canonical UI refactor spec (failures, targets, component order). |
+| [**design/CurrentUIAudit.md**](./design/CurrentUIAudit.md) | Brutal area × status × fix audit table. |
+| [**design/FrontendPriorities.md**](./design/FrontendPriorities.md) | P0 checklist (failed/partial) + Refactor Phase 0. |
 | [**design/README.md**](./design/README.md) | Design language index, principles, relationship to `DesignTokens.swift`. |
 | [design/OpenWriteDesignLanguage.md](./design/OpenWriteDesignLanguage.md) | *Planned* — principles, visual identity, layout grammar. |
 | [design/Tokens.md](./design/Tokens.md) | *Planned* — semantic colors, typography, spacing. |

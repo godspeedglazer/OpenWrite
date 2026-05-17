@@ -49,28 +49,34 @@ struct DatabaseTableView: View {
     }
 
     private var tableHeader: some View {
-        HStack(spacing: DesignTokens.Spacing.spacing3) {
-            HStack(spacing: DesignTokens.Spacing.spacing2) {
-                OWUnicodeIconView(icon: database.icon, size: 20, color: database.tint.color)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(database.name)
-                        .font(DesignTokens.Typography.heading3)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                    Text("\(entries.count) entries · \(database.fields.count) fields")
-                        .font(DesignTokens.Typography.caption)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            HStack(spacing: DesignTokens.Spacing.spacing3) {
+                HStack(spacing: DesignTokens.Spacing.spacing2) {
+                    OWUnicodeIconView(icon: database.icon, size: 20, color: database.tint.color)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(database.name)
+                            .font(DesignTokens.Typography.heading3)
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                        Text("\(entries.count) entries · \(database.fields.count) fields")
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                    }
                 }
-            }
-            Spacer()
-            Button {
-                if let entry = vaultStore.addDatabaseEntry(to: database.id) {
-                    editingEntry = entry
+                Spacer()
+                Button {
+                    if let entry = vaultStore.addDatabaseEntry(to: database.id) {
+                        editingEntry = entry
+                    }
+                } label: {
+                    OWLabel(title: "Add entry", icon: .plus, iconSize: 14)
                 }
-            } label: {
-                OWLabel(title: "Add entry", icon: .plus, iconSize: 14)
+                .buttonStyle(.borderedProminent)
+                .tint(database.tint.color)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(database.tint.color)
+
+            if !database.fields.isEmpty {
+                newRowButton
+            }
         }
         .padding(.horizontal, DesignTokens.Spacing.spacing5)
         .padding(.vertical, DesignTokens.Spacing.spacing2)
@@ -94,35 +100,43 @@ struct DatabaseTableView: View {
     }
 
     private var emptyState: some View {
-        VStack {
-            Spacer()
-            Button {
-                if let entry = vaultStore.addDatabaseEntry(to: database.id) {
-                    editingEntry = entry
-                }
-            } label: {
-                HStack(spacing: DesignTokens.Spacing.spacing2) {
-                    OWUnicodeIconView(icon: .plus, size: 16, color: database.tint.color)
-                    Text("+ New row")
-                        .font(DesignTokens.Typography.bodyEmphasis)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                }
-                .padding(.horizontal, DesignTokens.Spacing.spacing4)
-                .padding(.vertical, DesignTokens.Spacing.spacing2)
-                .background(
-                    database.tint.color.opacity(0.14),
-                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-                        .strokeBorder(database.tint.color.opacity(0.35), lineWidth: DesignTokens.Layout.borderWidth)
-                }
-            }
-            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing4) {
+            Text("No rows yet — add your first entry below the toolbar.")
+                .font(DesignTokens.Typography.caption)
+                .foregroundStyle(DesignTokens.Color.textTertiary)
+                .padding(.horizontal, DesignTokens.Spacing.spacing5)
+                .padding(.top, DesignTokens.Spacing.spacing4)
+
             Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(DesignTokens.Color.editorCanvas)
+    }
+
+    private var newRowButton: some View {
+        Button {
+            if let entry = vaultStore.addDatabaseEntry(to: database.id) {
+                editingEntry = entry
+            }
+        } label: {
+            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                OWUnicodeIconView(icon: .plus, size: 16, color: database.tint.color)
+                Text("New row")
+                    .font(DesignTokens.Typography.bodyEmphasis)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+            }
+            .padding(.horizontal, DesignTokens.Spacing.spacing4)
+            .padding(.vertical, DesignTokens.Spacing.spacing2)
+            .background(
+                database.tint.color.opacity(0.14),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .strokeBorder(database.tint.color.opacity(0.35), lineWidth: DesignTokens.Layout.borderWidth)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var tableBody: some View {

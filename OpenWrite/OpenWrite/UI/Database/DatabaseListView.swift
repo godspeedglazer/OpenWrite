@@ -33,7 +33,7 @@ struct DatabaseListView: View {
                         } label: {
                             HStack(spacing: DesignTokens.Spacing.spacing2) {
                                 OWUnicodeIconView(icon: .plus, size: 14, color: DesignTokens.Color.accent)
-                                Text("+ New database")
+                                Text("New database")
                                     .font(DesignTokens.Typography.sidebarItem.weight(.medium))
                                     .foregroundStyle(DesignTokens.Color.accent)
                             }
@@ -42,7 +42,7 @@ struct DatabaseListView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(
                                 DesignTokens.Color.selectionPill.opacity(0.75),
-                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                             )
                         }
                         .buttonStyle(.plain)
