@@ -10,6 +10,8 @@ struct OWSidebarRow: View {
     var customIcon: OWIcon?
     var iconTint: Color?
     var showsGraphGlyph: Bool = false
+    /// Tighter vault/object list density.
+    var dense: Bool = false
     let isSelected: Bool
     let action: () -> Void
 
@@ -31,18 +33,22 @@ struct OWSidebarRow: View {
                         .frame(width: 28, height: 28)
                         .background(iconTint.opacity(0.14), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous))
                 } else {
-                    OWPageTypeIconWell(icon: rowIcon, pageType: pageTypeForWell)
+                    OWPageTypeIconWell(
+                        icon: rowIcon,
+                        pageType: pageTypeForWell,
+                        size: DesignTokens.Layout.objectIconWellSize
+                    )
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: dense ? 0 : 2) {
                     Text(title)
-                        .font(DesignTokens.Typography.sidebarItem.weight(.medium))
+                        .font(OWTypography.sidebarItemEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                         .lineLimit(1)
 
-                    if let subtitle {
+                    if let subtitle, !dense {
                         Text(subtitle)
-                            .font(DesignTokens.Typography.caption)
+                            .font(OWTypography.caption)
                             .foregroundStyle(DesignTokens.Color.textSecondary)
                             .lineLimit(1)
                     }
@@ -51,8 +57,8 @@ struct OWSidebarRow: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, DesignTokens.Spacing.spacing2)
-            .padding(.vertical, subtitle == nil ? 2 : DesignTokens.Spacing.spacing1)
-            .frame(minHeight: DesignTokens.Layout.sidebarRowHeight)
+            .padding(.vertical, dense ? 1 : (subtitle == nil ? 2 : DesignTokens.Spacing.spacing1))
+            .frame(minHeight: dense ? 28 : DesignTokens.Layout.sidebarRowHeight)
             .background {
                 if isSelected || isHovered {
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)

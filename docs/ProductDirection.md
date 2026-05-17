@@ -1,11 +1,11 @@
 # OpenWrite Product Direction
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Last updated:** 2026-05-17  
 **Audience:** Product, design, engineering, and agents  
 **Status:** Firm grasp — single page for *what we are building* and *what wins next*
 
-**Related:** [OpenWriteMasterPlan.md](./OpenWriteMasterPlan.md) (delivery depth) · [ProductPhilosophy.md](./ProductPhilosophy.md) (beliefs) · [FeatureParityMatrix.md](./FeatureParityMatrix.md) (row-level parity) · [design/ProductDirection.md](./design/ProductDirection.md) (UI non-negotiables) · [design/OpenWriteDesignLanguage.md](./design/OpenWriteDesignLanguage.md) (visual rules) · [design/AntiPatterns.md](./design/AntiPatterns.md)
+**Related:** [OpenWriteMasterPlan.md](./OpenWriteMasterPlan.md) (delivery depth) · [ProductPhilosophy.md](./ProductPhilosophy.md) (beliefs) · [FeatureParityMatrix.md](./FeatureParityMatrix.md) (row-level parity) · [design/FrontendPriorities.md](./design/FrontendPriorities.md) (**P0: downloads depend on frontend**) · [design/ProductDirection.md](./design/ProductDirection.md) (UI non-negotiables) · [design/OpenWriteDesignLanguage.md](./design/OpenWriteDesignLanguage.md) (visual rules) · [design/AntiPatterns.md](./design/AntiPatterns.md)
 
 ---
 
@@ -91,26 +91,35 @@ From the Reor lineage ([ADR 0003](./adr/0003-reor-rag-in-swift.md), [features/Re
 
 ---
 
-## 3. Visual direction: Anytype-inspired custom rects, NOT Apple HIG / SF Symbols
+## 3. Visual direction: Anytype *aesthetics*, not HIG ordering or Anytype *framework*
 
-### Principle
+### Principle (user feedback, 2026-05-17)
 
-**Native macOS** means sandbox, Keychain, shortcuts, VoiceOver — not “every control is `List`, `Form`, SF Symbols, and system blue buttons.” OpenWrite ships a **custom shell**: calm gray rail, white editor canvas, rounded **OW Rect** cards, pill selection, **`OWIcon`** + **bundled typography** — clean-room from Anytype *density and modularity*, not pixels or assets.
+**Downloads depend on frontend.** Assume vault, NDL, and local RAG are viable; the next wins are **perception and daily use** — not more backend surface area.
 
-**Design canon:** [design/ProductDirection.md](./design/ProductDirection.md) (resize, AI back nav) · [design/AntiPatterns.md](./design/AntiPatterns.md) (forbidden patterns) · [OpenWriteDesignLanguage.md](./design/OpenWriteDesignLanguage.md) § Custom shell.
+**Native macOS** means sandbox, Keychain, shortcuts, VoiceOver — **not** Apple HIG as the product’s information architecture. We **abandon HIG ordering**: no stock `NavigationSplitView` + `List` sidebar staple, no Settings-app section flow, no SF Symbols + San Francisco as the product face. OpenWrite ships a **custom shell**: calm gray rail, **filled** white editor canvas, rounded **OW Rect** cards, pill selection, **open icon sets** (Lucide or Phosphor, MIT), and **punchy serif typography** (Serifa intent → bundled Source Serif 4 / Literata).
+
+**Anytype clarification:** The reference app is **more functional and cohesive** than our current UI. We want Anytype’s **aesthetics** (dense object rows, gradient page banners, filled blocks, sensible nav) — **not** its framework (Electron/TS stack, object middleware, ASAL code). Today we are inverted: too much Anytype-*shaped* chrome with too little Anytype-*quality* fill and polish.
+
+**Bloom intro:** Sub-half-second launch wordmark fade (clean-room), then straight into the workbench — see [design/FrontendPriorities.md § Bloom](./design/FrontendPriorities.md#5-bloom-intro).
+
+**Logo:** Final mark **deferred to the user** (Figma); engineering keeps a placeholder only — [design/BrandAndLogo.md](./design/BrandAndLogo.md).
+
+**Design canon:** [design/FrontendPriorities.md](./design/FrontendPriorities.md) · [design/ProductDirection.md](./design/ProductDirection.md) · [design/AntiPatterns.md](./design/AntiPatterns.md) · [OpenWriteDesignLanguage.md](./design/OpenWriteDesignLanguage.md) § Custom shell.
 
 ### Do / don’t
 
 | Do | Don’t |
 |----|-------|
-| `OWIcon`, `OWRoundedRect`, `OWSidebarRow`, `OWPageHero`, `OWObjectTypeChip`, `OWAIPanelHeader` ([OWComponents.md](./design/OWComponents.md)) | **SF Symbols** or `Image(systemName:)` in product UI |
-| Bundled fonts via `DesignTokens.Typography` | San Francisco as default chrome typeface |
-| Sidebar background ~`#F5F5F7`, editor on `editorCanvas` white | Vibrancy stacks and full-width separator soup |
-| 10–12pt corner radius on cards; 36–40pt row height | System grouped `Form` as the main editor layout |
+| `OWNavigationRail` + `OWSidebarRow`, `OWPageHero`, `OWPageBanner`, `OWRoundedRect` ([OWComponents.md](./design/OWComponents.md)) | **HIG sidebar `List`** + system selection blue |
+| **Lucide or Phosphor** (MIT) via `OWIcon` — richer strokes than SF | **SF Symbols** / `Image(systemName:)` in product UI |
+| **Serif** display + section labels (Source Serif 4 / Literata OFL) | San Francisco / Inter-only chrome that reads “stock Mac” |
+| Filled editor column, dense object rows, “+ New row” empty states | Vast dead margins and paragraph-only empty placeholders |
+| Bloom intro &lt; 0.5s, then writing-first shell | Blocking splash or AI-first landing |
+| Inspector collapsed default; editor ≥ 55% width | Inspector half the window; LM Studio block in left rail |
 | One accent (OpenWrite teal-blue) for links and primary actions | System `.borderedProminent` / user accentColor as brand |
-| Inspector back stack for AI sub-panels | Flat inspector with no way back from drill-in |
-| Column resize clamps + inspector collapsed default | Anytype palette, icons, or copy |
-| Graph as dedicated section with custom node styling | Skia/WebView graph port |
+| Clean-room Anytype *patterns* (hero, pills, graph entry) | Anytype **framework**, assets, hex, or ASAL code |
+| User-supplied logo when ready | Shipping placeholder “OW box” as final brand |
 
 ### Screenshot → component mapping
 
@@ -177,24 +186,25 @@ We **ship** only `OpenWrite/`. **OSI-licensed** reference trees (`reor-main/`, `
 
 ---
 
-## 6. Next 30 days — UI priorities
+## 6. Next 30 days — frontend-first (downloads depend on UI)
 
-**Window:** 2026-05-17 → 2026-06-16. Goal: *feel like Anytype’s calm shell with Reor’s AI posture* while editor and NDL remain the engineering spine.
+**Window:** 2026-05-17 → 2026-06-16. Goal: *Anytype-level aesthetic density and cohesion* with *Reor’s AI posture* — **not** HIG-default chrome and **not** Anytype’s framework.
 
-| # | Priority | Outcome | Epic / doc |
-|---|----------|---------|------------|
-| 1 | **Writing-first layout** | Inspector off or ≤320pt by default; editor flex-grow; LM Studio → Settings | [EditorAndAIPanel.md](./design/EditorAndAIPanel.md), E-08 |
-| 2 | **Sidebar → OWSidebarRow** | Vault list on gray rail with pill selection; remove giant LM block from rail | [OWComponents.md](./design/OWComponents.md) |
-| 3 | **OWPageHero + editor canvas** | Title, type chip, metadata row above block editor (Anytype About pattern) | OWPageHero (implement per spec) |
-| 4 | **Wire OWRoundedRect** | Inspector and type/new-page surfaces use OW Rect cards, not raw `Form` | `UI/Design/*`, E-08 |
-| 5 | **Graph shell (read-only)** | Sidebar **Graph** opens canvas with stub layout + “link with [[wikilinks]]” empty state | [features/GraphView.md](./features/GraphView.md), E-06 |
-| 6 | **Chat compact mode** | Smaller typography, tighter empty state; agent picker in header not body | [design/Components.md](./design/Components.md) § AI panel |
-| 7 | **New page flow** | Type/template picker in sheet only; center column always editor | [TypedPagesAndStructures.md](./features/TypedPagesAndStructures.md) |
-| 8 | **Inline assist popover** | Replace sheet scaffold with selection-anchored popover + Apply | [InlineAIEditing.md](./design/InlineAIEditing.md) |
+**Checklist authority:** [design/FrontendPriorities.md](./design/FrontendPriorities.md) (filled UI checklist, sequencing).
 
-**Explicitly not in 30-day UI:** full Anytype relation graph, whiteboard, plugin system, mobile, cloud sync ([FeatureParityMatrix](./FeatureParityMatrix.md) **wont** rows).
+| # | Priority | Outcome | Doc |
+|---|----------|---------|-----|
+| 1 | **Abandon HIG ordering** | `OWNavigationRail`; custom search; OBJECTS / DATABASES / VAULT serif section labels; no system `List` selection | [FrontendPriorities.md](./design/FrontendPriorities.md) § 1 |
+| 2 | **Serif typography** | Source Serif 4 or Literata bundled; hero + rail + labels off SF/Inter-only chrome | [Typography.md](./design/Typography.md) |
+| 3 | **Open icons** | Lucide or Phosphor MIT SVGs via `OWIcon`; zero `systemName:` in UI | [OWIcons.md](./design/OWIcons.md) |
+| 4 | **Anytype aesthetics** | Gradient `OWPageBanner`, dense type rows, filled empty states, less dead margin | [AnytypeUIInspiration.md](./design/AnytypeUIInspiration.md) |
+| 5 | **Bloom intro** | `LaunchIntroView` 0.35–0.45s wordmark fade, once per version | [FrontendPriorities.md](./design/FrontendPriorities.md) § 5 |
+| 6 | **Writing-first layout** | Inspector collapsed; editor ≥ 55%; LM Studio → Settings | [EditorAndAIPanel.md](./design/EditorAndAIPanel.md) |
+| 7 | **Inline assist popover** | Selection-anchored refine + Apply | [InlineAIEditing.md](./design/InlineAIEditing.md) |
 
-**Success check (30 days):** A new user opens the app and sees **a wide page to write in** first; AI is one click away, not half the window. Side-by-side with [Anytype Graph capture](#reference-captures-user-provided-2026-05-17), the rail and rects read as family; side-by-side with [current OpenWrite capture](#reference-captures-user-provided-2026-05-17), chat no longer dominates.
+**Explicitly not in 30-day UI:** full Anytype relation graph, whiteboard, plugin system, mobile, cloud sync, **final logo** (user-owned) ([FeatureParityMatrix](./FeatureParityMatrix.md) **wont** rows).
+
+**Success check (30 days):** Launch feels intentional (Bloom), sidebar does **not** read as Apple NavigationSplitView, typography and icons feel **distinct**, center column is **filled** not hollow, and AI stays secondary. Side-by-side with Anytype captures, density and nav coherence are in the same family; side-by-side with [current OpenWrite capture](#reference-captures-user-provided-2026-05-17), empty space and HIG chrome are gone.
 
 ---
 
@@ -205,6 +215,7 @@ We **ship** only `OpenWrite/`. **OSI-licensed** reference trees (`reor-main/`, `
 | Why local / dual-generator? | [ProductPhilosophy.md](./ProductPhilosophy.md) |
 | Epics, estimates, acceptance criteria? | [RoadmapEpics.md](./RoadmapEpics.md) |
 | Competitive row pass/fail? | [FeatureParityMatrix.md](./FeatureParityMatrix.md) |
+| Frontend P0 checklist? | [design/FrontendPriorities.md](./design/FrontendPriorities.md) |
 | Colors, motion, components? | [design/README.md](./design/README.md) |
 | Full vision + NDL + privacy? | [OpenWriteMasterPlan.md](./OpenWriteMasterPlan.md) |
 | Database presets and schemas? | [features/DatabasePresets.md](./features/DatabasePresets.md) |

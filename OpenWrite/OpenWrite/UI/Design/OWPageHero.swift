@@ -32,14 +32,14 @@ struct OWPageHero: View {
             }
 
             Text(title)
-                .font(DesignTokens.Typography.documentTitle)
+                .font(OWTypography.documentTitle)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .multilineTextAlignment(style == .emptyState ? .center : .leading)
                 .frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth, alignment: alignment)
 
             if let subtitle {
                 Text(subtitle)
-                    .font(DesignTokens.Typography.callout)
+                    .font(OWTypography.callout)
                     .foregroundStyle(DesignTokens.Color.textSecondary)
                     .multilineTextAlignment(style == .emptyState ? .center : .leading)
                     .frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth, alignment: alignment)

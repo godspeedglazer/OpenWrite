@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - OWIcon
 
-/// OpenWrite icon vocabulary — geometric strokes, no SF Symbols.
+/// OpenWrite icon vocabulary — Lucide-inspired strokes (MIT), no SF Symbols.
+/// See `docs/design/OWIcons.md` for license and glyph mapping.
 enum OWIcon: String, CaseIterable, Sendable {
   case note
   case task
@@ -40,6 +41,7 @@ enum OWIcon: String, CaseIterable, Sendable {
   case zoomOut
   case zoomIn
   case grid
+  case database
   case publish
   case checkmark
   case person
@@ -186,7 +188,7 @@ extension CenterWorkbenchTab {
     switch self {
     case .editor: return .note
     case .graph: return .graph
-    case .database: return .grid
+    case .database: return .database
     }
   }
 }
@@ -248,6 +250,7 @@ private extension OWIcon {
     case .zoomOut: return zoomPath(plus: false)
     case .zoomIn: return zoomPath(plus: true)
     case .grid: return gridPath()
+    case .database: return databasePath()
     case .publish: return publishPath()
     case .checkmark: return checkmarkPath()
     case .person, .agent: return personPath()
@@ -594,6 +597,27 @@ private extension OWIcon {
     return p
   }
 
+  /// Lucide `database` — ellipse cap, side walls, mid band.
+  func databasePath() -> Path {
+    var p = Path()
+    p.addEllipse(in: CGRect(x: 3, y: 2, width: 18, height: 6))
+    p.move(to: CGPoint(x: 3, y: 5))
+    p.addLine(to: CGPoint(x: 3, y: 19))
+    p.addCurve(
+      to: CGPoint(x: 21, y: 19),
+      control1: CGPoint(x: 3, y: 22),
+      control2: CGPoint(x: 21, y: 22)
+    )
+    p.addLine(to: CGPoint(x: 21, y: 5))
+    p.move(to: CGPoint(x: 3, y: 12))
+    p.addCurve(
+      to: CGPoint(x: 21, y: 12),
+      control1: CGPoint(x: 3, y: 15),
+      control2: CGPoint(x: 21, y: 15)
+    )
+    return p
+  }
+
   func publishPath() -> Path {
     var p = Path()
     p.addRoundedRect(in: CGRect(x: 5, y: 7, width: 14, height: 14), cornerSize: CGSize(width: 2, height: 2))
@@ -712,8 +736,8 @@ struct OWPageTypeIconWell: View {
 
     private var wellBackground: Color {
         if let pageType {
-            return DesignTokens.ObjectType.chipBackground(for: pageType)
+            return DesignTokens.ObjectType.wellBackground(for: pageType)
         }
-        return DesignTokens.Color.accentMuted
+        return DesignTokens.Color.accent.opacity(0.22)
     }
 }

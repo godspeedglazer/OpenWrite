@@ -59,11 +59,15 @@
 		AA0001010000000000000035 /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000035 /* AISettingsView.swift */; };
 		AA0001010000000000000036 /* OWRoundedRect.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000036 /* OWRoundedRect.swift */; };
 		AA0001010000000000000038 /* OWPageHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000038 /* OWPageHero.swift */; };
+		AA0001010000000000000046 /* OWPageBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000046 /* OWPageBanner.swift */; };
+		AA0001010000000000000047 /* OWPreviewBlockRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000047 /* OWPreviewBlockRow.swift */; };
 		AA0001010000000000000039 /* OWObjectTypeChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000039 /* OWObjectTypeChip.swift */; };
 		AA000101000000000000003A /* AgentRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000003A /* AgentRegistry.swift */; };
 		AA000101000000000000003E /* OWMetadataChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000003E /* OWMetadataChip.swift */; };
 		AA00010100000000000000B1 /* OWIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B1 /* OWIcon.swift */; };
 		AA0001010000000000000040 /* AnytypeShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000040 /* AnytypeShellView.swift */; };
+		AA00010100000000000000B3 /* OWNavigationRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B3 /* OWNavigationRail.swift */; };
+		AA00010100000000000000D0 /* LaunchIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000D0 /* LaunchIntroView.swift */; };
 		AA0001010000000000000041 /* GraphPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000041 /* GraphPlaceholderView.swift */; };
 		AA0001010000000000000042 /* AIAssistStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000042 /* AIAssistStripView.swift */; };
 		AA0001010000000000000043 /* CenterWorkbenchTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000043 /* CenterWorkbenchTab.swift */; };
@@ -73,10 +77,10 @@
 		AA000101000000000000004D /* IngestionHealth.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000004D /* IngestionHealth.swift */; };
 		AA000101000000000000004E /* VaultFSEventsStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000004E /* VaultFSEventsStub.swift */; };
 		AA00010100000000000000B2 /* AIAssistNavigationState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B2 /* AIAssistNavigationState.swift */; };
-		AA0001010000000000000050 /* Inter-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000050 /* Inter-Regular.ttf */; };
-		AA0001010000000000000051 /* Inter-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000051 /* Inter-Medium.ttf */; };
-		AA0001010000000000000052 /* Inter-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000052 /* Inter-SemiBold.ttf */; };
-		AA0001010000000000000053 /* Inter-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000053 /* Inter-Bold.ttf */; };
+		AA0001010000000000000050 /* SourceSerif4-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000050 /* SourceSerif4-Regular.ttf */; };
+		AA0001010000000000000052 /* SourceSerif4-Semibold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000052 /* SourceSerif4-Semibold.ttf */; };
+		AA0001010000000000000053 /* SourceSerif4-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000053 /* SourceSerif4-Bold.ttf */; };
+		AA00010100000000000000D1 /* OWTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000D1 /* OWTypography.swift */; };
 		AA0001010000000000000054 /* LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000054 /* LICENSE.txt */; };
 		AA0001010000000000000056 /* OWDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000056 /* OWDatabase.swift */; };
 		AA0001010000000000000057 /* OWDatabaseEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000057 /* OWDatabaseEntry.swift */; };
@@ -144,10 +148,14 @@
 		BB0001010000000000000035 /* AISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000036 /* OWRoundedRect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWRoundedRect.swift; sourceTree = "<group>"; };
 		BB0001010000000000000038 /* OWPageHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWPageHero.swift; sourceTree = "<group>"; };
+		BB0001010000000000000046 /* OWPageBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWPageBanner.swift; sourceTree = "<group>"; };
+		BB0001010000000000000047 /* OWPreviewBlockRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWPreviewBlockRow.swift; sourceTree = "<group>"; };
 		BB0001010000000000000039 /* OWObjectTypeChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWObjectTypeChip.swift; sourceTree = "<group>"; };
 		BB000101000000000000003A /* AgentRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRegistry.swift; sourceTree = "<group>"; };
 		BB000101000000000000003E /* OWMetadataChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWMetadataChip.swift; sourceTree = "<group>"; };
 		BB0001010000000000000040 /* AnytypeShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnytypeShellView.swift; sourceTree = "<group>"; };
+		BB00010100000000000000B3 /* OWNavigationRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWNavigationRail.swift; sourceTree = "<group>"; };
+		BB00010100000000000000D0 /* LaunchIntroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchIntroView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000041 /* GraphPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphPlaceholderView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000042 /* AIAssistStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistStripView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000043 /* CenterWorkbenchTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CenterWorkbenchTab.swift; sourceTree = "<group>"; };
@@ -156,12 +164,12 @@
 		BB000101000000000000004C /* IngestionPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngestionPipeline.swift; sourceTree = "<group>"; };
 		BB000101000000000000004D /* IngestionHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngestionHealth.swift; sourceTree = "<group>"; };
 		BB000101000000000000004E /* VaultFSEventsStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultFSEventsStub.swift; sourceTree = "<group>"; };
-		BB0001010000000000000050 /* Inter-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Regular.ttf"; sourceTree = "<group>"; };
-		BB0001010000000000000051 /* Inter-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Medium.ttf"; sourceTree = "<group>"; };
-		BB0001010000000000000052 /* Inter-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-SemiBold.ttf"; sourceTree = "<group>"; };
-		BB0001010000000000000053 /* Inter-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter-Bold.ttf"; sourceTree = "<group>"; };
+		BB0001010000000000000050 /* SourceSerif4-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSerif4-Regular.ttf"; sourceTree = "<group>"; };
+		BB0001010000000000000052 /* SourceSerif4-Semibold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSerif4-Semibold.ttf"; sourceTree = "<group>"; };
+		BB0001010000000000000053 /* SourceSerif4-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SourceSerif4-Bold.ttf"; sourceTree = "<group>"; };
 		BB0001010000000000000054 /* LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE.txt; sourceTree = "<group>"; };
 		BB0001010000000000000055 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BB00010100000000000000D1 /* OWTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWTypography.swift; sourceTree = "<group>"; };
 		BB00010100000000000000B1 /* OWIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWIcon.swift; sourceTree = "<group>"; };
 		BB00010100000000000000B2 /* AIAssistNavigationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistNavigationState.swift; sourceTree = "<group>"; };
 		BB0001010000000000000056 /* OWDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWDatabase.swift; sourceTree = "<group>"; };
@@ -455,6 +463,8 @@
 				BB0001010000000000000036 /* OWRoundedRect.swift */,
 				BB0001010000000000000034 /* OWSidebarRow.swift */,
 				BB0001010000000000000038 /* OWPageHero.swift */,
+				BB0001010000000000000046 /* OWPageBanner.swift */,
+				BB0001010000000000000047 /* OWPreviewBlockRow.swift */,
 				BB0001010000000000000039 /* OWObjectTypeChip.swift */,
 				BB000101000000000000003E /* OWMetadataChip.swift */,
 				BB00010100000000000000B1 /* OWIcon.swift */,
@@ -465,7 +475,9 @@
 		EE0001010000000000000037 /* Shell */ = {
 			isa = PBXGroup;
 			children = (
+				BB00010100000000000000D0 /* LaunchIntroView.swift */,
 				BB0001010000000000000040 /* AnytypeShellView.swift */,
+				BB00010100000000000000B3 /* OWNavigationRail.swift */,
 				BB0001010000000000000041 /* GraphPlaceholderView.swift */,
 				BB0001010000000000000042 /* AIAssistStripView.swift */,
 				BB0001010000000000000043 /* CenterWorkbenchTab.swift */,
@@ -494,6 +506,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0001010000000000000022 /* DesignTokens.swift */,
+				BB00010100000000000000D1 /* OWTypography.swift */,
 			);
 			path = Design;
 			sourceTree = "<group>";
@@ -510,10 +523,9 @@
 		EE000101000000000000003C /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
-				BB0001010000000000000050 /* Inter-Regular.ttf */,
-				BB0001010000000000000051 /* Inter-Medium.ttf */,
-				BB0001010000000000000052 /* Inter-SemiBold.ttf */,
-				BB0001010000000000000053 /* Inter-Bold.ttf */,
+				BB0001010000000000000050 /* SourceSerif4-Regular.ttf */,
+				BB0001010000000000000052 /* SourceSerif4-Semibold.ttf */,
+				BB0001010000000000000053 /* SourceSerif4-Bold.ttf */,
 				BB0001010000000000000054 /* LICENSE.txt */,
 			);
 			path = Fonts;
@@ -578,10 +590,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA000101000000000000000A /* Assets.xcassets in Resources */,
-				AA0001010000000000000050 /* Inter-Regular.ttf in Resources */,
-				AA0001010000000000000051 /* Inter-Medium.ttf in Resources */,
-				AA0001010000000000000052 /* Inter-SemiBold.ttf in Resources */,
-				AA0001010000000000000053 /* Inter-Bold.ttf in Resources */,
+				AA0001010000000000000050 /* SourceSerif4-Regular.ttf in Resources */,
+				AA0001010000000000000052 /* SourceSerif4-Semibold.ttf in Resources */,
+				AA0001010000000000000053 /* SourceSerif4-Bold.ttf in Resources */,
 				AA0001010000000000000054 /* LICENSE.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -627,6 +638,7 @@
 				AA0001010000000000000020 /* WorkbenchInspectorView.swift in Sources */,
 				AA0001010000000000000021 /* IndexChunk.swift in Sources */,
 				AA0001010000000000000022 /* DesignTokens.swift in Sources */,
+				AA00010100000000000000D1 /* OWTypography.swift in Sources */,
 				AA0001010000000000000023 /* EmbeddingService.swift in Sources */,
 				AA0001010000000000000024 /* InMemoryVectorStore.swift in Sources */,
 				AA0001010000000000000025 /* OpenWriteAIServices.swift in Sources */,
@@ -645,9 +657,13 @@
 				AA0001010000000000000035 /* AISettingsView.swift in Sources */,
 				AA0001010000000000000036 /* OWRoundedRect.swift in Sources */,
 				AA0001010000000000000038 /* OWPageHero.swift in Sources */,
+				AA0001010000000000000046 /* OWPageBanner.swift in Sources */,
+				AA0001010000000000000047 /* OWPreviewBlockRow.swift in Sources */,
 				AA0001010000000000000039 /* OWObjectTypeChip.swift in Sources */,
 				AA000101000000000000003E /* OWMetadataChip.swift in Sources */,
+				AA00010100000000000000D0 /* LaunchIntroView.swift in Sources */,
 				AA0001010000000000000040 /* AnytypeShellView.swift in Sources */,
+				AA00010100000000000000B3 /* OWNavigationRail.swift in Sources */,
 				AA0001010000000000000041 /* GraphPlaceholderView.swift in Sources */,
 				AA0001010000000000000042 /* AIAssistStripView.swift in Sources */,
 				AA00010100000000000000B2 /* AIAssistNavigationState.swift in Sources */,

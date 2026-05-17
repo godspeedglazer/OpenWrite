@@ -59,7 +59,7 @@ struct DatabaseTableView: View {
                     editingEntry = entry
                 }
             } label: {
-                Label("Add entry", systemImage: "plus")
+                OWLabel(title: "Add entry", icon: .plus, iconSize: 14)
             }
             .buttonStyle(.borderedProminent)
             .tint(database.tint.color)
@@ -70,21 +70,31 @@ struct DatabaseTableView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: DesignTokens.Spacing.spacing4) {
+        VStack {
             Spacer()
-            OWPageHero(
-                title: "No entries yet",
-                subtitle: "Add your first row to start filling this database.",
-                icon: database.icon,
-                style: .emptyState
-            )
-            Button("Add entry") {
+            Button {
                 if let entry = vaultStore.addDatabaseEntry(to: database.id) {
                     editingEntry = entry
                 }
+            } label: {
+                HStack(spacing: DesignTokens.Spacing.spacing2) {
+                    OWIconView(icon: .plus, size: 16, color: database.tint.color)
+                    Text("+ New row")
+                        .font(DesignTokens.Typography.bodyEmphasis)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                }
+                .padding(.horizontal, DesignTokens.Spacing.spacing4)
+                .padding(.vertical, DesignTokens.Spacing.spacing2)
+                .background(
+                    database.tint.color.opacity(0.14),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                        .strokeBorder(database.tint.color.opacity(0.35), lineWidth: DesignTokens.Layout.borderWidth)
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .tint(database.tint.color)
+            .buttonStyle(.plain)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

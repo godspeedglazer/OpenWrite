@@ -11,14 +11,16 @@ struct OpenWriteApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(themeManager)
-                .openWritePalette(themeManager.palette)
-                .preferredColorScheme(themeManager.selectedTheme.prefersDarkAppearance ? .dark : .light)
-                .id(themeManager.selectedTheme)
-                .environmentObject(vaultStore)
-                .environmentObject(aiServices)
-                .environmentObject(pastWrites)
+            LaunchRootView {
+                ContentView()
+            }
+            .environment(themeManager)
+            .openWritePalette(themeManager.palette)
+            .preferredColorScheme(themeManager.selectedTheme.prefersDarkAppearance ? .dark : .light)
+            .id(themeManager.selectedTheme)
+            .environmentObject(vaultStore)
+            .environmentObject(aiServices)
+            .environmentObject(pastWrites)
         }
         .defaultSize(
             width: DesignTokens.Layout.windowDefaultWidth,

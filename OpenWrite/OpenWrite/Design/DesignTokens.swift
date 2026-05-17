@@ -115,6 +115,11 @@ enum DesignTokens {
         static func chipBackground(for pageType: PageType) -> SwiftUI.Color {
             accent(for: pageType).opacity(0.14)
         }
+
+        /// Sidebar / banner icon wells — stronger than chip wash.
+        static func wellBackground(for pageType: PageType) -> SwiftUI.Color {
+            accent(for: pageType).opacity(0.28)
+        }
     }
 
     // MARK: Opacity
@@ -129,64 +134,31 @@ enum DesignTokens {
     }
 
     // MARK: Typography
-    // Bundled Inter — see docs/design/Typography.md
+    // Bundled Source Serif 4 — see docs/design/Typography.md and OWTypography.swift
 
     enum Typography {
-        enum Family {
-            static let regular = "Inter-Regular"
-            static let medium = "Inter-Medium"
-            static let semibold = "Inter-SemiBold"
-            static let bold = "Inter-Bold"
-        }
-
-        static let documentTitle = inter(Family.bold, relativeTo: .largeTitle)
-        static let heading1 = inter(Family.semibold, relativeTo: .title)
-        static let heading2 = inter(Family.semibold, relativeTo: .title2)
-        static let heading3 = inter(Family.medium, relativeTo: .title3)
-        static let body = inter(Family.regular, relativeTo: .body)
-        static let bodyEmphasis = inter(Family.medium, relativeTo: .body)
-        static let callout = inter(Family.regular, relativeTo: .callout)
-        static let caption = inter(Family.regular, relativeTo: .caption)
-        static let captionEmphasis = inter(Family.medium, relativeTo: .caption)
-        static let footnote = inter(Family.regular, relativeTo: .footnote)
-        static let code = Font.system(.body, design: .monospaced)
-        static let codeSmall = Font.system(.callout, design: .monospaced)
-        static let sidebarItem = inter(Family.regular, relativeTo: .body)
-        static let sidebarItemEmphasis = inter(Family.medium, relativeTo: .body)
-        static let sidebarSection = inter(Family.semibold, relativeTo: .caption)
-        static let toolbarLabel = inter(Family.regular, relativeTo: .callout)
-        static let pageTypeIcon = inter(Family.medium, relativeTo: .title3)
-        static let sidebarWellIcon = inter(Family.semibold, relativeTo: .caption2)
-        /// SF Symbols — keep system metrics for glyph alignment.
-        static let heroSymbol = Font.system(size: 48)
-
-        static var editorNSFont: NSFont {
-            let size = NSFont.preferredFont(forTextStyle: .body).pointSize
-            return NSFont(name: Family.regular, size: size)
-                ?? .systemFont(ofSize: size)
-        }
-
-        private static func inter(_ postScriptName: String, relativeTo style: Font.TextStyle) -> Font {
-            let size = NSFont.preferredFont(forTextStyle: nsTextStyle(for: style)).pointSize
-            return Font.custom(postScriptName, size: size, relativeTo: style)
-        }
-
-        private static func nsTextStyle(for style: Font.TextStyle) -> NSFont.TextStyle {
-            switch style {
-            case .largeTitle: return .largeTitle
-            case .title: return .title1
-            case .title2: return .title2
-            case .title3: return .title3
-            case .headline: return .headline
-            case .subheadline: return .subheadline
-            case .body: return .body
-            case .callout: return .callout
-            case .caption: return .caption1
-            case .caption2: return .caption2
-            case .footnote: return .footnote
-            @unknown default: return .body
-            }
-        }
+        static let documentTitle = OWTypography.documentTitle
+        static let heading1 = OWTypography.heading1
+        static let heading2 = OWTypography.heading2
+        static let heading3 = OWTypography.heading3
+        static let body = OWTypography.body
+        static let bodyEmphasis = OWTypography.bodyEmphasis
+        static let callout = OWTypography.callout
+        static let caption = OWTypography.caption
+        static let captionEmphasis = OWTypography.captionEmphasis
+        static let footnote = OWTypography.footnote
+        static let code = OWTypography.code
+        static let codeSmall = OWTypography.codeSmall
+        static let sidebarItem = OWTypography.sidebarItem
+        static let sidebarItemEmphasis = OWTypography.sidebarItemEmphasis
+        static let sidebarSection = OWTypography.sidebarSection
+        static let railSectionLabel = OWTypography.railSectionLabel
+        static let railSectionTracking = OWTypography.railSectionTracking
+        static let toolbarLabel = OWTypography.toolbarLabel
+        static let pageTypeIcon = OWTypography.pageTypeIcon
+        static let sidebarWellIcon = OWTypography.sidebarWellIcon
+        static let heroSymbol = OWTypography.heroSymbol
+        static var editorNSFont: NSFont { OWTypography.editorNSFont }
     }
 
     // MARK: Spacing (4pt grid)
@@ -209,7 +181,7 @@ enum DesignTokens {
         )
         /// Hero / header band inside the editor card — tighter than full editor padding.
         static let editorHeroPadding = EdgeInsets(
-            top: spacing4, leading: spacing5, bottom: spacing2, trailing: spacing5
+            top: spacing2, leading: spacing3, bottom: spacing1, trailing: spacing3
         )
         static let sidebarPadding = EdgeInsets(
             top: spacing2, leading: spacing2, bottom: spacing2, trailing: spacing2
@@ -304,9 +276,11 @@ enum DesignTokens {
         static let sidebarMinWidth: CGFloat = 220
         static let sidebarMaxWidth: CGFloat = 280
         static let sidebarPreferredWidth: CGFloat = 248
-        static let sidebarRowHeight: CGFloat = 32
+        /// Fixed navigation rail — not user-resizable (anti–NavigationSplitView sidebar).
+        static let navigationRailWidth: CGFloat = 248
+        static let sidebarRowHeight: CGFloat = 30
         static let sidebarRowIconSize: CGFloat = 18
-        static let objectIconWellSize: CGFloat = 20
+        static let objectIconWellSize: CGFloat = 28
         static let sidebarBottomButtonSize: CGFloat = 32
         static let graphFloatingBarMaxWidth: CGFloat = 560
         static let objectTypeChipHeight: CGFloat = 24
@@ -327,8 +301,8 @@ enum DesignTokens {
         static let windowMinHeight: CGFloat = 600
         static let windowDefaultWidth: CGFloat = 1200
         static let windowDefaultHeight: CGFloat = 800
-        /// Readable measure while using more of wide center columns (~72–78 chars at body size).
-        static let editorMaxContentWidth: CGFloat = 820
+        /// Readable measure — Anytype-inspired ~704px reference, tuned for OpenWrite.
+        static let editorMaxContentWidth: CGFloat = 680
         static let captureSheetWidth: CGFloat = 520
         static let captureSheetMinHeight: CGFloat = 200
         static let graphNodeMinSize: CGFloat = 44

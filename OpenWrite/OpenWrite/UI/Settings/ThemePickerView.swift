@@ -31,10 +31,12 @@ struct ThemeQuickToggle: View {
                     Button {
                         themeManager.select(theme)
                     } label: {
-                        if themeManager.selectedTheme == theme {
-                            Label(theme.displayName, systemImage: "checkmark")
-                        } else {
+                        HStack {
                             Text(theme.displayName)
+                            if themeManager.selectedTheme == theme {
+                                Spacer(minLength: 8)
+                                OWIconView(icon: .checkmark, size: 12, color: DesignTokens.Color.accent)
+                            }
                         }
                     }
                 }

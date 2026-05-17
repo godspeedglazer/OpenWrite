@@ -51,7 +51,7 @@ struct EditorView: View {
     @ViewBuilder
     private func editorBody(_ document: VaultDocument) -> some View {
         VStack(spacing: 0) {
-            pageHero(document)
+            pageBanner(document)
 
             if showTypePicker {
                 editorTypePickerStrip(document)
@@ -66,37 +66,26 @@ struct EditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func pageHero(_ document: VaultDocument) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-            HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
-                pageIcon(for: document)
-
-                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
-                    Text(document.displayTitle)
-                        .font(DesignTokens.Typography.documentTitle)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .lineLimit(3)
-
-                    metadataRow(document)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private func pageBanner(_ document: VaultDocument) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            OWPageBanner(
+                title: document.displayTitle,
+                icon: document.pageType.owIcon,
+                pageType: document.pageType,
+                showsGradient: true
+            ) {
+                metadataRow(document)
             }
-            .openWriteEditorContentWidth()
-            .frame(maxWidth: .infinity, alignment: .leading)
 
             if showProperties {
                 OWRoundedRect(style: .elevated, padding: DesignTokens.Spacing.spacing2) {
                     PropertyInspectorView(documentID: document.id)
                 }
                 .openWriteEditorContentWidth()
+                .padding(.horizontal, DesignTokens.Spacing.spacing3)
+                .padding(.bottom, DesignTokens.Spacing.spacing2)
             }
         }
-        .padding(DesignTokens.Spacing.editorHeroPadding)
-    }
-
-    private func pageIcon(for document: VaultDocument) -> some View {
-        OWPageTypeIconWell(icon: document.pageType.owIcon, pageType: document.pageType, size: 36)
-            .accessibilityHidden(true)
     }
 
     private func metadataRow(_ document: VaultDocument) -> some View {
@@ -139,7 +128,7 @@ struct EditorView: View {
 
     private func editorTypePickerStrip(_ document: VaultDocument) -> some View {
         TypePickerView(documentID: document.id, mode: .switchType, layout: .compact)
-            .padding(.horizontal, DesignTokens.Spacing.spacing5)
+            .padding(.horizontal, DesignTokens.Spacing.spacing3)
             .padding(.bottom, DesignTokens.Spacing.spacing1)
     }
 
@@ -159,13 +148,15 @@ struct EditorView: View {
                         .controlSize(.small)
                 } else {
                     OWLabel(title: "Refine", icon: .sparkles)
-                        .font(DesignTokens.Typography.captionEmphasis)
+                        .font(OWTypography.captionEmphasis)
                 }
             }
             .disabled(!inlineAssist.canRefineSelection)
             .help("Improve selected text with local AI")
         }
-        .padding(.horizontal, DesignTokens.Spacing.spacing5)
+        .openWriteEditorContentWidth()
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, DesignTokens.Spacing.spacing3)
         .padding(.vertical, DesignTokens.Spacing.spacing1)
     }
 
@@ -181,10 +172,12 @@ struct EditorView: View {
                     selectedRange: range
                 )
             }
-            .font(DesignTokens.Typography.body)
+            .font(OWTypography.body)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.horizontal, DesignTokens.Spacing.spacing5)
-            .padding(.bottom, DesignTokens.Spacing.spacing4)
+            .openWriteEditorContentWidth()
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.bottom, DesignTokens.Spacing.spacing3)
             .onChange(of: editingText) { _, newValue in
                 commitEdit(document: document, plainText: newValue)
             }
@@ -252,66 +245,16 @@ struct EditorView: View {
 
     private func renderedPreview(_ document: VaultDocument) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
                 ForEach(document.rootBlocks.filter { $0.kind != .property }) { block in
-                    blockView(block)
+                    OWPreviewBlockRow(block: block)
                 }
             }
             .openWriteEditorContentWidth()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DesignTokens.Spacing.spacing5)
+            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.bottom, DesignTokens.Spacing.spacing3)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    @ViewBuilder
-    private func blockView(_ block: NoteBlock) -> some View {
-        switch block.kind {
-        case .heading1:
-            Text(block.text).font(DesignTokens.Typography.heading1)
-        case .heading2:
-            Text(block.text).font(DesignTokens.Typography.heading2)
-        case .heading3:
-            Text(block.text).font(DesignTokens.Typography.heading3)
-        case .bullet:
-            HStack(alignment: .top, spacing: 8) {
-                Text("•")
-                Text(block.text)
-            }
-        case .quote:
-            Text(block.text)
-                .padding(.leading, 12)
-                .overlay(alignment: .leading) {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.4))
-                        .frame(width: 3)
-                }
-        case .code:
-            Text(block.text)
-                .font(DesignTokens.Typography.code)
-                .padding(8)
-                .background(Color.secondary.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        case .divider:
-            Divider()
-        case .wikilink:
-            Text(block.text)
-                .foregroundStyle(.tint)
-        case .property:
-            HStack(spacing: 6) {
-                Text(block.propertyKey?.displayName ?? block.text)
-                    .font(DesignTokens.Typography.captionEmphasis)
-                    .foregroundStyle(.secondary)
-                Text(block.propertyValuePayload)
-                    .font(DesignTokens.Typography.caption)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Color.secondary.opacity(0.1))
-            .clipShape(Capsule())
-        case .paragraph:
-            Text(block.text)
-                .font(DesignTokens.Typography.body)
-        }
     }
 }

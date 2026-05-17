@@ -1,26 +1,34 @@
 # OpenWrite Design Product Direction
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Last updated:** 2026-05-17  
 **Audience:** Design and UI implementers  
 **Product scope (full):** [../ProductDirection.md](../ProductDirection.md)  
-**Visual system:** [OpenWriteDesignLanguage.md](./OpenWriteDesignLanguage.md) · [AntiPatterns.md](./AntiPatterns.md)
+**Visual system:** [FrontendPriorities.md](./FrontendPriorities.md) · [OpenWriteDesignLanguage.md](./OpenWriteDesignLanguage.md) · [AntiPatterns.md](./AntiPatterns.md)
 
-This page captures **non-negotiable design direction** for the OpenWrite shell. It does not replace the master product doc; it makes explicit what “native macOS” means for OpenWrite: **platform integration without Apple HIG stock chrome or SF Symbols in product UI.**
+This page captures **non-negotiable design direction** for the OpenWrite shell. **Downloads depend on frontend** — see [FrontendPriorities.md](./FrontendPriorities.md) for the P0 checklist and sequencing.
+
+“Native macOS” here means **platform integration without Apple HIG as product IA** — not stock `NavigationSplitView` sidebar ordering, not SF Symbols, not Settings-shaped `Form` in the editor column.
 
 ---
 
-## Identity: not HIG-default, not SF Symbols
+## Identity: abandon HIG ordering; Anytype aesthetics, not framework
 
 | OpenWrite is | OpenWrite is not |
 |--------------|------------------|
-| A **custom** calm workbench (Anytype-*inspired* density, clean-room) | A settings-app built from `Form`, `List`, and SF Symbol sidebars |
-| **Bundled** typography and **OWIcon** assets | San Francisco + SF Symbols as the product face |
-| macOS for sandbox, Keychain, shortcuts, VoiceOver | “Looks like a first-party Apple utility” |
+| **Filled** calm workbench — Anytype-*quality* density (clean-room) | Hollow columns, vast margins, paragraph-only empty states |
+| **Serif** display + section labels (Serifa intent → Source Serif 4 / Literata) | Inter/SF-only chrome that reads “unfinished Mac app” |
+| **Lucide or Phosphor** (MIT) via `OWIcon` | SF Symbols or symmetric Apple glyph grid |
+| `OWNavigationRail` — custom rail, pill rows, product section order | HIG staple `List` sidebar + system selection blue |
+| macOS for sandbox, Keychain, shortcuts, VoiceOver | Anytype Electron/TS **framework** or ASAL code |
 
-**SF Symbols ban:** Do not use `Image(systemName:)`, `Label(..., systemImage:)`, or SF-based `ContentUnavailableView` in vault, editor, inspector, graph, or AI surfaces. See [AntiPatterns.md](./AntiPatterns.md).
+**HIG ordering ban:** Do not structure navigation like Settings.app or default split-view sidebars. Section order is **OBJECTS → DATABASES → VAULT** (see [FrontendPriorities.md § 1](./FrontendPriorities.md#1-abandon-hig-ordering-not-just-symbols)).
 
-**Typography requirement:** All chrome and editor typography flows through **`DesignTokens.Typography`** backed by **bundled font files** in the app target (`Resources/Fonts/`). System font is permitted only for user-authored content previews where NDL does not specify a face, and for controls AppKit renders exclusively (documented exceptions).
+**SF Symbols ban:** Do not use `Image(systemName:)`, `Label(..., systemImage:)`, or SF-based `ContentUnavailableView`. See [AntiPatterns.md](./AntiPatterns.md).
+
+**Typography requirement:** Bundled **serif** (and optional body pairing) via **`DesignTokens.Typography`** / `OWTypography` — `Resources/Fonts/`, `UIAppFonts`. System font only for monospaced code and documented AppKit exceptions.
+
+**Logo:** Placeholder icon is dev-only; **final logo is user-owned** — [BrandAndLogo.md](./BrandAndLogo.md).
 
 ---
 
@@ -28,7 +36,9 @@ This page captures **non-negotiable design direction** for the OpenWrite shell. 
 
 | Primitive | Role |
 |-----------|------|
-| **`OWIcon`** | Single icon pipeline — template PDF/SVG, `accent` / `textSecondary` / object-type tints |
+| **`OWIcon`** | Single icon pipeline — **Lucide or Phosphor** SVG assets (MIT), `accent` / `textSecondary` / object-type tints |
+| **`OWNavigationRail`** | Fixed-width sidebar; no system `List` selection |
+| **`OWPageBanner`** | Optional gradient strip behind page icon (Anytype playground pattern) |
 | **`OWRoundedRect`** | Cards, inspector sections, capture fields |
 | **`OWSidebarRow`** | Vault and section navigation |
 | **`OWPageHero`** | Document header and empty states |
@@ -117,13 +127,14 @@ When total content width cannot satisfy mins:
 
 ## 30-day design priorities
 
-Aligned with [../ProductDirection.md § Next 30 days](../ProductDirection.md#6-next-30-days--ui-priorities):
+Aligned with [../ProductDirection.md § Next 30 days](../ProductDirection.md#6-next-30-days--frontend-first-downloads-depend-on-ui) and [FrontendPriorities.md](./FrontendPriorities.md):
 
-1. Replace SF Symbol usage with **`OWIcon`** catalog.
-2. Register **bundled fonts** and point `DesignTokens.Typography` at them.
-3. **`OWAIPanelHeader`** + back stack in chat/agent flows.
-4. Enforce **resize clamps** and inspector collapsed default.
-5. Wire **`OWSidebarRow`** vault list; remove LM Studio block from rail.
+1. **`OWNavigationRail`** — exit HIG sidebar ordering.
+2. **Serif** fonts + **Lucide/Phosphor** icons landed in all product UI.
+3. **Anytype aesthetic** density — banner, filled empty states, 36pt type rows.
+4. **`LaunchIntroView`** — Bloom intro &lt; 0.5s.
+5. **Filled UI checklist** P0 green; logo stays user-deferred.
+6. **`OWAIPanelHeader`** + back stack; inspector collapsed default.
 
 ---
 

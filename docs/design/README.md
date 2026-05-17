@@ -27,9 +27,10 @@ These documents are written for:
 
 | Document | Contents |
 |----------|----------|
-| [**BrandAndLogo.md**](./BrandAndLogo.md) | Logo concept directions, accent colors, app icon sizes, Figma handoff, Notion-simple rules |
-| [**ProductDirection.md**](./ProductDirection.md) | Design non-negotiables: no SF Symbols, bundled type, AI back nav, resize rules |
-| [**AntiPatterns.md**](./AntiPatterns.md) | Forbidden UI: HIG `Form`, system blue buttons, SF Symbols, etc. |
+| [**FrontendPriorities.md**](./FrontendPriorities.md) | **P0:** downloads depend on frontend — HIG exit, serif, Lucide/Phosphor, Anytype aesthetics, Bloom, checklist |
+| [**BrandAndLogo.md**](./BrandAndLogo.md) | Logo concept directions (user-owned final mark), accent colors, app icon sizes |
+| [**ProductDirection.md**](./ProductDirection.md) | Design non-negotiables: abandon HIG ordering, serif + open icons, AI back nav, resize rules |
+| [**AntiPatterns.md**](./AntiPatterns.md) | Forbidden UI: HIG sidebar, hollow shell, SF Symbols, Anytype framework copy, etc. |
 | [**OpenWriteDesignLanguage.md**](./OpenWriteDesignLanguage.md) | Principles, visual identity, custom shell (not HIG-default), layout grammar |
 | [**Tokens.md**](./Tokens.md) | Semantic colors, typography scale, 4pt spacing grid, radius, shadows; Swift name mapping |
 | [**OWComponents.md**](./OWComponents.md) | OWIcon, OW Rect, sidebar row, AI header, object-type chip, page hero |
@@ -45,7 +46,7 @@ These documents are written for:
 
 ## Reading order
 
-1. **ProductDirection.md** + **AntiPatterns.md** — Read first; defines what we refuse to ship (SF Symbols, HIG-default chrome).
+1. **FrontendPriorities.md** + **ProductDirection.md** + **AntiPatterns.md** — Read first; P0 frontend checklist and what we refuse to ship (HIG ordering, SF Symbols, hollow Anytype-shaped shell).
 2. **OpenWriteDesignLanguage.md** — Read once when joining the project; revisit when making structural UI decisions.
 3. **BrandAndLogo.md** — Use when designing or exporting the app icon, wordmark, or marketing lockups in Figma.
 4. **Tokens.md** — Keep open while styling; every visual constant should trace to `DesignTokens`.

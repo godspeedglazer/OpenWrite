@@ -72,7 +72,7 @@ struct OWDatabase: Identifiable, Codable, Hashable, Sendable {
         id: UUID = UUID(),
         name: String,
         fields: [OWDatabaseField],
-        iconName: String = OWIcon.grid.rawValue,
+        iconName: String = OWIcon.database.rawValue,
         themeTint: String = OWDatabaseThemeTint.blue.rawValue,
         createdAt: Date = .now,
         updatedAt: Date = .now,
@@ -89,7 +89,7 @@ struct OWDatabase: Identifiable, Codable, Hashable, Sendable {
     }
 
     var icon: OWIcon {
-        OWIcon(rawValue: iconName) ?? .grid
+        OWIcon(rawValue: iconName) ?? .database
     }
 
     var tint: OWDatabaseThemeTint {
@@ -166,7 +166,7 @@ enum DatabasePreset: String, Codable, CaseIterable, Identifiable, Sendable {
         case .codeSnippets: return .document
         case .bookmarks: return .link
         case .readingList: return .book
-        case .custom: return .grid
+        case .custom: return .database
         }
     }
 

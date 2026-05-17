@@ -3,7 +3,9 @@
 **Version:** 1.0  
 **Last updated:** 2026-05-17  
 **Audience:** Founders, designers (Figma), engineers shipping `AppIcon.appiconset`  
-**Related:** [OpenWriteDesignLanguage.md](./OpenWriteDesignLanguage.md) · [Tokens.md](./Tokens.md) · `OpenWrite/Design/DesignTokens.swift`
+**Related:** [FrontendPriorities.md](./FrontendPriorities.md) · [OpenWriteDesignLanguage.md](./OpenWriteDesignLanguage.md) · [Tokens.md](./Tokens.md) · `OpenWrite/Design/DesignTokens.swift`
+
+**Ownership:** Final logo and app icon are **deferred to the user** (Figma). Engineering ships a **placeholder** only; do not treat placeholder iteration as a release blocker. Bloom intro may use a **typographic** wordmark until final art lands.
 
 ---
 

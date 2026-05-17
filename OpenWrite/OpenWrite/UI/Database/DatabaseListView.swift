@@ -9,7 +9,7 @@ struct DatabaseListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
             HStack {
-                sidebarSectionLabel("Databases")
+                OWNavigationRailSectionLabel(title: "Databases")
                 Spacer()
                 Button {
                     showCreateDatabaseSheet = true
@@ -57,12 +57,6 @@ struct DatabaseListView: View {
         }
     }
 
-    private func sidebarSectionLabel(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(DesignTokens.Typography.sidebarSection)
-            .foregroundStyle(DesignTokens.Color.textTertiary)
-            .padding(.horizontal, DesignTokens.Spacing.spacing2)
-    }
 }
 
 #Preview {
