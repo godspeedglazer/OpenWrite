@@ -10,12 +10,18 @@ struct WorkbenchInspectorView: View {
         VStack(spacing: 0) {
             Picker("Inspector", selection: $workbench.inspectorTab) {
                 ForEach(InspectorTab.allCases) { tab in
-                    Label(tab.title, systemImage: tab.systemImage)
-                        .tag(tab)
+                    Label {
+                        Text(tab.title)
+                    } icon: {
+                        OWIconView(icon: tab.owIcon, size: 12)
+                    }
+                    .tag(tab)
                 }
             }
             .pickerStyle(.segmented)
-            .padding(10)
+            .controlSize(.small)
+            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.vertical, DesignTokens.Spacing.spacing2)
 
             Divider()
 
@@ -34,6 +40,7 @@ struct WorkbenchInspectorView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 300, idealWidth: 340)
+        .frame(maxWidth: DesignTokens.Layout.inspectorMaxWidth)
+        .background(DesignTokens.Color.surface)
     }
 }

@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindowPresentationAttempts += 1
 
         if let window = NSApp.mainWindow ?? NSApp.keyWindow ?? preferredMainWindow() {
+            applyWindowSizingPolicy(to: window)
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
             return
@@ -44,6 +45,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func preferredMainWindow() -> NSWindow? {
         NSApp.windows.first { window in
             window.canBecomeKey && !window.isSheet && window.contentView != nil
+        }
+    }
+
+    private func applyWindowSizingPolicy(to window: NSWindow) {
+        let minSize = NSSize(
+            width: DesignTokens.Layout.windowMinWidth,
+            height: DesignTokens.Layout.windowMinHeight
+        )
+        if window.minSize != minSize {
+            window.minSize = minSize
         }
     }
 }

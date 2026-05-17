@@ -19,4 +19,5 @@ enum SidebarSection: String, CaseIterable, Identifiable, Sendable {
         case .publish: return "Publish"
         }
     }
+
 }

@@ -19,7 +19,8 @@ Welcome to the canonical documentation index for OpenWrite. This hub is the entr
 | NDL / editor work | [NDL/Specification.md](./NDL/Specification.md) | [NDL/Migration.md](./NDL/Migration.md) |
 | AI / search work | [Architecture/AI-Pipeline.md](./Architecture/AI-Pipeline.md) | [Glossary.md](./Glossary.md) (RAG, dual-generator) |
 | Designer | [design/README.md](./design/README.md) | [ProductPhilosophy.md](./ProductPhilosophy.md) |
-| PM / planning | [RoadmapEpics.md](./RoadmapEpics.md) | [FeatureParityMatrix.md](./FeatureParityMatrix.md), [OpenWriteMasterPlan.md](./OpenWriteMasterPlan.md) |
+| PM / planning | [**ProductDirection.md**](./ProductDirection.md) (firm grasp) | [RoadmapEpics.md](./RoadmapEpics.md), [FeatureParityMatrix.md](./FeatureParityMatrix.md) |
+| Designer (visual target) | [**ProductDirection.md**](./ProductDirection.md) § Visual | [design/OpenWriteDesignLanguage.md](./design/OpenWriteDesignLanguage.md) |
 
 ---
 
@@ -27,6 +28,7 @@ Welcome to the canonical documentation index for OpenWrite. This hub is the entr
 
 | Document | Description |
 |----------|-------------|
+| [**ProductDirection.md**](./ProductDirection.md) | **Firm grasp** — what OpenWrite is (app of apps), writing-first / AI-second layout, Anytype-inspired custom rects, competitor roles, gaps vs [FeatureParityMatrix](./FeatureParityMatrix.md), 30-day UI priorities; links user reference captures. |
 | [**OpenWriteMasterPlan.md**](./OpenWriteMasterPlan.md) | **Authoritative** product vision, competitor synthesis, architecture target, NDL v0 summary, privacy model, phased roadmap (MVP → v2). Link here; do not paste the full plan into other docs. |
 | [**ProductPhilosophy.md**](./ProductPhilosophy.md) | Why local-first, dual-generator AI, simplicity vs Anytype, outliner + blocks, privacy-as-architecture. |
 | [**RoadmapEpics.md**](./RoadmapEpics.md) | Phase 2 implementation epics (E-01 … E-10), dependencies, acceptance criteria, Swift module mapping. |
@@ -79,6 +81,8 @@ Feature docs describe **user-visible behavior**, acceptance criteria, and links 
 |----------|------|--------|
 | [features/README.md](./features/README.md) | — | Feature doc index |
 | [features/VaultEncryption.md](./features/VaultEncryption.md) | E-01 | *Partial* |
+| [features/VaultAndFileTree.md](./features/VaultAndFileTree.md) | E-08, E-07 | *Spec* |
+| [features/TypedPagesAndStructures.md](./features/TypedPagesAndStructures.md) | E-02 | *Partial* |
 | [features/GraphView.md](./features/GraphView.md) | E-06 | *Partial* |
 | [features/Workbench.md](./features/Workbench.md) | E-08 | *Partial* |
 | [features/ImportExport.md](./features/ImportExport.md) | E-07, E-10 | *Partial* |
@@ -176,6 +180,7 @@ Vendored trees are for study only. See [OpenWriteMasterPlan.md § Workspace inve
 ## Quick links
 
 - Build: root [README.md](../README.md)
+- Product direction: [ProductDirection.md](./ProductDirection.md)
 - Master plan: [OpenWriteMasterPlan.md](./OpenWriteMasterPlan.md)
 - Epics: [RoadmapEpics.md](./RoadmapEpics.md)
 - Parity matrix: [FeatureParityMatrix.md](./FeatureParityMatrix.md)

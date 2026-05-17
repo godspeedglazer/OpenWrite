@@ -4,29 +4,30 @@ struct AgentPickerView: View {
     @Binding var selectedAgentID: String
 
     private var selection: AgentConfig {
-        BuiltInAgents.agent(id: selectedAgentID)
+        AgentRegistry.agent(id: selectedAgentID)
     }
 
     var body: some View {
         Menu {
-            ForEach(BuiltInAgents.all) { agent in
+            ForEach(AgentRegistry.pickerAgents) { agent in
                 Button {
                     selectedAgentID = agent.id
                 } label: {
-                    if agent.id == selectedAgentID {
-                        Label(agent.name, systemImage: "checkmark")
-                    } else {
+                    HStack {
                         Text(agent.name)
+                        if agent.id == selectedAgentID {
+                            Spacer()
+                            OWIconView(icon: .checkmark, size: 12)
+                        }
                     }
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: "person.crop.circle")
+                OWIconView(icon: .agent, size: 14)
                 Text(selection.name)
                     .lineLimit(1)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
+                OWIconView(icon: .chevronDown, size: 10)
                     .foregroundStyle(.secondary)
             }
             .font(.subheadline.weight(.medium))

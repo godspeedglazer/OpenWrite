@@ -55,6 +55,7 @@ final class RelatedNotesModel: ObservableObject {
 struct RelatedNotesView: View {
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var aiServices: OpenWriteAIServices
+    @EnvironmentObject private var workbench: WorkbenchState
     @StateObject private var model = RelatedNotesModel()
 
     var body: some View {
@@ -92,16 +93,16 @@ struct RelatedNotesView: View {
     @ViewBuilder
     private var content: some View {
         if let errorMessage = model.errorMessage {
-            ContentUnavailableView(
-                "Could not load",
-                systemImage: "exclamationmark.triangle",
+            OWEmptyState(
+                title: "Could not load",
+                icon: .warning,
                 description: Text(errorMessage)
             )
             .padding()
         } else if model.hits.isEmpty {
-            ContentUnavailableView(
-                vaultStore.selectedDocument == nil ? "No note selected" : "No related notes yet",
-                systemImage: "link",
+            OWEmptyState(
+                title: vaultStore.selectedDocument == nil ? "No note selected" : "No related notes yet",
+                icon: .link,
                 description: Text(
                     vaultStore.selectedDocument == nil
                         ? "Select a note to see semantic neighbors."
@@ -112,7 +113,7 @@ struct RelatedNotesView: View {
         } else {
             List(model.hits) { hit in
                 Button {
-                    model.open(hit: hit, vaultStore: vaultStore)
+                    workbench.aiAssistNavigation.openRelatedDetail(hit)
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {

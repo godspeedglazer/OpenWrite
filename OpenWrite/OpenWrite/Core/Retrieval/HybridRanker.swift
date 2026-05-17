@@ -1,3 +1,11 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// Hybrid ranking adapted from Reor (https://github.com/reorproject/reor)
+// `src/lib/db.ts` — `keywordSearch`, `combineAndRankResults`, `hybridSearch`.
+// Swift reimplementation only; no TypeScript is linked. If this logic is ever
+// extracted into a separately distributed module, keep it under AGPL and
+// document dynamic-linking obligations in ReorPortNotes.md.
+
 import Foundation
 
 struct HybridRankCandidate: Sendable {
@@ -7,8 +15,9 @@ struct HybridRankCandidate: Sendable {
     var combinedScore: Double
 }
 
-/// Combines lexical and vector scores (Reor `combineAndRankResults` clean-room port).
+/// Combines lexical and vector scores (Reor `combineAndRankResults`).
 struct HybridRanker: Sendable {
+    /// Reor `hybridSearch` default `vectorWeight` (0.7 vector / 0.3 keyword).
     var vectorWeight: Double = AISafetyLimits.hybridVectorWeight
 
     func rank(
@@ -22,12 +31,12 @@ struct HybridRanker: Sendable {
         let maxKeyword = keywordHits.map(\.score).max() ?? 0
 
         for hit in vectorHits {
-            let normalizedVector = max(0, min(1, hit.score))
+            let vectorScore = max(0, min(1, hit.score))
             map[hit.chunk.fusionKey] = HybridRankCandidate(
                 chunk: hit.chunk,
-                vectorScore: normalizedVector,
+                vectorScore: vectorScore,
                 keywordScore: 0,
-                combinedScore: normalizedVector * vectorWeight
+                combinedScore: vectorScore * vectorWeight
             )
         }
 
@@ -53,7 +62,24 @@ struct HybridRanker: Sendable {
         return map.values
             .sorted { $0.combinedScore > $1.combinedScore }
             .prefix(limit)
-            .map { $0 }
+            .map { displayCandidate($0, maxKeywordScore: maxKeyword) }
+    }
+
+    /// Reor scores keywords on the vector candidate pool (`keywordSearch` → `database.search` first).
+    func keywordHits(
+        query: String,
+        in pool: [IndexChunk],
+        limit: Int
+    ) -> [(chunk: IndexChunk, score: Double)] {
+        var hits: [(chunk: IndexChunk, score: Double)] = []
+        for chunk in pool {
+            let score = keywordScore(query: query, content: chunk.text)
+            if score > 0 {
+                hits.append((chunk, score))
+            }
+        }
+        hits.sort { $0.score > $1.score }
+        return Array(hits.prefix(limit))
     }
 
     func keywordScore(query: String, content: String) -> Double {
@@ -67,5 +93,23 @@ struct HybridRanker: Sendable {
         }
         let range = NSRange(content.startIndex..., in: content)
         return Double(regex.numberOfMatches(in: content, range: range))
+    }
+
+    /// Maps fused score to a 0…1 retrieval score (Reor `_distance = 1 - combinedScore` display path).
+    private func displayCandidate(
+        _ candidate: HybridRankCandidate,
+        maxKeywordScore: Double
+    ) -> HybridRankCandidate {
+        var updated = candidate
+        if vectorWeight == 0 {
+            if candidate.keywordScore > 0, maxKeywordScore > 0 {
+                updated.combinedScore = candidate.keywordScore / maxKeywordScore
+            } else {
+                updated.combinedScore = 0.01
+            }
+        } else {
+            updated.combinedScore = max(0, min(1, candidate.combinedScore))
+        }
+        return updated
     }
 }

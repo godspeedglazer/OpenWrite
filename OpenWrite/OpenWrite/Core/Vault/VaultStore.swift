@@ -5,6 +5,9 @@ import Combine
 final class VaultStore: ObservableObject {
     @Published var documents: [VaultDocument] = []
     @Published var selectedDocumentID: UUID?
+    @Published var databases: [OWDatabase] = []
+    @Published var databaseEntries: [OWDatabaseEntry] = []
+    @Published var selectedDatabaseID: UUID?
     @Published var typeRegistry: PageTypeRegistry = .default
 
     private let encryption: EncryptionService
@@ -13,11 +16,24 @@ final class VaultStore: ObservableObject {
         self.encryption = encryption
         documents = [.welcomeSample]
         selectedDocumentID = documents.first?.id
+        databases = []
+        databaseEntries = []
     }
 
     var selectedDocument: VaultDocument? {
         guard let id = selectedDocumentID else { return nil }
         return documents.first { $0.id == id }
+    }
+
+    var selectedDatabase: OWDatabase? {
+        guard let id = selectedDatabaseID else { return nil }
+        return databases.first { $0.id == id }
+    }
+
+    func entries(for databaseID: UUID) -> [OWDatabaseEntry] {
+        databaseEntries
+            .filter { $0.databaseID == databaseID }
+            .sorted { $0.updatedAt > $1.updatedAt }
     }
 
     // MARK: - Mutations (in-memory; Codable-ready for encrypted bundle)
@@ -150,11 +166,112 @@ final class VaultStore: ObservableObject {
         return try encryption.seal(plain, associatedData: document.id.uuidString.data(using: .utf8))
     }
 
+    // MARK: - Universal databases
+
+    @discardableResult
+    func createDatabase(
+        preset: DatabasePreset,
+        name: String? = nil
+    ) -> OWDatabase {
+        let database = preset.makeDatabase(name: name)
+        databases.append(database)
+        selectedDatabaseID = database.id
+        selectedDocumentID = nil
+        return database
+    }
+
+    @discardableResult
+    func createDatabase(_ database: OWDatabase) -> OWDatabase {
+        var db = database
+        db.touchUpdatedAt()
+        databases.append(db)
+        selectedDatabaseID = db.id
+        selectedDocumentID = nil
+        return db
+    }
+
+    func updateDatabase(_ database: OWDatabase) {
+        guard let index = databases.firstIndex(where: { $0.id == database.id }) else { return }
+        var updated = database
+        updated.touchUpdatedAt()
+        databases[index] = updated
+    }
+
+    func deleteDatabase(id: UUID) {
+        databases.removeAll { $0.id == id }
+        databaseEntries.removeAll { $0.databaseID == id }
+        if selectedDatabaseID == id {
+            selectedDatabaseID = databases.first?.id
+        }
+    }
+
+    @discardableResult
+    func addDatabaseEntry(to databaseID: UUID) -> OWDatabaseEntry? {
+        guard let database = databases.first(where: { $0.id == databaseID }) else { return nil }
+        let entry = OWDatabaseEntry.emptyRow(for: database)
+        databaseEntries.append(entry)
+        return entry
+    }
+
+    func updateDatabaseEntry(_ entry: OWDatabaseEntry) {
+        guard let index = databaseEntries.firstIndex(where: { $0.id == entry.id }) else { return }
+        var updated = entry
+        updated.touchUpdatedAt()
+        databaseEntries[index] = updated
+        if let dbIndex = databases.firstIndex(where: { $0.id == entry.databaseID }) {
+            databases[dbIndex].touchUpdatedAt()
+        }
+    }
+
+    func deleteDatabaseEntry(id: UUID) {
+        databaseEntries.removeAll { $0.id == id }
+    }
+
+    // MARK: - Snapshot (future `.openwrite` bundle)
+
+    func makeSnapshot() -> VaultSnapshot {
+        VaultSnapshot(
+            documents: documents,
+            databases: databases,
+            databaseEntries: databaseEntries
+        )
+    }
+
+    func applySnapshot(_ snapshot: VaultSnapshot) {
+        documents = snapshot.documents
+        databases = snapshot.databases
+        databaseEntries = snapshot.databaseEntries
+        if selectedDocumentID != nil,
+           !documents.contains(where: { $0.id == selectedDocumentID }) {
+            selectedDocumentID = documents.first?.id
+        }
+        if selectedDatabaseID != nil,
+           !databases.contains(where: { $0.id == selectedDatabaseID }) {
+            selectedDatabaseID = databases.first?.id
+        }
+    }
+
+    func encodedSnapshot() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(makeSnapshot())
+    }
+
     static let preview: VaultStore = {
         let store = VaultStore()
         store.documents.append(
             VaultDocument.fromTemplate(TypeTemplate.template(for: .task, title: "Ship typed pages"))
         )
+        let snippets = store.createDatabase(preset: .codeSnippets)
+        var entry = OWDatabaseEntry.emptyRow(for: snippets)
+        if let titleField = snippets.fields.first(where: { $0.key == "title" }) {
+            entry.setValue(.text("Hello, OpenWrite"), for: titleField)
+        }
+        if let bodyField = snippets.fields.first(where: { $0.key == "body" }) {
+            entry.setValue(.code("print(\"Hello\")"), for: bodyField)
+        }
+        store.databaseEntries.append(entry)
         return store
     }()
 }

@@ -117,8 +117,7 @@ struct AIActivityIndicator: View {
                         .controlSize(.small)
                         .scaleEffect(pulse ? 1.05 : 0.95)
                 } else if case .error = state {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                    OWIconView(icon: .warningFill, size: 16, color: .orange)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -193,11 +192,85 @@ private struct StreamingDots: View {
 
 struct ChatPanelView: View {
     @EnvironmentObject private var aiServices: OpenWriteAIServices
+    @EnvironmentObject private var workbench: WorkbenchState
     @StateObject private var model = ChatPanelModel()
 
+    private var navigation: AIAssistNavigationState { workbench.aiAssistNavigation }
+
     var body: some View {
+        Group {
+            switch effectiveScreen {
+            case .agentPicker:
+                agentPickerPanel
+            case .conversation:
+                conversationPanel
+            }
+        }
+    }
+
+    private var effectiveScreen: ChatPanelScreen {
+        if navigation.current == .chatThread {
+            return .conversation
+        }
+        return navigation.chatPanelScreen
+    }
+
+    private var agentPickerPanel: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
+                Text("Choose an agent")
+                    .font(DesignTokens.Typography.callout.weight(.semibold))
+                Text("Each agent uses your local index with different retrieval settings.")
+                    .font(DesignTokens.Typography.caption)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+
+                ForEach(AgentRegistry.pickerAgents) { agent in
+                    agentRow(agent)
+                }
+            }
+            .padding(DesignTokens.Spacing.spacing3)
+        }
+    }
+
+    private func agentRow(_ agent: AgentConfig) -> some View {
+        let isSelected = aiServices.selectedAgentID == agent.id
+        return Button {
+            aiServices.selectedAgentID = agent.id
+            navigation.openChatThread()
+        } label: {
+            HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
+                OWIconView(icon: .agent, size: 18)
+                    .foregroundStyle(DesignTokens.Color.accent)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(agent.name)
+                        .font(DesignTokens.Typography.callout.weight(.medium))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    Text(agentHelp(agent))
+                        .font(DesignTokens.Typography.caption)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                if isSelected {
+                    OWIconView(icon: .checkmarkCircle, size: 18, color: DesignTokens.Color.accent)
+                }
+            }
+            .padding(DesignTokens.Spacing.spacing2)
+            .background(
+                isSelected
+                    ? DesignTokens.Color.accentMuted
+                    : DesignTokens.Color.surface.opacity(0.6),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var conversationPanel: some View {
         VStack(spacing: 0) {
-            header
+            conversationHeader
             Divider()
             AIActivityIndicator(
                 state: aiServices.activityState,
@@ -210,57 +283,74 @@ struct ChatPanelView: View {
             Divider()
             composer
         }
-        .frame(minWidth: 280)
     }
 
-    private var header: some View {
-        HStack(spacing: 10) {
+    private var conversationHeader: some View {
+        HStack(spacing: 8) {
+            if navigation.current != .chatThread {
+                Button {
+                    navigation.closeChatThread()
+                } label: {
+                    OWIconView(icon: .back, size: 14)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+                .help("Back to agents")
+            }
+
             VStack(alignment: .leading, spacing: 2) {
-                Text("Vault chat")
-                    .font(.headline)
-                HStack(spacing: 8) {
+                Text("Ask vault")
+                    .font(DesignTokens.Typography.callout.weight(.semibold))
+                HStack(spacing: 6) {
                     AgentPickerView(selectedAgentID: $aiServices.selectedAgentID)
                     Text(aiServices.lmConfig.chatModelDisplay)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(DesignTokens.Typography.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
                         .lineLimit(1)
                 }
             }
             Spacer()
             if aiServices.activityState != .idle {
                 Text(aiServices.activityState.shortLabel)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .font(DesignTokens.Typography.caption)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.secondary.opacity(0.12))
+                    .background(DesignTokens.Color.surface)
                     .clipShape(Capsule())
             }
             Button("Clear") { model.clear(services: aiServices) }
+                .font(DesignTokens.Typography.caption)
                 .disabled(model.messages.isEmpty)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, DesignTokens.Spacing.spacing3)
+        .padding(.vertical, DesignTokens.Spacing.spacing2)
     }
 
     private var messageList: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                     if model.messages.isEmpty {
-                        ContentUnavailableView(
-                            "Ask your vault",
-                            systemImage: "sparkles",
-                            description: Text("Answers cite indexed note chunks from this Mac. Activity shows when LM Studio is connecting, searching, or streaming.")
-                        )
-                        .frame(maxWidth: .infinity, minHeight: 200)
+                        VStack(spacing: DesignTokens.Spacing.spacing2) {
+                            OWIconView(icon: .sparkles, size: 22)
+                                .foregroundStyle(DesignTokens.Color.textTertiary)
+                            Text("Ask about your notes")
+                                .font(DesignTokens.Typography.callout.weight(.medium))
+                            Text("Answers cite indexed chunks on this Mac.")
+                                .font(DesignTokens.Typography.caption)
+                                .foregroundStyle(DesignTokens.Color.textTertiary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DesignTokens.Spacing.spacing6)
                     }
                     ForEach(model.messages) { message in
                         messageBubble(message)
                             .id(message.id)
                     }
                 }
-                .padding(12)
+                .padding(DesignTokens.Spacing.spacing3)
             }
             .onChange(of: model.messages.count) { _, _ in
                 scrollToBottom(proxy: proxy)
@@ -299,16 +389,15 @@ struct ChatPanelView: View {
                         .textSelection(.enabled)
                 }
             }
-            .padding(10)
+            .padding(DesignTokens.Spacing.spacing2)
+            .font(DesignTokens.Typography.callout)
             .background(bubbleColor(for: message.role))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium))
             .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
 
             if message.isStreaming, !message.text.isEmpty {
                 HStack(spacing: 4) {
-                    Image(systemName: "waveform")
-                        .font(.caption2)
-                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                    OWIconView(icon: .waveform, size: 12, color: DesignTokens.Color.textTertiary)
                     Text("Streaming")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -374,22 +463,34 @@ struct ChatPanelView: View {
                 Button {
                     aiServices.voiceInput.toggleListening(appendTo: &model.draft)
                 } label: {
-                    Image(systemName: aiServices.voiceInput.isListening ? "mic.fill" : "mic")
-                        .font(.title3)
-                        .foregroundStyle(aiServices.voiceInput.isListening ? Color.accentColor : .secondary)
+                    OWIconView(
+                        icon: aiServices.voiceInput.isListening ? .micActive : .mic,
+                        size: 20,
+                        color: aiServices.voiceInput.isListening ? Color.accentColor : .secondary
+                    )
                 }
                 .help(aiServices.voiceInput.statusMessage ?? "Dictate into the message field")
 
                 Button {
                     model.send(services: aiServices, agent: aiServices.selectedAgent)
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
+                    OWIconView(icon: .send, size: 24, color: DesignTokens.Color.accent)
                 }
                 .disabled(model.isBusy || AIInput.sanitizeQuery(model.draft) == nil)
                 .keyboardShortcut(.return, modifiers: [.command])
             }
         }
-        .padding(12)
+        .padding(DesignTokens.Spacing.spacing3)
+    }
+
+    private func agentHelp(_ agent: AgentConfig) -> String {
+        var parts = ["Retrieves up to \(agent.effectiveChunkLimit) chunks."]
+        if agent.toolFlags.allowCreateNote {
+            parts.append("Create-note tool enabled.")
+        }
+        if agent.toolFlags.passFullNoteContext {
+            parts.append("Wider excerpts per chunk.")
+        }
+        return parts.joined(separator: " ")
     }
 }

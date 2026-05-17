@@ -55,16 +55,8 @@ struct HybridRetrievalService: RetrievalService {
             }
         }
 
-        let allChunks = await vectorStore.allChunks()
-        var keywordHits: [(chunk: IndexChunk, score: Double)] = []
-        for chunk in allChunks {
-            let score = ranker.keywordScore(query: sanitized, content: chunk.text)
-            if score > 0 {
-                keywordHits.append((chunk, score))
-            }
-        }
-        keywordHits.sort { $0.score > $1.score }
-        keywordHits = Array(keywordHits.prefix(pool))
+        let vectorPool = vectorHits.map(\.chunk)
+        let keywordHits = ranker.keywordHits(query: sanitized, in: vectorPool, limit: pool)
 
         let ranked = ranker.rank(vectorHits: vectorHits, keywordHits: keywordHits, limit: limit)
         return ranked.map { RetrievalHit(chunk: $0.chunk, score: $0.combinedScore) }

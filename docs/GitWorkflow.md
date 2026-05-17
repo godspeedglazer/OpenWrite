@@ -30,7 +30,21 @@ Keep the subject line under ~72 characters; add a body when context is non-obvio
 | Root `README.md`, `.gitignore` | `buffer/` (Buffer.app binary), empty Obsidian placeholder |
 | OpenWrite-specific config at repo root (when added) | `node_modules/`, `dist/`, `build/` inside clones |
 
-Reference trees are for **reading and comparison**, not for shipping in OpenWrite. Do not `git add` them unless you deliberately adopt [git submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules) or subtree vendoring.
+Reference trees stay **out of git** by default (local clones). Product code lives in `OpenWrite/`. What you may **copy or port** into `OpenWrite/` depends on license — not on whether the tree is tracked.
+
+### What may be copied into `OpenWrite/` vs not
+
+| Path | License | In `OpenWrite/` |
+|------|---------|-----------------|
+| `reor-main/` | AGPL-3.0 | **Yes** — port/adapt with **link/comply** (notices, source offer, counsel as needed) |
+| `logseq-master/` | AGPL-3.0 | **Yes** — same as Reor |
+| `massCode-main/` | AGPL-3.0 | **Yes** — same as Reor |
+| `AFFiNE-canary/` | MIT (frontend) · EE (`packages/backend/server`) | **Yes** for MIT frontend code/patterns + attribution; **no** EE server or BlockSuite bundle |
+| `rem-main/`, `rem/`, `REM*/` | MIT | **Yes** — preserve MIT copyright in file or `NOTICE` |
+| `anytype-ts-develop/` | ASAL 1.0 | **No** — inspiration-only; do not commit ported Anytype snippets |
+| `buffer/` | Proprietary | **No** — binary/UX reference only |
+
+Do not `git add` reference trees unless you deliberately adopt [git submodules](https://git-scm.com/book/en/v2/Git-Tools-Submodules). When porting, follow [Contributing/DocumentationStandards.md](./Contributing/DocumentationStandards.md) for attribution.
 
 ### REM / rem copy folders
 

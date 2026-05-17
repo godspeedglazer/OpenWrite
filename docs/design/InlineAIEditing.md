@@ -1,10 +1,26 @@
 # Inline AI editing (selection refine)
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Last updated:** 2026-05-17  
 **Implementation:** Partial — `InlineAssistController`, `SelectablePlainTextEditor`, refine sheet in `EditorView`  
 **Target UX:** Popover at selection with Apply (v1 design decision)  
-**Related:** [EditorAndAIPanel.md](./EditorAndAIPanel.md) · [Components.md § Inline assist](./Components.md#inline-assist)
+**Related:** [EditorAndAIPanel.md](./EditorAndAIPanel.md) · [Components.md § Inline assist](./Components.md#inline-assist) · [**InlineAI-GoogleDocsResearch.md**](./InlineAI-GoogleDocsResearch.md) (Google Docs UX + local-model patterns)
+
+---
+
+## Secondary to writing (principle)
+
+Inline assist is **subordinate to the editor**, not a second authoring surface.
+
+| Rule | Rationale |
+|------|-----------|
+| **Typing always wins** | No modal that blocks the manuscript; migrate the refine **sheet** → **popover** at selection. |
+| **Explicit invoke only** | Refine runs when the user taps Refine (or a preset)—not on every selection change or keystroke. |
+| **No auto-apply** | Model output is preview-only until **Apply**; matches Google Gemini “Accept suggestion,” not silent replacement. |
+| **No inspector for refine** | Vault chat, citations, and long transcripts stay in the inspector; inline stays spatially tied to the selection. |
+| **Minimal GPU wake** | Debounced selection capture, capped selection chars, chat model for refine; **embedding model for index** (and optional light retrieve), never full-document embed per keystroke. |
+
+Competitive UX research (Smart Compose ghost vs Gemini floating bar vs side panel) and memory budgets for small local models: [InlineAI-GoogleDocsResearch.md](./InlineAI-GoogleDocsResearch.md).
 
 ---
 
@@ -130,4 +146,4 @@ See [EditorAndAIPanel.md](./EditorAndAIPanel.md). Refine is spatially tied to th
 
 ---
 
-*See also: [AIActivityStates.md](./AIActivityStates.md) (vault chat only)*
+*See also: [InlineAI-GoogleDocsResearch.md](./InlineAI-GoogleDocsResearch.md) · [AIActivityStates.md](./AIActivityStates.md) (vault chat only)*

@@ -1,23 +1,27 @@
 import Foundation
 
-/// Reor-shaped tool capability flags (v1: retrieval only; create-note is a v2 stub).
+/// Reor-shaped tool capability flags (v1: retrieval; vault mutations are v2 stubs).
 struct AgentToolFlags: Hashable, Sendable, Codable {
-    /// Retrieve indexed vault chunks for the user query.
+    /// Retrieve indexed vault chunks for the user query (Reor `search` tool / `retreiveFromVectorDB`).
     var useVaultRetrieval: Bool
-    /// Future: propose a new note after explicit user confirmation.
+    /// Future: propose a new note after explicit user confirmation (Reor `createNote`).
     var allowCreateNote: Bool
+    /// Future: read/list vault files with confirmation (Reor `readFile`, `listFiles`).
+    var allowReadFiles: Bool
     /// Prefer wider note excerpts when chunks are assembled (Reor `passFullNoteIntoContext`).
     var passFullNoteContext: Bool
 
     static let retrievalOnly = AgentToolFlags(
         useVaultRetrieval: true,
         allowCreateNote: false,
+        allowReadFiles: false,
         passFullNoteContext: false
     )
 
     static let retrievalWithFullNote = AgentToolFlags(
         useVaultRetrieval: true,
         allowCreateNote: false,
+        allowReadFiles: false,
         passFullNoteContext: true
     )
 }

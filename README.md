@@ -44,8 +44,9 @@ Open `OpenWrite/OpenWrite.xcodeproj` in Xcode and run the **OpenWrite** target.
 | `docs/adr/` | Architecture decision records (0001–0003) |
 | `docs/RoadmapEpics.md` | Phase 2 implementation epics (E-01–E-10) |
 | `OpenWrite/` | Xcode project and Swift sources |
-| `reor-main/` | Reference: local AI PKM (not linked into app) |
-| `AFFiNE-canary/` | Reference: block editor patterns (not linked) |
+| `reor-main/`, `logseq-master/`, `massCode-main/` | Reference clones (AGPL — code may be ported to Swift with link/comply) |
+| `AFFiNE-canary/`, `rem-main/` | Reference clones (MIT — may port with attribution) |
+| `anytype-ts-develop/` | Reference clone (ASAL — inspiration only, no code copy) |
 
 ## Bundle ID
 

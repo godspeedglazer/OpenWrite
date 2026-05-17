@@ -10,15 +10,21 @@ final class OpenWriteAIServices: ObservableObject {
     @Published var indexedChunkCount = 0
     @Published var activityState: AIActivityState = .idle
     @Published var lastChatError: String?
-    @Published var selectedAgentID: String = BuiltInAgents.defaultAgent.id
+    @Published var selectedAgentID: String = AgentRegistry.defaultAgent.id
+
     let dictation: DictationService = NoOpDictationService()
     let voiceInput = VoiceInputService()
     let vectorStore = InMemoryVectorStore()
+    let ingestionHealth = IngestionHealthMonitor()
+
     private(set) var lmClient: LMStudioClient
     private(set) var embeddings: EmbeddingService
     private(set) var indexer: IndexerService
     private(set) var retrieval: RetrievalService
     private(set) var rag: RAGService
+
+    private var ingestionPipeline: IngestionPipeline?
+    private var indexingTask: Task<Void, Never>?
 
     init() {
         lmClient = LMStudioClient(config: .default)
@@ -27,6 +33,12 @@ final class OpenWriteAIServices: ObservableObject {
         retrieval = NoOpRetrievalService()
         rag = PlaceholderRAGService(retrieval: NoOpRetrievalService())
         rebuildPipeline()
+        Task {
+            await vectorStore.loadFromDiskIfPresent()
+            let count = await vectorStore.chunkCount
+            indexedChunkCount = count
+            ingestionHealth.updateIndexedChunkCount(count)
+        }
     }
 
     func applyConfig(_ config: LMStudioConfig) {
@@ -50,19 +62,36 @@ final class OpenWriteAIServices: ObservableObject {
             client: lmClient,
             fallback: LocalHashEmbeddingService()
         )
-        indexer = InMemoryIndexerService(vectorStore: vectorStore, embeddings: embeddings)
+        let pipeline = IngestionPipeline(
+            vectorStore: vectorStore,
+            embeddings: embeddings,
+            health: ingestionHealth
+        )
+        ingestionPipeline = pipeline
+        indexer = PipelineIndexerService(pipeline: pipeline)
         retrieval = HybridRetrievalService(vectorStore: vectorStore, embeddings: embeddings)
         rag = LiveRAGService(retrieval: retrieval, client: lmClient)
     }
 
     var selectedAgent: AgentConfig {
-        BuiltInAgents.agent(id: selectedAgentID)
+        AgentRegistry.agent(id: selectedAgentID)
     }
 
     func setActivity(_ state: AIActivityState) {
         activityState = state
         if case .error = state { return }
         if state != .idle { lastChatError = nil }
+    }
+
+    func cancelIndexing() {
+        indexingTask?.cancel()
+        Task {
+            await indexer.cancel()
+            isIndexing = false
+            if case .indexing = activityState {
+                setActivity(.idle)
+            }
+        }
     }
 
     func checkConnection() async {
@@ -98,7 +127,7 @@ final class OpenWriteAIServices: ObservableObject {
             let embedListed = models.contains { $0.id == lmConfig.resolvedEmbeddingModel }
             var hints: [String] = [modelList]
             if !chatListed, !lmConfig.chatModel.isEmpty {
-                hints.append("Chat model “\(lmConfig.chatModel)” is not in the server list — pick a Chat model in the sidebar.")
+                hints.append("Chat model “\(lmConfig.chatModel)” is not in the server list — pick a Chat model in Settings.")
             }
             if !embedListed, lmConfig.usesDedicatedEmbeddingModel {
                 hints.append("Embedding model “\(lmConfig.resolvedEmbeddingModel)” is not loaded — set Embedding model or load it in LM Studio.")
@@ -118,22 +147,44 @@ final class OpenWriteAIServices: ObservableObject {
     }
 
     func reindex(documents: [VaultDocument]) async {
+        indexingTask?.cancel()
         isIndexing = true
         setActivity(.indexing)
-        defer {
-            isIndexing = false
-            if case .indexing = activityState {
-                setActivity(.idle)
+        ingestionHealth.reloadFromPersistence()
+
+        let payload = documents.map { (id: $0.id, title: $0.title, blocks: $0.rootBlocks) }
+
+        indexingTask = Task {
+            defer {
+                Task { @MainActor in
+                    isIndexing = false
+                    if case .indexing = activityState {
+                        setActivity(.idle)
+                    }
+                }
+            }
+            do {
+                try Task.checkCancellation()
+                try await indexer.rebuildAll(documents: payload)
+                let count = await vectorStore.chunkCount
+                await MainActor.run {
+                    indexedChunkCount = count
+                    ingestionHealth.updateIndexedChunkCount(count)
+                }
+            } catch is CancellationError {
+                await MainActor.run { ingestionHealth.markCancelled() }
+            } catch IngestionPipelineError.cancelled {
+                await MainActor.run { ingestionHealth.markCancelled() }
+            } catch {
+                await MainActor.run {
+                    ingestionHealth.recordError(error.localizedDescription)
+                    lmStatus = "Index error: \(error.localizedDescription)"
+                    setActivity(.error("Indexing failed: \(error.localizedDescription)"))
+                }
             }
         }
-        let payload = documents.map { (id: $0.id, title: $0.title, blocks: $0.rootBlocks) }
-        do {
-            try await indexer.rebuildAll(documents: payload)
-            indexedChunkCount = await vectorStore.chunkCount
-        } catch {
-            lmStatus = "Index error: \(error.localizedDescription)"
-            setActivity(.error("Indexing failed: \(error.localizedDescription)"))
-        }
+
+        await indexingTask?.value
     }
 
     func index(document: VaultDocument) async {
@@ -144,9 +195,15 @@ final class OpenWriteAIServices: ObservableObject {
                 blocks: document.rootBlocks
             )
             indexedChunkCount = await vectorStore.chunkCount
+            ingestionHealth.updateIndexedChunkCount(indexedChunkCount)
         } catch {
+            ingestionHealth.recordError(error.localizedDescription)
             lmStatus = "Index error: \(error.localizedDescription)"
         }
+    }
+
+    func startFilesystemIngestionWatch() async {
+        await ingestionPipeline?.startFilesystemWatch()
     }
 
     static func actionableChatError(_ error: Error, config: LMStudioConfig) -> String {
@@ -155,10 +212,10 @@ final class OpenWriteAIServices: ObservableObject {
             case .disabled:
                 return "AI is disabled. Enable LM Studio and load a chat model."
             case .invalidURL:
-                return "Invalid LM Studio URL (\(config.baseURL.absoluteString)). Use http://127.0.0.1:1234 in the sidebar."
+                return "Invalid LM Studio URL (\(config.baseURL.absoluteString)). Use http://127.0.0.1:1234 in Settings."
             case .httpStatus(let code, let detail):
                 if code == 404 {
-                    return "Chat model not found. Load “\(config.chatModelDisplay)” in LM Studio or change Chat model in the sidebar."
+                    return "Chat model not found. Load “\(config.chatModelDisplay)” in LM Studio or change Chat model in Settings."
                 }
                 if let detail, !detail.isEmpty {
                     return "LM Studio returned HTTP \(code): \(detail)"
@@ -178,9 +235,9 @@ final class OpenWriteAIServices: ObservableObject {
         if description.localizedCaseInsensitiveContains("could not connect")
             || description.localizedCaseInsensitiveContains("connection refused")
             || description.localizedCaseInsensitiveContains("network") {
-            return "Cannot reach LM Studio at \(config.baseURL.absoluteString). Start the local server, then use Check connection in the sidebar."
+            return "Cannot reach LM Studio at \(config.baseURL.absoluteString). Start the local server, then use Check connection in Settings."
         }
-        return "\(description) Use Check connection in the sidebar if this persists."
+        return "\(description) Use Check connection in Settings if this persists."
     }
 
     static func actionableConnectionError(_ error: Error) -> String {

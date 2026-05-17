@@ -54,6 +54,26 @@ Use explicit status in feature docs and architecture tables (see [Architecture/O
 
 Never commit passphrases, API keys, real vault salts, or production URLs with credentials. Use placeholders: `http://127.0.0.1:1234`, `base64...`.
 
+### 6. License attribution when porting reference code
+
+OSI-licensed reference trees may contribute **code** into `OpenWrite/` when obligations are met. **Anytype (`anytype-ts-develop/`, ASAL)** remains **inspiration-only** — never port its source into the product.
+
+| Source | License | When you port into `OpenWrite/` |
+|--------|---------|----------------------------------|
+| `reor-main/` | AGPL-3.0 | File header or adjacent comment: derived from Reor, AGPL-3.0, link to upstream commit/URL; ensure repo **NOTICE** / distribution meets **link/comply** (counsel for proprietary builds) |
+| `logseq-master/` | AGPL-3.0 | Same as Reor |
+| `massCode-main/` | AGPL-3.0 | Same as Reor |
+| `AFFiNE-canary/` (MIT paths only) | MIT | SPDX + copyright line from upstream file; note AFFiNE path in PR |
+| `rem-main/`, `rem/`, `REM*/` | MIT | Preserve Jason McGhee / fork copyright; note upstream path in PR |
+| `anytype-ts-develop/` | ASAL | **Do not port** — document UX inspiration only in design docs |
+
+**PR checklist for ports:**
+
+- [ ] Feature doc or ADR mentions upstream inspiration (behavior + path), not just “similar to X”
+- [ ] Ported Swift files carry correct license header or reference in root `NOTICE` (when added)
+- [ ] AGPL ports: compliance plan noted in PR (linking, source offer, combined work)
+- [ ] No Anytype source, assets, protos, or UI strings in the diff
+
 ---
 
 ## File placement guide
@@ -120,7 +140,7 @@ Manual and automated checks.
 - [ ] Root [README.md](../../README.md) updated if user-facing entry point changes
 - [ ] NDL/vault changes have migration notes
 - [ ] Aspirational claims labeled Planned/Partial
-- [ ] No copy-paste of AGPL/ASAL reference source
+- [ ] Reference ports: license headers / NOTICE updated; AGPL link/comply considered; **no Anytype (ASAL) code**
 - [ ] Glossary updated for new terms
 
 ---

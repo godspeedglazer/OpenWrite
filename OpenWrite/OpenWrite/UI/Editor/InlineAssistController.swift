@@ -18,6 +18,7 @@ enum InlineAssistPhase: Equatable {
 }
 
 /// Debounced selection capture and async refine via `RAGService` — never blocks the text view.
+/// Design: selection-only payload, explicit Refine invoke, popover + Apply (no auto-apply). See `docs/design/InlineAIEditing.md` and `InlineAI-GoogleDocsResearch.md`.
 @MainActor
 final class InlineAssistController: ObservableObject {
     @Published private(set) var phase: InlineAssistPhase = .idle
@@ -180,19 +181,29 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
+        scrollView.autoresizingMask = [.width, .height]
 
         let textView = NSTextView()
         textView.isRichText = false
         textView.isEditable = true
         textView.isSelectable = true
         textView.allowsUndo = true
-        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.font = DesignTokens.Typography.editorNSFont
         textView.textContainerInset = NSSize(width: 4, height: 8)
         textView.backgroundColor = .clear
         textView.delegate = context.coordinator
         textView.string = text
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.containerSize = NSSize(
+            width: 0,
+            height: CGFloat.greatestFiniteMagnitude
+        )
 
         scrollView.documentView = textView
         context.coordinator.textView = textView

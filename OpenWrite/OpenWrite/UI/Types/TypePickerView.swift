@@ -5,6 +5,7 @@ struct TypePickerView: View {
     @EnvironmentObject private var vaultStore: VaultStore
     let documentID: UUID?
     var mode: Mode = .switchType
+    var layout: Layout = .standard
     var onCreated: ((UUID) -> Void)?
 
     enum Mode {
@@ -12,37 +13,66 @@ struct TypePickerView: View {
         case switchType
     }
 
+    enum Layout {
+        case standard
+        case compact
+    }
+
     @State private var newTitle: String = ""
     @State private var applyTemplateOnSwitch = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(mode == .create ? "Quick page type" : "Page type")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: layout == .compact ? DesignTokens.Spacing.spacing1 : DesignTokens.Spacing.spacing2) {
+            if layout == .standard {
+                Text(mode == .create ? "Quick page type" : "Page type")
+                    .font(.headline)
+            }
 
             if mode == .create {
                 TextField("Title", text: $newTitle)
                     .textFieldStyle(.roundedBorder)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], spacing: 10) {
-                ForEach(vaultStore.typeRegistry.quickPickSelectable) { pageType in
-                    typeButton(pageType)
-                }
-            }
+            typePickerRow
 
-            if mode == .switchType, documentID != nil {
+            if mode == .switchType, documentID != nil, layout == .standard {
                 Toggle("Apply default layout", isOn: $applyTemplateOnSwitch)
                     .font(.caption)
                     .toggleStyle(.checkbox)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, layout == .compact ? 0 : 4)
+    }
+
+    @ViewBuilder
+    private var typePickerRow: some View {
+        let types = vaultStore.typeRegistry.quickPickSelectable
+        if layout == .compact {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DesignTokens.Spacing.spacing1) {
+                    ForEach(types) { pageType in
+                        typeButton(pageType)
+                    }
+                }
+            }
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DesignTokens.Spacing.spacing2) {
+                    ForEach(types) { pageType in
+                        typeButton(pageType)
+                    }
+                }
+            }
+        }
     }
 
     private func typeButton(_ pageType: PageType) -> some View {
         let currentDoc = documentID.flatMap { id in vaultStore.documents.first { $0.id == id } }
         let isSelected = currentDoc?.pageType == pageType && mode == .switchType
+        let compact = layout == .compact
+        let iconSize: CGFloat = compact ? 16 : 20
+        let verticalPad: CGFloat = compact ? 4 : 8
+        let minWidth: CGFloat = compact ? 56 : 72
 
         return Button {
             switch mode {
@@ -61,18 +91,19 @@ struct TypePickerView: View {
                 vaultStore.syncPropertiesToNDL(for: documentID)
             }
         } label: {
-            VStack(spacing: 6) {
-                Image(systemName: pageType.systemImage)
-                    .font(.title2)
+            VStack(spacing: compact ? 2 : 4) {
+                OWIconView(icon: pageType.owIcon, size: iconSize, color: DesignTokens.ObjectType.accent(for: pageType))
                 Text(pageType.displayName)
-                    .font(.caption)
+                    .font(compact ? DesignTokens.Typography.caption : .caption)
+                    .lineLimit(1)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
+            .frame(minWidth: minWidth)
+            .padding(.horizontal, compact ? 6 : 8)
+            .padding(.vertical, verticalPad)
             .background(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
             )
         }

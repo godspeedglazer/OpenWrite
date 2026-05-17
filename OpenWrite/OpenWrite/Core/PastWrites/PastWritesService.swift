@@ -2,6 +2,7 @@ import Foundation
 import Combine
 
 /// Optional “Past Writes” module: writing-session timeline from vault edits (+ optional REM import).
+@MainActor
 protocol PastWritesService: AnyObject {
     func recentContexts(since: Date) -> [WritingContextEntry]
     func snapshotSession(noteId: UUID) -> SessionSnapshot?

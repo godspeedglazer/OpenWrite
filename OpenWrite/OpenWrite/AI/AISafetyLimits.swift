@@ -18,6 +18,10 @@ enum AISafetyLimits {
     static let maxInlineRefineContextChunks = 4
     static let maxInlineRefinePromptTokens = 2000
     static let hybridVectorWeight = 0.7
+    /// Reor default `chunkSize` (store migrator); heading groups larger than this are split recursively.
+    static let indexChunkMaxChars = 1000
+    /// Reor `chunkMarkdownByHeadingsAndByCharsIfBig` overlap.
+    static let indexChunkOverlap = 20
     static let embeddingDimensions = 384
     static let maxEmbeddingInputChars = 2000
 }

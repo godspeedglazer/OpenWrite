@@ -1,6 +1,6 @@
 # OpenWrite Master Plan
 
-**Version:** 0.2 (research synthesis)  
+**Version:** 0.3 (ultimate database vision)  
 **Platform:** Native macOS (Swift / SwiftUI)  
 **Bundle ID:** `com.openwrite.app`  
 **Last updated:** 2026-05-17
@@ -11,9 +11,19 @@
 
 ## Vision
 
-OpenWrite is the ultimate **local-first writer**: a private knowledge workspace that combines deep AI research (Reor lineage), block-structured editing (Affine-inspired UX without copying code), graph-native linking (beats rigid folder silos), and publishing-ready output (Buffer-style workflows)—all on macOS with no mandatory cloud.
+OpenWrite is the ultimate **local-first writer and database**: a private knowledge workspace that combines a native **editor**, **typed pages**, and **user-defined databases** (`OWDatabase`) in one encrypted vault — snippets, books, tasks, references, or any schema you define. Around that core: deep AI research (Reor lineage), block-structured editing (AFFiNE-inspired UX without copying code), graph-native linking, and publishing-ready output (Buffer-style workflows)—all on macOS with no mandatory cloud.
 
-**North star:** One vault you own. Notes as a designed language (NDL), not plain Markdown files with accidental structure. AI that runs beside you via LM Studio (or compatible local servers), never exfiltrating your corpus by default—the **dual-generator** model: you write; the LLM retrieves and suggests.
+**Product equation:** `OpenWrite = Editor (NDL) + Typed pages (PageType) + User-defined databases (OWDatabase)`.
+
+| Layer | Role |
+|-------|------|
+| **Editor** | Every row has a body: NDL block tree in `.owdoc` |
+| **Typed pages** | Built-in kinds + property schemas (`PageType`, `PageProperties`) |
+| **OWDatabase** | Vault-local table definitions: fields, filters, sort, views; rows map to pages (or child pages) |
+
+**North star:** One vault you own. Notes as a designed language (NDL), not plain Markdown files with accidental structure. Structured data as **your** databases, not a vendor object graph. AI that runs beside you via LM Studio (or compatible local servers), never exfiltrating your corpus by default—the **dual-generator** model: you write; the LLM retrieves and suggests.
+
+**Database presets:** [features/DatabasePresets.md](./features/DatabasePresets.md).
 
 **Success criteria (v1):**
 
@@ -32,8 +42,9 @@ OpenWrite is the ultimate **local-first writer**: a private knowledge workspace 
 4. **AI is augment, not author** — Human remains a “generator”; RAG retrieves from *your* notes (Reor model).
 5. **Native macOS** — SwiftUI, AppKit bridges only where needed; respect sandboxing and HIG.
 6. **Composable blocks** — Affine-like structure (page → blocks → children) without AFFiNE/Anytype code.
-7. **Extensible later** — Plugins and sync are v2+; MVP is opinionated and small with **native graph, search, and AI**—no plugin duct tape.
-8. **Clean room** — Learn from competitors; never ship Anytype source or non-compliant forks.
+7. **User-defined databases** — `OWDatabase` generalizes snippet stores, reading lists, and manuscript trackers into one vault-local abstraction; built-in **presets** ship first ([DatabasePresets.md](./features/DatabasePresets.md)).
+8. **Extensible later** — Plugins and sync are v2+; MVP is opinionated and small with **native graph, search, and AI**—no plugin duct tape.
+9. **License compliance** — OSI-licensed reference trees may contribute **code** when obligations are met (AGPL: link/comply; MIT: attribute). **Anytype (ASAL)** is **inspiration-only** — no copy, adapt, or ship.
 
 ---
 
@@ -43,12 +54,12 @@ Six vendored reference trees live beside the shipping app. They are **local stud
 
 | Path | App | Tech | License | Size / notes |
 |------|-----|------|---------|--------------|
-| `reor-main/` | **Reor** (stated foundation) | TS, React, Electron, LanceDB, Transformers.js | **AGPL-3.0** | ~43k LOC; local RAG + markdown vault |
-| `AFFiNE-canary/` | AFFiNE | Yarn monorepo, BlockSuite, optional Rust | **MIT** (frontend); **EE** on `packages/backend/server` | ~358k LOC; workbench + blocks |
-| `anytype-ts-develop/` | Anytype Desktop | TS, Electron, Vite, Bun | **ASAL 1.0** — open code, **not** open source | ~197k LOC; **inspiration only** |
-| `logseq-master/` | Logseq | ClojureScript, Electron, SQLite graph | **AGPL-3.0** | ~250k LOC; outliner + block graph |
-| `massCode-main/` | massCode | Electron, snippets/notes | **AGPL-3.0** | ~75k LOC; optional import patterns |
-| `rem-main/` | rem (user hard-fork candidate) | Native Swift, SQLite, LM Studio | **MIT** | Screen-memory app + semantic search patterns |
+| `reor-main/` | **Reor** (stated foundation) | TS, React, Electron, LanceDB, Transformers.js | **AGPL-3.0** — code OK, **link/comply** | ~43k LOC; local RAG + markdown vault |
+| `AFFiNE-canary/` | AFFiNE | Yarn monorepo, BlockSuite, optional Rust | **MIT** (frontend); **EE** on `packages/backend/server` | ~358k LOC; MIT paths portable; no EE server |
+| `anytype-ts-develop/` | Anytype Desktop | TS, Electron, Vite, Bun | **ASAL 1.0** — **no code copy** | ~197k LOC; inspiration only |
+| `logseq-master/` | Logseq | ClojureScript, Electron, SQLite graph | **AGPL-3.0** — code OK, **link/comply** | ~250k LOC; outliner + block graph |
+| `massCode-main/` | massCode | Electron, snippets/notes | **AGPL-3.0** — code OK, **link/comply** | ~75k LOC; **proves snippet-store demand** → OpenWrite **Snippet Store** preset on `OWDatabase` |
+| `rem-main/` | rem+ (user fork: `rem/`, `REM*/`) | Native Swift, SQLite, LM Studio | **MIT** — code OK, attribute | Screen-memory + semantic search patterns |
 
 **Also present (not vendored source):**
 
@@ -68,22 +79,33 @@ Six vendored reference trees live beside the shipping app. They are **local stud
 
 ## Reference trees policy
 
-Reference trees are **vendored, gitignored, and not shipped** in the OpenWrite app bundle.
+Reference trees are **local clones** (gitignored by default), **not npm/yarn dependencies**, and **not copied wholesale** into the app bundle. OpenWrite may **port or adapt code** from OSI-licensed references when license obligations are satisfied. **Anytype** stays **ASAL — inspiration only** (no code contact).
+
+| Repo / path | License | Code reuse in `OpenWrite/` |
+|-------------|---------|---------------------------|
+| `reor-main/` | **AGPL-3.0** | **Allowed** — port algorithms/UI logic into Swift; **link/comply** (source offer, notices, counsel for proprietary distribution) |
+| `logseq-master/` | **AGPL-3.0** | **Allowed** — same as Reor; prefer Swift ports over shipping ClojureScript/Electron |
+| `massCode-main/` | **AGPL-3.0** | **Allowed** — import UX + Snippet Store preset; product generalizes massCode’s job to **OWDatabase** |
+| `AFFiNE-canary/` | **MIT** (frontend) · **EE** (`packages/backend/server`) | **Allowed** for MIT paths — workbench/block **patterns and code** with attribution; **never** embed EE backend or BlockSuite runtime in v1 |
+| `rem-main/` · user `rem/` · `REM*/` | **MIT** | **Allowed** — port with MIT copyright/notice in `NOTICE` or file headers |
+| `anytype-ts-develop/` | **ASAL 1.0** | **Not allowed** — UX/IA study only; independent Swift + naming |
+| `buffer/` | Proprietary binary | **Not allowed** — product/UX reference only |
 
 | Rule | Detail |
 |------|--------|
 | **Git** | Listed in root `.gitignore` (`reor-main/`, `AFFiNE-canary/`, `anytype-ts-develop/`, `logseq-master/`, `massCode-main/`, `rem-main/`, `buffer/`, `Obsidian*/`). Only `OpenWrite/`, `docs/`, and root `README.md` are product-tracked. |
-| **Build** | No reference package is linked into the Xcode target. No `node_modules` from vendors in CI. |
-| **Purpose** | Architecture study, algorithm porting (clean-room), UX benchmarking. |
-| **Submodules** | Optional later: pin commits via git submodule if team wants reproducible reference revs; default is “clone locally, don’t commit.” |
+| **Build** | No reference `node_modules` or upstream Electron app in CI/release. Shipped binary = `OpenWrite/` + SPM only. |
+| **Purpose** | Study, **license-compliant porting**, UX benchmarking — not vendoring whole upstream apps. |
+| **Attribution** | See [Contributing/DocumentationStandards.md](./Contributing/DocumentationStandards.md) when porting files or substantial logic. |
+| **Submodules** | Optional: pin reference commits via submodule; default is “clone locally, don’t commit.” |
 | **REM copies** | User may add `rem/` or `REM*/` forks; same ignore rules. Do not alter upstream folders when a separate copy is provided. |
-| **Shipping** | App Store / notarized build contains **only** `OpenWrite/` sources and declared SPM deps. |
+| **Shipping** | App Store / notarized build contains **only** `OpenWrite/` sources, declared SPM deps, and required license notices. |
 
 ---
 
 ## Competitor synthesis
 
-### Reor (foundation — AGPL; clean-room Swift)
+### Reor (foundation — AGPL; port with link/comply)
 
 **Thesis:** *“A RAG app with two generators: the LLM and the human.”* Q&A and related-notes augment writing; Writing Assistant was never shipped in upstream UI.
 
@@ -97,7 +119,7 @@ Reference trees are **vendored, gitignored, and not shipped** in the OpenWrite a
 
 **Critical Reor paths (spec only):** `electron/main/common/chunking.ts`, `electron/main/vector-database/`, `src/lib/db.ts`, `src/lib/llm/chat.ts`, `src/components/Chat/index.tsx`.
 
-**Do not replicate:** forced dark mode, React Native in Electron, PostHog in a privacy product, full-screen indexing gate before edit, AGPL copy-paste into proprietary binary.
+**Do not replicate:** forced dark mode, React Native in Electron, PostHog in a privacy product, full-screen indexing gate before edit, shipping Reor’s Electron runtime or commingled AGPL blobs without compliance.
 
 ---
 
@@ -115,11 +137,13 @@ Reference trees are **vendored, gitignored, and not shipped** in the OpenWrite a
 
 ### Logseq / Obsidian (outliner + files)
 
-**Logseq (AGPL):** Block UUID, parent, fractional order, outliner ops, SQLite authoritative store with markdown interchange (`pages/`, `journals/`, `- ` bullets). **Reuse ideas, not code.**
+**Logseq (AGPL):** Block UUID, parent, fractional order, outliner ops, SQLite authoritative store with markdown interchange (`pages/`, `journals/`, `- ` bullets). **May port logic to Swift** with AGPL link/comply; do not ship Logseq’s Electron+CLJS stack.
 
 **Obsidian:** No source in workspace; public plugin API = `Vault` + `Workspace` + CodeMirror 6. User pain: plugin fragility, paid sync, Electron lag, file-only model forcing plugins for block queries.
 
 **OpenWrite stance:** **Outliner-first NDL** with native block graph (backlinks, block refs) built in—beat “install 15 plugins” without copying Logseq’s Electron+CLJS stack.
+
+**Vault navigation (hybrid):** One encrypted registry (flat `.owdoc` files), with **optional virtual folder tree**, **flat/smart-list sections** (All, Inbox, Journal, Types), and **typed pages**—not a second filesystem or Anytype object graph. Detail: [features/VaultAndFileTree.md](./features/VaultAndFileTree.md).
 
 | From Obsidian | From Logseq |
 |---------------|-------------|
@@ -136,6 +160,25 @@ Reference trees are **vendored, gitignored, and not shipped** in the OpenWrite a
 **OpenWrite response:** Native speed, simpler capture, **file-level vault crypto**, LM Studio RAG first-class, NDL + graph **without** Any-ID / space onboarding. Light typed properties in v1; defer kanban/calendar/DB-as-objects.
 
 **Workspace:** `anytype-ts-develop/` (~79 MB) — Electron client only; no `anytype-heart` middleware in tree. **Do not copy** schemas, assets, gRPC protos, or UI strings.
+
+---
+
+### massCode (snippet store — market proof, not the ceiling)
+
+**Thesis:** massCode validated that developers and writers want a **fast, structured snippet store** — folders, tags, languages, copy-to-clipboard, import from JSON.
+
+**OpenWrite response:** Do not ship a snippet-only silo. Port **UX patterns** (quick capture, tag filter, language column, massCode JSON import) into the **Snippet Store** preset on **`OWDatabase`**. The same vault holds **Book**, **Task board**, **Reference library**, and custom schemas the user defines.
+
+| massCode concept | OpenWrite mapping |
+|------------------|-------------------|
+| Snippet = title + body + language + tags | `OWDatabase` row → `VaultDocument` (`pageType: snippet` or preset schema) |
+| Folders / collections | Database **views** (saved filters) or vault smart collections |
+| JSON export/import | [ImportExport.md](./features/ImportExport.md) massCode path → NDL + properties |
+| Electron app | Native Swift table + editor split; AGPL ports with link/comply |
+
+**Critical paths (study only):** `massCode-main/src/main/services/store/snippets.ts`, import/export handlers, sidebar list density.
+
+**Do not replicate:** Snippet-only product boundary; separate app identity; plaintext-only storage without vault encryption.
 
 ---
 
@@ -156,13 +199,13 @@ Legend: ● strong · ◐ partial · ○ weak · — not focus
 | Primary job | Knowledge OS / object graph | Menubar capture | Notion+Miro workspace | Local AI PKM | **Writer + research vault** |
 | Platform | Electron (multi) | macOS menubar | Web + desktop + mobile | Electron | **macOS native** |
 | Default encryption | ● E2E spaces | ○ local files | ◐ self-host | ○ md folder | ● **`.openwrite` vault** |
-| Data model | Objects, relations, DB views | Plain MD | BlockSuite + DB blocks | MD + vectors | **NDL tree** + light metadata |
+| Data model | Objects, relations, DB views | Plain MD | BlockSuite + DB blocks | MD + vectors | **NDL tree** + **`OWDatabase`** (user schemas) |
 | Graph / linking | ● relations | ○ | ● linked docs | ● semantic + wiki | ● wiki + graph v1 |
 | Block editor | ● | ○ WYSIWYG MD | ●● | ○ | ● composable v1 |
 | Local AI / RAG | ◐ | ● on-device | ◐ cloud mix | ● | ● **LM Studio** |
 | Publishing | ○ export | ○ personal | ◐ share | ○ | ● pipelines v2 |
 | Capture speed | ◐ type friction | ●● | ◐ | ◐ | ● **fast inbox** |
-| License reuse | **ASAL — none** | N/A | MIT patterns OK | AGPL → clean-room | Own codebase |
+| License reuse | **ASAL — none** | N/A | MIT code OK | AGPL → link/comply | MIT + AGPL ports |
 
 ---
 
@@ -207,7 +250,10 @@ Legend: ● strong · ◐ partial · ○ weak · — not focus
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  UI (SwiftUI) — Workbench, Editor, Graph, AI inspector      │
+│  UI (SwiftUI) — Workbench, Editor, Graph, Database views, │
+│                 AI inspector                                 │
+├─────────────────────────────────────────────────────────────┤
+│  Databases — OWDatabase schema, views, row ↔ VaultDocument  │
 ├─────────────────────────────────────────────────────────────┤
 │  NoteDSL — NDL AST, parse/serialize, block tree ops         │
 ├─────────────────────────────────────────────────────────────┤
@@ -218,6 +264,21 @@ Legend: ● strong · ◐ partial · ○ weak · — not focus
 │  On-disk — Encrypted vault bundle (.openwrite)              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### OWDatabase (user-defined databases)
+
+**OWDatabase** is a vault-local definition: named fields (typed properties), one or more **views** (filter, sort, visible columns), and **rows** backed by `VaultDocument` instances (same `.owdoc` encryption as notes).
+
+| Concept | Description |
+|---------|-------------|
+| **Preset** | Shipped schema + default views (Snippet Store, Book, Task board, …) — [DatabasePresets.md](./features/DatabasePresets.md) |
+| **Custom database** | User duplicates a preset or defines fields; stored in vault manifest / `databases/{id}.json` (format TBD) |
+| **Row** | Primary key = document UUID; body in NDL; structured columns in `PageProperties` |
+| **View** | Saved predicate + column layout (table, board, calendar later) |
+
+**massCode lineage:** Snippet Store preset is the **first-class** proof-of-parity target; engineering generalizes to arbitrary `OWDatabase` schemas so books, contacts, and reading lists do not need new apps.
+
+**Explicit non-goals (v1):** SQL engine, multi-vault federation, Anytype-style relation graph on every field, real-time collaborative cursors on table cells.
 
 ### Module map (aligned to Xcode layout)
 
@@ -257,6 +318,9 @@ Current scaffold under `OpenWrite/OpenWrite/`:
 | `UI/Inspector/RelatedNotesPanel.swift` | Semantic sidebar |
 | `UI/Inspector/ChatPanel.swift` | Streaming Q&A |
 | `UI/Graph/GraphView.swift` | Native graph surface |
+| `Databases/OWDatabase.swift` | Schema, views, row registry |
+| `Databases/DatabasePreset.swift` | Built-in presets from [DatabasePresets.md](./features/DatabasePresets.md) |
+| `UI/Databases/DatabaseTableView.swift` | Table lens over filtered rows |
 | `Publish/ExportPipeline.swift` | MD / thread / newsletter stubs (v2) |
 
 **Dependency rule:** `UI` → `NoteDSL`, `Models`, `Core`, `AI`. `AI` must not import `UI`. `Core` must not import `AI`.
@@ -457,11 +521,13 @@ value:: active
 
 ### v2
 
+- **`OWDatabase` v1** — table views, custom schemas, Snippet Store + Book/Task/Reference presets
+- massCode JSON import into Snippet Store preset
 - Sync provider abstraction (optional E2E)
 - Plugin sandbox API
 - Publish pipelines (Buffer-like queues)
 - iOS companion (if product direction holds)
-- Advanced NDL: tables, embeds, typed properties
+- Advanced NDL: tables, embeds, board/calendar database views
 
 ---
 
@@ -486,28 +552,28 @@ Rough calendar for autonomous / human agents. Adjust per velocity; dependencies 
 
 ## Legal / compliance
 
-### Anytype (strict)
+### Anytype (ASAL — inspiration only)
 
 - Anytype is **“open code” under ASAL 1.0**, not OSI open source. Commercial use, network deployment, and redistribution are restricted.
 - **Never** copy or adapt Anytype source, assets, protobuf/gRPC definitions, type names, or UI copy into OpenWrite.
 - **Never** link `anytype-ts-develop` into the app target or ship derived binaries.
 - Competitive study is limited to **public behavior**, README-level concepts, and independent reimplementation with **original schemas and naming** (e.g. `VaultDocument`, `NoteBlock`, not Anytype object IDs).
-- If in doubt, treat Anytype like a proprietary competitor with extra visibility into UX—legal review before any code contact.
+- If in doubt, treat Anytype like a proprietary competitor with extra visibility into UX—**no code contact**.
 
-### Other references
+### OSI-licensed references (code allowed with compliance)
 
 | Tree | License | OpenWrite rule |
 |------|---------|----------------|
-| `reor-main/` | AGPL-3.0 | **Clean-room Swift** reimplementation of algorithms; do not ship Electron/Reor runtime or commingled AGPL code in closed product without counsel |
-| `AFFiNE-canary/` | MIT + EE backend | UI/block **patterns** only; no BlockSuite link; no EE server |
-| `logseq-master/` | AGPL-3.0 | Design patterns only; no source paste |
-| `massCode-main/` | AGPL-3.0 | Optional import UX reference |
-| `rem-main/` | MIT | Concept port OK; prefer rewrite |
-| `buffer/` | Proprietary binary | UX reference only |
+| `reor-main/` | AGPL-3.0 | **May use code** (Swift ports); **link/comply**; do not ship Electron/Reor runtime without counsel |
+| `logseq-master/` | AGPL-3.0 | **May use code** (Swift ports); **link/comply**; do not ship Logseq stack |
+| `massCode-main/` | AGPL-3.0 | **May use code** for import/snippet UX; **link/comply** |
+| `AFFiNE-canary/` | MIT + EE backend | **MIT paths:** may use/adapt with attribution; **no** EE server, BlockSuite link, or Yjs cloud stack in v1 |
+| `rem-main/` · `rem/` · `REM*/` | MIT | **May use code**; preserve MIT notices in ported files or `NOTICE` |
+| `buffer/` | Proprietary binary | UX reference only — **no code** |
 
 ### General
 
-- **Clean room:** Study all references for ideas and UX; ship independent implementation.
+- **Attribution:** Document ports in PRs and [Contributing/DocumentationStandards.md](./Contributing/DocumentationStandards.md).
 - **Trademarks:** “OpenWrite” is a working title; verify before public release.
 - **Export control / AI:** User runs local models; document that users are responsible for model licenses.
 - **Telemetry:** Opt-in only; no default analytics in MVP.
@@ -516,17 +582,17 @@ Rough calendar for autonomous / human agents. Adjust per velocity; dependencies 
 
 ## Appendix: References in workspace
 
-| Path | Role | Ship? |
-|------|------|-------|
-| `OpenWrite/` | Native macOS product | **Yes** |
-| `docs/OpenWriteMasterPlan.md` | This document | **Yes** |
-| `reor-main/` | RAG + vault behavior spec | No |
-| `AFFiNE-canary/` | Workbench + block UX | No |
-| `anytype-ts-develop/` | Competitor UX (ASAL) | No |
-| `logseq-master/` | Outliner + graph patterns | No |
-| `massCode-main/` | Snippets / import ideas | No |
-| `rem-main/` | Swift LM Studio + search patterns | No |
-| `buffer/` | Publish UX binary | No |
+| Path | Role | Ship? | Code into `OpenWrite/`? |
+|------|------|-------|-------------------------|
+| `OpenWrite/` | Native macOS product | **Yes** | — |
+| `docs/OpenWriteMasterPlan.md` | This document | **Yes** | — |
+| `reor-main/` | RAG + vault reference | No (clone) | **Yes** (AGPL link/comply) |
+| `AFFiNE-canary/` | Workbench + block reference | No (clone) | **Yes** (MIT paths only) |
+| `anytype-ts-develop/` | Competitor UX (ASAL) | No (clone) | **No** |
+| `logseq-master/` | Outliner + graph reference | No (clone) | **Yes** (AGPL link/comply) |
+| `massCode-main/` | Snippet store demand proof → **OWDatabase** Snippet preset | No (clone) | **Yes** (AGPL link/comply) |
+| `rem-main/` · `rem/` · `REM*/` | Swift LM Studio + search | No (clone) | **Yes** (MIT attribute) |
+| `buffer/` | Publish UX binary | No | **No** |
 
 ### Reor entry points (quick index)
 
@@ -539,6 +605,8 @@ Rough calendar for autonomous / human agents. Adjust per velocity; dependencies 
 
 - `AFFiNE-canary/packages/frontend/core/src/modules/workbench/`
 - `AFFiNE-canary/packages/frontend/core/src/modules/workbench/view/view-islands.tsx`
+
+**Obsidian import study only (do not ship):** `AFFiNE-canary/blocksuite/affine/widgets/linked-doc/src/transformers/obsidian.ts` — Markdown/wikilink/callout mapping reference for E-07; OpenWrite import stays clean-room Swift ([ImportExport.md](./features/ImportExport.md)).
 
 ### Logseq entry points
 

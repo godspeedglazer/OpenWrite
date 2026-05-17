@@ -10,7 +10,7 @@
 
 OpenWrite’s **canonical format is NDL inside encrypted `.owdoc` files**, not Markdown on disk. Import and export are **bridges**: bring legacy knowledge in without becoming a “Markdown vault app,” and ship writing out to interoperable formats and publish templates.
 
-**Import priority:** Obsidian folder + single `.md` files (P2 epic, high user demand from Reor study).  
+**Import priority:** Obsidian folder + single `.md` files (P2 epic, high user demand from Reor study). Folder paths become virtual tree metadata, not on-disk layout inside `.openwrite` — see [VaultAndFileTree.md](./VaultAndFileTree.md).  
 **Export priority:** Lossless-enough Markdown + plain text in v1; PDF and Buffer-style publish queues in v2 (E-10).
 
 ---

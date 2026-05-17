@@ -16,11 +16,4 @@ enum InspectorTab: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var systemImage: String {
-        switch self {
-        case .chat: return "bubble.left.and.bubble.right"
-        case .related: return "link.circle"
-        case .pastWrites: return "clock.arrow.circlepath"
-        }
-    }
 }

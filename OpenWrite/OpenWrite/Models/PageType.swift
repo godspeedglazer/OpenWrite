@@ -28,20 +28,6 @@ enum PageType: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
         }
     }
 
-    var systemImage: String {
-        switch self {
-        case .note: return "doc.text"
-        case .task: return "checkmark.circle"
-        case .reference: return "link"
-        case .journal: return "book.closed"
-        case .project: return "folder"
-        case .book: return "books.vertical"
-        case .document: return "doc.richtext"
-        case .wikiSite: return "globe"
-        case .collection: return "tray.full"
-        }
-    }
-
     var accentColorName: String {
         switch self {
         case .note: return "blue"

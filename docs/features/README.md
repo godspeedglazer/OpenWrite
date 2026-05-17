@@ -11,6 +11,9 @@ Per-feature documents describe **user-visible behavior**, acceptance criteria, a
 | Feature | Epic | Doc | Status |
 |---------|------|-----|--------|
 | Vault encryption | E-01 | [VaultEncryption.md](./VaultEncryption.md) | *Partial* |
+| Vault navigation & file tree | E-08, E-07 | [VaultAndFileTree.md](./VaultAndFileTree.md) | *Spec* |
+| Typed pages & structures | E-02 | [TypedPagesAndStructures.md](./TypedPagesAndStructures.md) | *Partial* |
+| User-defined databases (OWDatabase) | v2 | [DatabasePresets.md](./DatabasePresets.md) | *Spec* |
 | Backlinks & graph | E-06 | [GraphView.md](./GraphView.md) | *Partial* |
 | Workbench shell | E-08 | [Workbench.md](./Workbench.md) | *Partial* |
 | Import & export | E-07, E-10 | [ImportExport.md](./ImportExport.md) | *Partial* |

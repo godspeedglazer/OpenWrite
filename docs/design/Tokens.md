@@ -1,7 +1,7 @@
 # OpenWrite Design Tokens
 
-**Version:** 1.0  
-**Implementation:** `OpenWrite/Design/DesignTokens.swift`  
+**Version:** 2.0  
+**Implementation:** `OpenWrite/Design/DesignTokens.swift` · **Components:** [OWComponents.md](./OWComponents.md)  
 **Grid:** 4pt base unit
 
 All UI code should reference **`DesignTokens`** (or SwiftUI extensions backed by it), not magic numbers. Token names are stable API; values may shift in patch releases for contrast fixes.
@@ -37,7 +37,8 @@ DesignTokens.<Category>.<name>
 | Radius | `DesignTokens.Radius` | `.medium` |
 | Shadow | `DesignTokens.Shadow` | `.floating` |
 | Motion | `DesignTokens.Motion` | `.durationStandard` |
-| Layout | `DesignTokens.Layout` | `.sidebarMinWidth` |
+| Layout | `DesignTokens.Layout` | `.sidebarRowHeight` |
+| Object type | `DesignTokens.ObjectType` | `.accent(for: .task)` |
 
 ---
 
@@ -50,8 +51,12 @@ Semantic colors adapt to `ColorScheme` via static computed `Color` properties.
 | Token | Role | Light (sRGB) | Dark (sRGB) |
 |-------|------|--------------|-------------|
 | `background` | Window / split background | 0.98, 0.98, 0.97 | 0.11, 0.11, 0.12 |
-| `surface` | Sidebar, inspector, code bg | 0.95, 0.95, 0.94 | 0.15, 0.15, 0.16 |
-| `surfaceElevated` | Sheets, popovers | 1.0, 1.0, 1.0 | 0.18, 0.18, 0.19 |
+| `sidebarBackground` | Left nav rail (~#F5F5F7) | 0.961, 0.961, 0.969 | 0.14, 0.14, 0.15 |
+| `editorCanvas` | Main writing column (white) | 1.0, 1.0, 1.0 | 0.13, 0.13, 0.14 |
+| `surface` | Inspector panels, code bg | 0.95, 0.95, 0.94 | 0.15, 0.15, 0.16 |
+| `surfaceElevated` | OW Rect cards, popovers | 1.0, 1.0, 1.0 | 0.18, 0.18, 0.19 |
+| `selectionPill` | Sidebar row selected fill | 1.0, 1.0, 1.0 | 0.20, 0.20, 0.21 |
+| `borderSubtle` | 1px card / column edges | 0.90, 0.90, 0.92 | 0.24, 0.24, 0.26 |
 | `textPrimary` | Headings, body | 0.10, 0.10, 0.10 | 0.95, 0.95, 0.96 |
 | `textSecondary` | Metadata, nav inactive | 0.45, 0.45, 0.47 | 0.62, 0.62, 0.64 |
 | `textTertiary` | Placeholders, disabled | 0.60, 0.60, 0.62 | 0.48, 0.48, 0.50 |
@@ -67,6 +72,24 @@ Semantic colors adapt to `ColorScheme` via static computed `Color` properties.
 | `graphNode` | Default node fill | surfaceElevated | surfaceElevated |
 | `graphEdge` | Edge stroke | textTertiary | textTertiary |
 | `graphNodeFocused` | Selected node stroke | accent | accent |
+
+### Object-type accents
+
+Muted chips and sidebar icon tints — **not** full sidebar rainbow. Implemented as `DesignTokens.ObjectType.accent(for: PageType)`.
+
+| Page type | Light accent (sRGB) | Use |
+|-----------|---------------------|-----|
+| `note` | 0.23, 0.42, 0.88 | Default object |
+| `task` | 0.92, 0.45, 0.18 | Tasks |
+| `reference` | 0.55, 0.35, 0.85 | Links / refs |
+| `journal` | 0.22, 0.62, 0.42 | Journal |
+| `project` | 0.35, 0.38, 0.82 | Projects |
+| `book` | 0.55, 0.40, 0.28 | Books |
+| `document` | 0.18, 0.58, 0.58 | Longform |
+| `wikiSite` | 0.20, 0.62, 0.78 | Wiki |
+| `collection` | 0.50, 0.52, 0.56 | Sets |
+
+Chip fill: accent @ **14%** opacity (`ObjectType.chipBackground(for:)`).
 
 ### Swift mapping
 
@@ -88,7 +111,8 @@ Use `DesignTokens.Color.accent` for **product-branded** elements (wikilinks, gra
 |--------|-------|-----|
 | `overlayLight` | 0.04 | Hover on sidebar row |
 | `overlayMedium` | 0.08 | Pressed state |
-| `overlayStrong` | 0.12 | Selected row background |
+| `overlayStrong` | 0.12 | Legacy overlay; prefer `selectionPill` for sidebar |
+| `pillSelected` | 1.0 | Selection pill opacity (use `selectionPill` color) |
 | `scrim` | 0.35 | Sheet backdrop (if custom) |
 
 Defined as `DesignTokens.Opacity.*` in code.
@@ -97,11 +121,13 @@ Defined as `DesignTokens.Opacity.*` in code.
 
 ## Typography
 
+OpenWrite uses **bundled** UI and mono fonts registered in the app target — not San Francisco for chrome. Swift helpers (e.g. `Font.owBody`) map token names to those faces. See [OpenWriteDesignLanguage.md § Typography](./OpenWriteDesignLanguage.md#typography--voice) and [AntiPatterns.md](./AntiPatterns.md).
+
 ### Scale
 
 | Token | Font | Weight | Line spacing | Typical use |
 |-------|------|--------|--------------|-------------|
-| `documentTitle` | `.largeTitle` | bold | system | Note title |
+| `documentTitle` | bundled UI / `owDocumentTitle` | bold | token | Note title |
 | `heading1` | `.title` | semibold | system | NDL h1 |
 | `heading2` | `.title2` | semibold | system | NDL h2 |
 | `heading3` | `.title3` | medium | system | NDL h3 |
@@ -174,11 +200,13 @@ VStack(spacing: DesignTokens.Spacing.spacing3) { ... }
 | Token | Points | Use |
 |-------|--------|-----|
 | `none` | 0 | Full-bleed previews |
-| `small` | 6 | Code block, tags |
-| `medium` | 8 | Cards, graph nodes |
-| `large` | 12 | Sheets, panels |
+| `small` | 6 | Code block, inline controls |
+| `medium` | 8 | Graph nodes |
+| `owRect` | **11** | **OW Rect** — sidebar cards, property strip (range 10–12) |
+| `large` | 12 | Sheets |
 | `xlarge` | 16 | Modal dialogs (rare) |
-| `full` | 9999 | Pills, avatars |
+| `pill` | 9999 | Sidebar selection, `OWObjectTypeChip` |
+| `full` | 9999 | Alias of `pill` |
 
 ```swift
 RoundedRectangle(cornerRadius: DesignTokens.Radius.medium)
@@ -221,8 +249,12 @@ Duration and easing tokens live in `DesignTokens.Motion` and are documented in [
 
 | Token | Value | Notes |
 |-------|-------|-------|
-| `sidebarMinWidth` | 220 | Matches current `ContentView` |
-| `sidebarMaxWidth` | 280 | User resize clamp |
+| `sidebarMinWidth` | 260 | Anytype-calm rail |
+| `sidebarMaxWidth` | 300 | User resize clamp |
+| `sidebarPreferredWidth` | 272 | Default split width |
+| `sidebarRowHeight` | 38 | Target 36–40pt (`OWSidebarRow`) |
+| `sidebarRowIconSize` | 18 | Leading symbol frame |
+| `objectTypeChipHeight` | 24 | `OWObjectTypeChip` |
 | `inspectorMinWidth` | 280 | AI + backlinks |
 | `inspectorMaxWidth` | 360 | |
 | `mainMinWidth` | 480 | Below this, collapse inspector first |
@@ -285,8 +317,9 @@ Future: optional `Colors.xcassets` for semantic sets if we move off programmatic
 
 | Version | Change |
 |---------|--------|
+| 2.0 | Sidebar/editor split colors, OW Rect radius, row height, object-type accents, pill selection |
 | 1.0 | Initial token set aligned with scaffold UI |
 
 ---
 
-*See also: [OpenWriteDesignLanguage.md](./OpenWriteDesignLanguage.md) · [Components.md](./Components.md)*
+*See also: [OpenWriteDesignLanguage.md](./OpenWriteDesignLanguage.md) · [OWComponents.md](./OWComponents.md) · [Components.md](./Components.md)*

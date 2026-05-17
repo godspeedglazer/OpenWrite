@@ -18,15 +18,6 @@ enum StructureTemplate: String, Codable, CaseIterable, Identifiable, Hashable, S
         }
     }
 
-    var systemImage: String {
-        switch self {
-        case .book: return "books.vertical"
-        case .document: return "doc.richtext"
-        case .wikiSite: return "globe"
-        case .collection: return "folder"
-        }
-    }
-
     var summary: String {
         switch self {
         case .book:

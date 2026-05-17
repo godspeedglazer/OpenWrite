@@ -8,7 +8,10 @@ struct EditorView: View {
     let documentID: UUID
     @State private var editingText: String = ""
     @State private var showRenderedPreview: Bool = false
+    @State private var showProperties: Bool = false
+    @State private var showTypePicker: Bool = false
     @StateObject private var inlineAssist = InlineAssistController()
+
     init(document: VaultDocument) {
         self.documentID = document.id
     }
@@ -26,71 +29,7 @@ struct EditorView: View {
             if let document {
                 editorBody(document)
             } else {
-                ContentUnavailableView("Note missing", systemImage: "doc.questionmark")
-            }
-        }
-        .navigationTitle(document?.displayTitle ?? "Note")
-    }
-
-    @ViewBuilder
-    private func editorBody(_ document: VaultDocument) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .center, spacing: 10) {
-                    PageTypeBadge(pageType: document.pageType)
-                    Spacer()
-                    Text(document.updatedAt, style: .relative)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Toggle("Preview", isOn: $showRenderedPreview)
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                    Button {
-                        inlineAssist.refineSelection(using: aiServices.rag)
-                    } label: {
-                        if inlineAssist.isRefining {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Label("Refine selection", systemImage: "sparkles")
-                        }
-                    }
-                    .disabled(!inlineAssist.canRefineSelection)
-                    .help("Improve selected text with local AI (does not block typing)")
-                }
-
-                Text(document.displayTitle)
-                    .font(.largeTitle.bold())
-
-                TypePickerView(documentID: document.id, mode: .switchType)
-
-                PropertyInspectorView(documentID: document.id)
-                    .padding(12)
-                    .background(Color.secondary.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 24)
-            .padding(.bottom, 12)
-
-            if showRenderedPreview {
-                renderedPreview(document)
-            } else {
-                SelectablePlainTextEditor(text: $editingText) { range in
-                    inlineAssist.scheduleSelectionCapture(
-                        documentID: document.id,
-                        fullText: editingText,
-                        selectedRange: range
-                    )
-                }
-                .padding(12)
-                .background(Color.secondary.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
-                .onChange(of: editingText) { _, newValue in
-                    commitEdit(document: document, plainText: newValue)
-                }
+                OWEmptyState(title: "Note missing", icon: .missingNote)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -101,7 +40,7 @@ struct EditorView: View {
         .onChange(of: documentID) { _, _ in
             if let doc = self.document { syncFromDocument(doc) }
         }
-        .onChange(of: document.updatedAt) { _, _ in
+        .onChange(of: document?.updatedAt) { _, _ in
             guard !showRenderedPreview, let doc = self.document else { return }
             if doc.plainText != editingText {
                 syncFromDocument(doc)
@@ -109,7 +48,156 @@ struct EditorView: View {
         }
     }
 
-    private func syncFromDocument(_ document: VaultDocument) {
+    @ViewBuilder
+    private func editorBody(_ document: VaultDocument) -> some View {
+        VStack(spacing: 0) {
+            pageHero(document)
+
+            if showTypePicker {
+                editorTypePickerStrip(document)
+            }
+
+            editorActionBar(document)
+
+            editorMain(document)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .layoutPriority(1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func pageHero(_ document: VaultDocument) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
+                pageIcon(for: document)
+
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                    Text(document.displayTitle)
+                        .font(DesignTokens.Typography.documentTitle)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .lineLimit(3)
+
+                    metadataRow(document)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .openWriteEditorContentWidth()
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if showProperties {
+                OWRoundedRect(style: .elevated, padding: DesignTokens.Spacing.spacing2) {
+                    PropertyInspectorView(documentID: document.id)
+                }
+                .openWriteEditorContentWidth()
+            }
+        }
+        .padding(DesignTokens.Spacing.editorHeroPadding)
+    }
+
+    private func pageIcon(for document: VaultDocument) -> some View {
+        OWPageTypeIconWell(icon: document.pageType.owIcon, pageType: document.pageType, size: 36)
+            .accessibilityHidden(true)
+    }
+
+    private func metadataRow(_ document: VaultDocument) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                Button {
+                    showTypePicker.toggle()
+                } label: {
+                    OWObjectTypeChip(pageType: document.pageType)
+                }
+                .buttonStyle(.plain)
+                .help(showTypePicker ? "Hide type picker" : "Change page type")
+
+                OWMetadataChip(
+                    label: "Updated",
+                    icon: .clock,
+                    value: document.updatedAt.formatted(.relative(presentation: .named))
+                )
+
+                if let status = nonEmptyProperty(document, key: .status) {
+                    OWMetadataChip(label: status, icon: .statusDot)
+                }
+
+                if let tags = nonEmptyProperty(document, key: .tags) {
+                    OWMetadataChip(label: tags, icon: .tag)
+                }
+
+                Button {
+                    showProperties.toggle()
+                } label: {
+                    OWMetadataChip(
+                        label: showProperties ? "Hide properties" : "Properties",
+                        icon: .sliders
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func editorTypePickerStrip(_ document: VaultDocument) -> some View {
+        TypePickerView(documentID: document.id, mode: .switchType, layout: .compact)
+            .padding(.horizontal, DesignTokens.Spacing.spacing5)
+            .padding(.bottom, DesignTokens.Spacing.spacing1)
+    }
+
+    private func editorActionBar(_: VaultDocument) -> some View {
+        HStack(spacing: DesignTokens.Spacing.spacing3) {
+            Spacer()
+
+            Toggle("Preview", isOn: $showRenderedPreview)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+
+            Button {
+                inlineAssist.refineSelection(using: aiServices.rag)
+            } label: {
+                if inlineAssist.isRefining {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    OWLabel(title: "Refine", icon: .sparkles)
+                        .font(DesignTokens.Typography.captionEmphasis)
+                }
+            }
+            .disabled(!inlineAssist.canRefineSelection)
+            .help("Improve selected text with local AI")
+        }
+        .padding(.horizontal, DesignTokens.Spacing.spacing5)
+        .padding(.vertical, DesignTokens.Spacing.spacing1)
+    }
+
+    @ViewBuilder
+    private func editorMain(_ document: VaultDocument) -> some View {
+        if showRenderedPreview {
+            renderedPreview(document)
+        } else {
+            SelectablePlainTextEditor(text: $editingText) { range in
+                inlineAssist.scheduleSelectionCapture(
+                    documentID: document.id,
+                    fullText: editingText,
+                    selectedRange: range
+                )
+            }
+            .font(DesignTokens.Typography.body)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.horizontal, DesignTokens.Spacing.spacing5)
+            .padding(.bottom, DesignTokens.Spacing.spacing4)
+            .onChange(of: editingText) { _, newValue in
+                commitEdit(document: document, plainText: newValue)
+            }
+        }
+    }
+
+    private func nonEmptyProperty(_ document: VaultDocument, key: PagePropertyKey) -> String? {
+        let value = document.properties.string(for: key).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    private func syncFromDocument(_ document: VaultDocument?) {
+        guard let document else { return }
         editingText = document.plainText
     }
 
@@ -133,9 +221,9 @@ struct EditorView: View {
                             .padding()
                     }
                 case .failed(let message):
-                    ContentUnavailableView(
-                        "Refine failed",
-                        systemImage: "exclamationmark.triangle",
+                    OWEmptyState(
+                        title: "Refine failed",
+                        icon: .warning,
                         description: Text(message)
                     )
                 default:
@@ -169,20 +257,22 @@ struct EditorView: View {
                     blockView(block)
                 }
             }
+            .openWriteEditorContentWidth()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
+            .padding(DesignTokens.Spacing.spacing5)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
     private func blockView(_ block: NoteBlock) -> some View {
         switch block.kind {
         case .heading1:
-            Text(block.text).font(.title)
+            Text(block.text).font(DesignTokens.Typography.heading1)
         case .heading2:
-            Text(block.text).font(.title2)
+            Text(block.text).font(DesignTokens.Typography.heading2)
         case .heading3:
-            Text(block.text).font(.title3)
+            Text(block.text).font(DesignTokens.Typography.heading3)
         case .bullet:
             HStack(alignment: .top, spacing: 8) {
                 Text("•")
@@ -198,7 +288,7 @@ struct EditorView: View {
                 }
         case .code:
             Text(block.text)
-                .font(.system(.body, design: .monospaced))
+                .font(DesignTokens.Typography.code)
                 .padding(8)
                 .background(Color.secondary.opacity(0.12))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -210,10 +300,10 @@ struct EditorView: View {
         case .property:
             HStack(spacing: 6) {
                 Text(block.propertyKey?.displayName ?? block.text)
-                    .font(.caption.weight(.semibold))
+                    .font(DesignTokens.Typography.captionEmphasis)
                     .foregroundStyle(.secondary)
                 Text(block.propertyValuePayload)
-                    .font(.caption)
+                    .font(DesignTokens.Typography.caption)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -221,34 +311,7 @@ struct EditorView: View {
             .clipShape(Capsule())
         case .paragraph:
             Text(block.text)
-        }
-    }
-}
-
-struct PageTypeBadge: View {
-    let pageType: PageType
-
-    var body: some View {
-        Label(pageType.displayName, systemImage: pageType.systemImage)
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(badgeColor.opacity(0.15))
-            .foregroundStyle(badgeColor)
-            .clipShape(Capsule())
-    }
-
-    private var badgeColor: Color {
-        switch pageType {
-        case .note: return .blue
-        case .task: return .orange
-        case .reference: return .purple
-        case .journal: return .green
-        case .project: return .indigo
-        case .book: return .brown
-        case .document: return .teal
-        case .wikiSite: return .cyan
-        case .collection: return .gray
+                .font(DesignTokens.Typography.body)
         }
     }
 }

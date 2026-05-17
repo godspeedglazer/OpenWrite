@@ -24,9 +24,9 @@ struct PropertyInspectorView: View {
     private func inspectorContent(_ document: VaultDocument) -> some View {
         let schema = PageProperties.schema(for: document.pageType)
 
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
             Text("Properties")
-                .font(.headline)
+                .font(DesignTokens.Typography.captionEmphasis)
 
             ForEach(schema) { key in
                 fieldRow(key: key, document: document)
@@ -134,9 +134,11 @@ struct PropertyInspectorView: View {
             Stepper(value: ratingBinding, in: 1 ... 5) {
                 HStack(spacing: 2) {
                     ForEach(1 ... 5, id: \.self) { star in
-                        Image(systemName: star <= ratingBinding.wrappedValue ? "star.fill" : "star")
-                            .foregroundStyle(star <= ratingBinding.wrappedValue ? .yellow : .secondary)
-                            .font(.caption)
+                        OWIconView(
+                            icon: star <= ratingBinding.wrappedValue ? .starFilled : .star,
+                            size: 12,
+                            color: star <= ratingBinding.wrappedValue ? .yellow : .secondary
+                        )
                     }
                 }
             }

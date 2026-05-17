@@ -10,80 +10,72 @@ enum DesignTokens {
     // MARK: Color
 
     enum Color {
+        private static var palette: ThemePalette { ThemeManager.shared.palette }
+
         // MARK: Backgrounds & surfaces
 
-        static var background: SwiftUI.Color {
-            adaptive(light: (0.98, 0.98, 0.97), dark: (0.11, 0.11, 0.12))
-        }
+        static var background: SwiftUI.Color { palette.background }
 
-        static var surface: SwiftUI.Color {
-            adaptive(light: (0.95, 0.95, 0.94), dark: (0.15, 0.15, 0.16))
-        }
+        /// Left nav rail — slightly cooler than the workbench chrome for contrast.
+        static var sidebarBackground: SwiftUI.Color { palette.sidebarBackground }
 
-        static var surfaceElevated: SwiftUI.Color {
-            adaptive(light: (1.0, 1.0, 1.0), dark: (0.18, 0.18, 0.19))
-        }
+        /// Outer split padding behind the elevated editor card.
+        static var workbenchChrome: SwiftUI.Color { palette.workbenchChrome }
+
+        /// Main writing column.
+        static var editorCanvas: SwiftUI.Color { palette.editorCanvas }
+
+        /// Hairline borders on elevated cards (softer than `borderSubtle`).
+        static var borderHairline: SwiftUI.Color { palette.borderHairline }
+
+        static var surface: SwiftUI.Color { palette.surface }
+
+        static var surfaceElevated: SwiftUI.Color { palette.surfaceElevated }
+
+        /// Sidebar row pill when selected.
+        static var selectionPill: SwiftUI.Color { palette.selectionPill }
+
+        static var borderSubtle: SwiftUI.Color { palette.borderSubtle }
 
         // MARK: Text
 
-        static var textPrimary: SwiftUI.Color {
-            adaptive(light: (0.10, 0.10, 0.10), dark: (0.95, 0.95, 0.96))
-        }
+        static var textPrimary: SwiftUI.Color { palette.textPrimary }
 
-        static var textSecondary: SwiftUI.Color {
-            adaptive(light: (0.45, 0.45, 0.47), dark: (0.62, 0.62, 0.64))
-        }
+        static var textSecondary: SwiftUI.Color { palette.textSecondary }
 
-        static var textTertiary: SwiftUI.Color {
-            adaptive(light: (0.60, 0.60, 0.62), dark: (0.48, 0.48, 0.50))
-        }
+        static var textTertiary: SwiftUI.Color { palette.textTertiary }
 
         // MARK: Brand & semantic
 
-        /// Matches Assets.xcassets AccentColor (~sRGB 58, 107, 224).
-        static var accent: SwiftUI.Color {
-            adaptive(light: (0.227, 0.420, 0.878), dark: (0.35, 0.55, 0.95))
-        }
+        static var accent: SwiftUI.Color { palette.accent }
 
-        static var accentMuted: SwiftUI.Color {
-            accent.opacity(0.14)
-        }
+        static var accentMuted: SwiftUI.Color { palette.accentMuted }
 
-        static var separator: SwiftUI.Color {
-            adaptive(light: (0.88, 0.88, 0.87), dark: (0.28, 0.28, 0.30))
-        }
+        static var separator: SwiftUI.Color { palette.separator }
 
-        static var danger: SwiftUI.Color {
-            adaptive(light: (0.85, 0.22, 0.24), dark: (0.95, 0.35, 0.38))
-        }
+        static var danger: SwiftUI.Color { palette.danger }
 
-        static var dangerMuted: SwiftUI.Color {
-            danger.opacity(0.12)
-        }
+        static var dangerMuted: SwiftUI.Color { palette.dangerMuted }
 
-        static var success: SwiftUI.Color {
-            adaptive(light: (0.20, 0.62, 0.38), dark: (0.35, 0.75, 0.50))
-        }
+        static var success: SwiftUI.Color { palette.success }
 
-        static var warning: SwiftUI.Color {
-            adaptive(light: (0.85, 0.55, 0.12), dark: (0.95, 0.70, 0.25))
-        }
+        static var warning: SwiftUI.Color { palette.warning }
 
         // MARK: Editor & graph
 
-        static var wikilink: SwiftUI.Color { accent }
+        static var wikilink: SwiftUI.Color { palette.wikilink }
 
-        static var codeBackground: SwiftUI.Color { surface }
+        static var codeBackground: SwiftUI.Color { palette.codeBackground }
 
-        static var graphNode: SwiftUI.Color { surfaceElevated }
+        static var graphNode: SwiftUI.Color { palette.graphNode }
 
-        static var graphEdge: SwiftUI.Color { textTertiary }
+        static var graphEdge: SwiftUI.Color { palette.graphEdge }
 
-        static var graphNodeFocused: SwiftUI.Color { accent }
+        static var graphNodeFocused: SwiftUI.Color { palette.graphNodeFocused }
 
         // MARK: Private
 
-        private static func adaptive(
+        fileprivate static func adaptive(
             light: (CGFloat, CGFloat, CGFloat),
             dark: (CGFloat, CGFloat, CGFloat)
         ) -> SwiftUI.Color {
@@ -91,6 +83,37 @@ enum DesignTokens {
                 let rgb = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
                 return NSColor(srgbRed: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1)
             })
+        }
+    }
+
+    // MARK: Object type accents
+
+    enum ObjectType {
+        static func accent(for pageType: PageType) -> SwiftUI.Color {
+            switch pageType {
+            case .note:
+                return Color.adaptive(light: (0.23, 0.42, 0.88), dark: (0.40, 0.58, 0.95))
+            case .task:
+                return Color.adaptive(light: (0.92, 0.45, 0.18), dark: (0.98, 0.58, 0.32))
+            case .reference:
+                return Color.adaptive(light: (0.55, 0.35, 0.85), dark: (0.68, 0.50, 0.92))
+            case .journal:
+                return Color.adaptive(light: (0.22, 0.62, 0.42), dark: (0.38, 0.75, 0.55))
+            case .project:
+                return Color.adaptive(light: (0.35, 0.38, 0.82), dark: (0.48, 0.52, 0.90))
+            case .book:
+                return Color.adaptive(light: (0.55, 0.40, 0.28), dark: (0.72, 0.58, 0.42))
+            case .document:
+                return Color.adaptive(light: (0.18, 0.58, 0.58), dark: (0.32, 0.72, 0.72))
+            case .wikiSite:
+                return Color.adaptive(light: (0.20, 0.62, 0.78), dark: (0.35, 0.75, 0.88))
+            case .collection:
+                return Color.adaptive(light: (0.50, 0.52, 0.56), dark: (0.62, 0.64, 0.68))
+            }
+        }
+
+        static func chipBackground(for pageType: PageType) -> SwiftUI.Color {
+            accent(for: pageType).opacity(0.14)
         }
     }
 
@@ -102,26 +125,68 @@ enum DesignTokens {
         static let overlayStrong: Double = 0.12
         static let scrim: Double = 0.35
         static let focusRing: Double = 0.40
+        static let pillSelected: Double = 1.0
     }
 
     // MARK: Typography
+    // Bundled Inter — see docs/design/Typography.md
 
     enum Typography {
-        static let documentTitle = Font.largeTitle.bold()
-        static let heading1 = Font.title.weight(.semibold)
-        static let heading2 = Font.title2.weight(.semibold)
-        static let heading3 = Font.title3.weight(.medium)
-        static let body = Font.body
-        static let bodyEmphasis = Font.body.weight(.medium)
-        static let callout = Font.callout
-        static let caption = Font.caption
-        static let captionEmphasis = Font.caption.weight(.medium)
-        static let footnote = Font.footnote
+        enum Family {
+            static let regular = "Inter-Regular"
+            static let medium = "Inter-Medium"
+            static let semibold = "Inter-SemiBold"
+            static let bold = "Inter-Bold"
+        }
+
+        static let documentTitle = inter(Family.bold, relativeTo: .largeTitle)
+        static let heading1 = inter(Family.semibold, relativeTo: .title)
+        static let heading2 = inter(Family.semibold, relativeTo: .title2)
+        static let heading3 = inter(Family.medium, relativeTo: .title3)
+        static let body = inter(Family.regular, relativeTo: .body)
+        static let bodyEmphasis = inter(Family.medium, relativeTo: .body)
+        static let callout = inter(Family.regular, relativeTo: .callout)
+        static let caption = inter(Family.regular, relativeTo: .caption)
+        static let captionEmphasis = inter(Family.medium, relativeTo: .caption)
+        static let footnote = inter(Family.regular, relativeTo: .footnote)
         static let code = Font.system(.body, design: .monospaced)
         static let codeSmall = Font.system(.callout, design: .monospaced)
-        static let sidebarItem = Font.body
-        static let sidebarSection = Font.caption.weight(.semibold)
-        static let toolbarLabel = Font.callout
+        static let sidebarItem = inter(Family.regular, relativeTo: .body)
+        static let sidebarItemEmphasis = inter(Family.medium, relativeTo: .body)
+        static let sidebarSection = inter(Family.semibold, relativeTo: .caption)
+        static let toolbarLabel = inter(Family.regular, relativeTo: .callout)
+        static let pageTypeIcon = inter(Family.medium, relativeTo: .title3)
+        static let sidebarWellIcon = inter(Family.semibold, relativeTo: .caption2)
+        /// SF Symbols — keep system metrics for glyph alignment.
+        static let heroSymbol = Font.system(size: 48)
+
+        static var editorNSFont: NSFont {
+            let size = NSFont.preferredFont(forTextStyle: .body).pointSize
+            return NSFont(name: Family.regular, size: size)
+                ?? .systemFont(ofSize: size)
+        }
+
+        private static func inter(_ postScriptName: String, relativeTo style: Font.TextStyle) -> Font {
+            let size = NSFont.preferredFont(forTextStyle: nsTextStyle(for: style)).pointSize
+            return Font.custom(postScriptName, size: size, relativeTo: style)
+        }
+
+        private static func nsTextStyle(for style: Font.TextStyle) -> NSFont.TextStyle {
+            switch style {
+            case .largeTitle: return .largeTitle
+            case .title: return .title1
+            case .title2: return .title2
+            case .title3: return .title3
+            case .headline: return .headline
+            case .subheadline: return .subheadline
+            case .body: return .body
+            case .callout: return .callout
+            case .caption: return .caption1
+            case .caption2: return .caption2
+            case .footnote: return .footnote
+            @unknown default: return .body
+            }
+        }
     }
 
     // MARK: Spacing (4pt grid)
@@ -140,10 +205,14 @@ enum DesignTokens {
         static let spacing12: CGFloat = 48
 
         static let editorPadding = EdgeInsets(
-            top: spacing6, leading: spacing6, bottom: spacing6, trailing: spacing6
+            top: spacing4, leading: spacing5, bottom: spacing4, trailing: spacing5
+        )
+        /// Hero / header band inside the editor card — tighter than full editor padding.
+        static let editorHeroPadding = EdgeInsets(
+            top: spacing4, leading: spacing5, bottom: spacing2, trailing: spacing5
         )
         static let sidebarPadding = EdgeInsets(
-            top: spacing2, leading: spacing4, bottom: spacing2, trailing: spacing4
+            top: spacing2, leading: spacing2, bottom: spacing2, trailing: spacing2
         )
         static let inspectorPadding = EdgeInsets(
             top: spacing4, leading: spacing4, bottom: spacing4, trailing: spacing4
@@ -159,9 +228,14 @@ enum DesignTokens {
         static let none: CGFloat = 0
         static let small: CGFloat = 6
         static let medium: CGFloat = 8
+        /// OW Rect — sidebar cards, property strips (10–12pt range).
+        static let owRect: CGFloat = 11
         static let large: CGFloat = 12
+        /// Featured metadata cells (~20px CSS radius).
+        static let metadataChip: CGFloat = 10
         static let xlarge: CGFloat = 16
-        static let full: CGFloat = 9999
+        static let pill: CGFloat = 9999
+        static let full: CGFloat = pill
     }
 
     // MARK: Shadow
@@ -229,16 +303,39 @@ enum DesignTokens {
     enum Layout {
         static let sidebarMinWidth: CGFloat = 220
         static let sidebarMaxWidth: CGFloat = 280
-        static let inspectorMinWidth: CGFloat = 280
-        static let inspectorMaxWidth: CGFloat = 360
-        static let mainMinWidth: CGFloat = 480
-        static let editorMaxContentWidth: CGFloat = 720
+        static let sidebarPreferredWidth: CGFloat = 248
+        static let sidebarRowHeight: CGFloat = 32
+        static let sidebarRowIconSize: CGFloat = 18
+        static let objectIconWellSize: CGFloat = 20
+        static let sidebarBottomButtonSize: CGFloat = 32
+        static let graphFloatingBarMaxWidth: CGFloat = 560
+        static let objectTypeChipHeight: CGFloat = 24
+        /// Center workbench column (editor + graph card) — absorbs horizontal growth.
+        static let editorMinWidth: CGFloat = 400
+        /// Slim Reor-style assist strip — secondary to the editor column.
+        static let assistStripMinWidth: CGFloat = 240
+        static let assistStripMaxWidth: CGFloat = 320
+        static let assistStripCollapsedWidth: CGFloat = 44
+        static let inspectorMinWidth: CGFloat = assistStripMinWidth
+        static let inspectorIdealWidth: CGFloat = 280
+        static let inspectorMaxWidth: CGFloat = assistStripMaxWidth
+        static let assistBottomBarHeight: CGFloat = 32
+        static let centerCardOuterPadding: CGFloat = 2
+        /// Below this width, collapse assist before shrinking editor (see LayoutAndResize.md).
+        static let mainMinWidth: CGFloat = editorMinWidth + assistStripMinWidth
+        static let windowMinWidth: CGFloat = 900
+        static let windowMinHeight: CGFloat = 600
+        static let windowDefaultWidth: CGFloat = 1200
+        static let windowDefaultHeight: CGFloat = 800
+        /// Readable measure while using more of wide center columns (~72–78 chars at body size).
+        static let editorMaxContentWidth: CGFloat = 820
         static let captureSheetWidth: CGFloat = 520
         static let captureSheetMinHeight: CGFloat = 200
         static let graphNodeMinSize: CGFloat = 44
         static let toolbarHeight: CGFloat = 52
         static let focusRingWidth: CGFloat = 2
         static let quoteBarWidth: CGFloat = 3
+        static let borderWidth: CGFloat = 1
     }
 }
 
@@ -253,5 +350,14 @@ extension View {
     func openWriteEditorContentWidth() -> some View {
         frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth)
             .frame(maxWidth: .infinity)
+    }
+
+    func owRect(
+        style: OWRoundedRectStyle = .surface,
+        padding: CGFloat = DesignTokens.Spacing.spacing3
+    ) -> some View {
+        OWRoundedRect(style: style, padding: padding) {
+            self
+        }
     }
 }

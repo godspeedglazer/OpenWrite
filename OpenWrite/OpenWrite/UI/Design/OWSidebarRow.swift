@@ -1,0 +1,104 @@
+import SwiftUI
+
+// MARK: - OWSidebarRow
+
+/// Custom sidebar list row with pill selection — see docs/design/OWComponents.md.
+struct OWSidebarRow: View {
+    let title: String
+    var subtitle: String?
+    var pageType: PageType?
+    var customIcon: OWIcon?
+    var iconTint: Color?
+    var showsGraphGlyph: Bool = false
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var rowIcon: OWIcon {
+        if showsGraphGlyph { return .graph }
+        if let customIcon { return customIcon }
+        if let pageType { return pageType.owIcon }
+        return .note
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                if let iconTint {
+                    OWIconView(icon: rowIcon, size: 18, color: iconTint)
+                        .frame(width: 28, height: 28)
+                        .background(iconTint.opacity(0.14), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous))
+                } else {
+                    OWPageTypeIconWell(icon: rowIcon, pageType: pageTypeForWell)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(DesignTokens.Typography.sidebarItem.weight(.medium))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .lineLimit(1)
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+            .padding(.vertical, subtitle == nil ? 2 : DesignTokens.Spacing.spacing1)
+            .frame(minHeight: DesignTokens.Layout.sidebarRowHeight)
+            .background {
+                if isSelected || isHovered {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                        .fill(rowBackgroundColor)
+                        .padding(1)
+                }
+            }
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                        .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
+                        .padding(1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(selectionAnimation, value: isSelected)
+        .animation(selectionAnimation, value: isHovered)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var pageTypeForWell: PageType? {
+        showsGraphGlyph ? nil : pageType
+    }
+
+    private var rowBackgroundColor: Color {
+        if isSelected {
+            return DesignTokens.Color.selectionPill
+        }
+        return DesignTokens.Color.textPrimary.opacity(DesignTokens.Opacity.overlayLight)
+    }
+
+    private var selectionAnimation: Animation? {
+        DesignTokens.Motion.animation(DesignTokens.Motion.animationFast, reduceMotion: reduceMotion)
+    }
+
+    private var accessibilityLabel: String {
+        var parts = [title]
+        if let subtitle {
+            parts.append(subtitle)
+        }
+        if isSelected {
+            parts.append("selected")
+        }
+        return parts.joined(separator: ", ")
+    }
+}

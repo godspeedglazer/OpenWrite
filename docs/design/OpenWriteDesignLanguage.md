@@ -1,6 +1,6 @@
 # OpenWrite Design Language
 
-**Version:** 1.0  
+**Version:** 2.1  
 **Status:** Canonical  
 **Audience:** Design, engineering, and agent implementers
 
@@ -11,14 +11,15 @@
 1. [Introduction](#introduction)
 2. [Principles](#principles)
 3. [Visual identity](#visual-identity)
-4. [macOS native feel](#macos-native-feel)
+4. [Custom shell (not default HIG chrome)](#custom-shell-not-default-hig-chrome)
 5. [Layout grammar](#layout-grammar)
 6. [Typography & voice](#typography--voice)
 7. [Iconography](#iconography)
 8. [States & feedback](#states--feedback)
 9. [Dark mode & appearance](#dark-mode--appearance)
-10. [Anti-patterns](#anti-patterns)
-11. [Governance](#governance)
+10. [Resize & column behavior](#resize--column-behavior)
+11. [Anti-patterns](#anti-patterns)
+12. [Governance](#governance)
 
 ---
 
@@ -26,7 +27,7 @@
 
 OpenWrite is a native macOS application for private knowledge work: encrypted vaults, structured notes in **NDL** (Note Design Language), backlinks and graph navigation, and **local** retrieval-augmented generation through LM Studio. The interface must communicate trust (your data stays on disk), competence (native speed), and respect for deep work (calm, predictable chrome).
 
-This document defines the **why** and **what** of the design language. Concrete numbers live in [Tokens.md](./Tokens.md); component anatomy in [Components.md](./Components.md).
+This document defines the **why** and **what** of the design language. Concrete numbers live in [Tokens.md](./Tokens.md); OW primitives in [OWComponents.md](./OWComponents.md); workbench patterns in [Components.md](./Components.md).
 
 ### Design goals
 
@@ -35,7 +36,7 @@ This document defines the **why** and **what** of the design language. Concrete 
 | **Trust** | Vault lock/unlock states are clear; encryption never feels like a dark pattern |
 | **Flow** | Capture → edit → link → retrieve without modal dead-ends |
 | **Clarity** | Hierarchy readable at a glance; AI citations traceable to blocks |
-| **Native fit** | Could be mistaken for an Apple-adjacent productivity app at arm’s length |
+| **Distinct shell** | Custom rounded surfaces, **OWIcon** + bundled type — not SF Symbols or default HIG chrome (Anytype-*inspired* density, clean-room) |
 | **Accessibility** | Full keyboard paths; VoiceOver labels on all actionable chrome |
 
 ### Non-goals (v1)
@@ -44,7 +45,7 @@ This document defines the **why** and **what** of the design language. Concrete 
 - Gamification (streaks, achievements)
 - Dense “dashboard” analytics on launch
 - Skeuomorphic leather, neon cyberpunk, or glassmorphism stacks
-- Pixel-parity with Electron competitors (Anytype, Logseq, AFFiNE web)
+- Pixel-parity or asset copy from Anytype, Logseq, or AFFiNE (behavior and density only)
 
 ---
 
@@ -72,7 +73,7 @@ This document defines the **why** and **what** of the design language. Concrete 
 - **One accent hue** (OpenWrite teal-blue) for links, selection, and primary actions; neutrals carry structure.
 - **Whitespace** over borders: use `surface` elevation and spacing before adding hairlines everywhere.
 - **Motion** is subtle and short; see [Motion.md](./Motion.md).
-- Sidebars and inspectors default to **visible but quiet**—secondary text, sidebar list style, no heavy cards in the nav.
+- Sidebars use **custom rows** (`OWSidebarRow`) on a soft gray rail—not default `List` sidebar chrome. Inspectors use **OW Rect** cards, not vibrancy stacks.
 
 **Calm ≠ boring:** Use typography scale and block structure in the editor to create rhythm; chrome stays flat.
 
@@ -100,7 +101,7 @@ This document defines the **why** and **what** of the design language. Concrete 
 | **Thoughtful** | Measured spacing, complete sentences in empty states |
 | **Precise** | 4pt grid, aligned baselines, monospaced code blocks |
 | **Warm-neutral** | Paper-like backgrounds, not sterile hospital white or OLED black |
-| **Confident** | Single accent; no rainbow category colors in v1 |
+| **Confident** | Product accent for links/actions; **object-type** accents are muted chips only |
 
 ### Color philosophy
 
@@ -115,12 +116,16 @@ Accent aligns with `AccentColor` in the asset catalog: a clear, readable blue-te
 
 See [Tokens.md § Color](./Tokens.md#color).
 
-### Shape language
+### Shape language — OW Rect
 
-- **Small radius** (6pt) for inline chips, code blocks, capture field
-- **Medium radius** (8pt) for cards, graph nodes
-- **Large radius** (12pt) for sheets and modal panels
-- **Full pill** only for tags and compact filters—not primary buttons (use macOS default button chrome)
+OpenWrite does **not** rely on system sidebar/list chrome. Surfaces use **OW Rect**: rounded rectangles at **10–12pt** (`Radius.owRect`, default 11pt).
+
+- **OW Rect** (11pt): sidebar cards, property strips, capture panel, inspector sections
+- **Small** (6pt): code blocks, inline controls
+- **Pill** (`Radius.pill`): sidebar **selection** states and `OWObjectTypeChip`—white elevated pill on gray sidebar
+- **Sheets** (12–16pt): modal create-page, import flows
+
+Primary actions in toolbars may use `.borderedProminent`; **navigation** is always custom OW components.
 
 ### Elevation
 
@@ -134,34 +139,42 @@ Avoid stacked drop shadows and Material-style blur panels except where AppKit re
 
 ---
 
-## macOS native feel
+## Custom shell (not default HIG chrome)
 
-### Human Interface Guidelines alignment
+### Principle
 
-| HIG topic | OpenWrite approach |
-|-----------|-------------------|
-| **Navigation** | `NavigationSplitView` for sidebar + detail; optional tertiary inspector column |
-| **Sidebars** | `.listStyle(.sidebar)`, SF Symbols, selection via List/Buttons |
-| **Toolbars** | `ToolbarItem` groups: document actions left, view toggles right |
-| **Settings** | `Settings` scene (`Cmd+,`) for vault path, AI endpoint, appearance |
-| **Sheets** | `.sheet` for capture and import; `.alert` for destructive confirm |
-| **Menus** | Commands for New Note, Quick Capture, Toggle Sidebar, Toggle Inspector |
+OpenWrite is a **macOS app** but **not** an Apple HIG / SF Symbols product UI. We borrow platform affordances (menus, shortcuts, `Settings`, standard alerts, split-view geometry) while **drawing our own** navigation rail, icons, typography, selection pills, and editor canvas—similar *density and calm* to Anytype, without copying its assets.
 
-### System integration
+**Hard rules:** No SF Symbols in product surfaces; bundled fonts via `DesignTokens.Typography`; AI inspector sub-flows expose **back** navigation. Details: [ProductDirection.md](./ProductDirection.md) · [AntiPatterns.md](./AntiPatterns.md).
 
-- **Accent color:** Respect `AccentColor` asset; map to `DesignTokens.Color.accent`.
-- **Appearance:** Support Light, Dark, and Auto via `@Environment(\.colorScheme)`; tokens provide paired values.
-- **Typography:** Prefer `Font` styles (`.body`, `.title`) over fixed sizes so Dynamic Type can scale where SwiftUI allows.
-- **Keyboard:** Full menu command shortcuts; see [Accessibility.md § Keyboard](./Accessibility.md#keyboard).
-- **Windowing:** Document-style windows optional in v2; v1 single main window with tabbed workbench inside.
+| Zone | Appearance |
+|------|------------|
+| **Sidebar** | Light gray `#F5F5F7`-ish (`sidebarBackground`); rows 36–40pt; **pill selection** (white on gray) |
+| **Editor** | White (`editorCanvas`); max-width column; `OWPageHero` for titles / empty states |
+| **Inspector** | Slightly elevated OW Rect panels on `background` |
+| **Borders** | 1px `borderSubtle` between columns and on cards—never heavy separator lines |
 
-### What “native” does not mean
+Implementation: [OWComponents.md](./OWComponents.md).
 
-- Blindly copying every Sonoma visual effect
-- Replacing SwiftUI with AppKit for entire screens without cause
-- Ignoring OpenWrite’s three-column workbench because Mail.app uses two columns
+### What we keep from the platform
 
-Native means **familiar affordances** (sidebar toggle, standard buttons, predictable shortcuts) on a layout tuned for notes + graph + AI.
+| Platform | OpenWrite approach |
+|----------|-------------------|
+| **Split layout** | `NavigationSplitView` for column geometry only—**not** `.listStyle(.sidebar)` for vault list |
+| **Toolbars** | `ToolbarItem` for document actions; styling via tokens |
+| **Settings** | `Settings` scene (`Cmd+,`) |
+| **Sheets / alerts** | System presentation; **content** uses OW Rect + tokens |
+| **Keyboard** | Full command shortcuts; see [Accessibility.md](./Accessibility.md) |
+| **Split resize** | Native column dividers with token clamps; collapse order in [ProductDirection.md § Resize](./ProductDirection.md#resize-rules) |
+
+### What we deliberately avoid
+
+- **SF Symbols** and `Image(systemName:)` anywhere in vault, editor, inspector, graph, or AI UI
+- Default sidebar `List` selection highlight and disclosure chrome for the vault
+- `.bordered` / `.borderedProminent` system buttons as the *primary* brand actions
+- System secondary backgrounds in the editor column (always `editorCanvas`)
+- Glass / vibrancy stacks in the workbench body
+- Grouped `Form` layouts in the editor or inspector content areas
 
 ---
 
@@ -173,15 +186,17 @@ Native means **familiar affordances** (sidebar toggle, standard buttons, predict
 ┌──────────────┬────────────────────────────────────┬─────────────┐
 │   Sidebar    │           Main content             │  Inspector  │
 │   (nav)      │   (editor / graph / search / AI)   │  (context)  │
-│   220–280pt  │           flex (min 480pt)         │  280–360pt  │
+│   260–300pt  │           flex (min 480pt)         │  280–360pt  │
 └──────────────┴────────────────────────────────────┴─────────────┘
 ```
 
 | Zone | Min width | Max width | Collapsible |
 |------|-----------|-----------|-------------|
-| Sidebar | 220 | 280 | Yes (`Cmd+Ctrl+S`) |
+| Sidebar | 260 | 300 | Yes (`Cmd+Ctrl+S`) |
 | Main | 480 | — | No |
-| Inspector | 280 | 360 | Yes (`Cmd+Option+I`) |
+| Inspector | 280 | 360 | Yes (`Cmd+Option+I`) — **collapsed by default**; product cap 320pt at launch |
+
+**Resize:** Clamps match [Tokens.md § Layout](./Tokens.md#layout-constants). Below **900pt** window width, collapse inspector before sidebar; never shrink main below 480pt. Full rules: [ProductDirection.md § Resize](./ProductDirection.md#resize-rules).
 
 ### Spacing rules
 
@@ -202,18 +217,21 @@ All spacing derives from the **4pt grid** — [Tokens.md § Spacing](./Tokens.md
 
 ## Typography & voice
 
-### Type scale
+### Bundled typography (required)
 
-OpenWrite uses the **system font** (San Francisco) with semantic styles. Monospace is reserved for code blocks, block IDs in debug/citation chips, and vault paths in settings.
+OpenWrite does **not** use San Francisco as the product UI face. Register **bundled** UI and mono fonts in the app target (`Resources/Fonts/`) and expose them only through **`DesignTokens.Typography`** (SwiftUI `Font` helpers such as `Font.owBody`, `Font.owDocumentTitle`).
 
-| Role | SwiftUI | Use |
-|------|---------|-----|
-| Document title | `.largeTitle.bold()` | Note H0 in editor |
-| Section | `.title` / `.title2` / `.title3` | NDL headings |
-| Body | `.body` | Paragraphs, list items |
-| Secondary | `.callout` + `.secondary` | Timestamps, metadata |
-| Caption | `.caption` | AI status, indexer progress |
-| Code | `.system(.body, design: .monospaced)` | NDL code blocks |
+| Role | Token | Use |
+|------|-------|-----|
+| Document title | `documentTitle` | Note H0 in editor |
+| Section | `heading1` … `heading3` | NDL headings |
+| Body | `body` | Paragraphs, list items |
+| Secondary | `callout` + `textSecondary` | Timestamps, metadata |
+| Caption | `caption` | AI status, indexer progress |
+| Code | `code` / `codeSmall` | NDL code blocks, citation IDs |
+| Sidebar | `sidebarItem`, `sidebarSection` | Nav rail |
+
+**Exceptions:** Native alert/sheet chrome AppKit draws; optional system font inside user content when NDL does not specify a family.
 
 Details: [Tokens.md § Typography](./Tokens.md#typography).
 
@@ -228,21 +246,19 @@ Details: [Tokens.md § Typography](./Tokens.md#typography).
 
 ## Iconography
 
-### SF Symbols
+### OWIcon (required; SF Symbols forbidden)
 
-Use **SF Symbols** exclusively for navigation and actions. Prefer outlined variants in sidebars; filled variants only for selected tab or emphasized toolbar item.
+All navigation, toolbar, metadata, and empty-state icons use **`OWIcon`** — template assets in `Assets.xcassets/OWIcons/` (or `Resources/Icons/`), rendered at fixed frames with semantic tints. **Do not** use `Image(systemName:)`, `Label(..., systemImage:)`, or SF-based `ContentUnavailableView` in product UI.
 
-| Section | Symbol | Weight |
-|---------|--------|--------|
-| Notes | `doc.text` | regular |
-| Graph | `point.3.connected.trianglepath.dotted` | regular |
-| Search | `magnifyingglass` | regular |
-| AI | `sparkles` | regular |
-| Publish | `square.and.arrow.up` | regular |
-| Vault locked | `lock.fill` | medium |
-| Capture | `plus.circle` | regular |
+| Context | Size frame | Tint |
+|---------|------------|------|
+| Sidebar row | 18pt (`sidebarRowIconSize`) | `textSecondary` or `ObjectType.accent(for:)` |
+| Toolbar | 20pt | `textPrimary` / `accent` when emphasized |
+| Page hero | 48pt | `accent` or object-type accent |
+| Inspector row | 16pt | `textSecondary` |
+| AI back control | 20pt | `textPrimary` |
 
-Symbol scale: `.imageScale(.medium)` in sidebar; `.small` in compact inspector rows.
+Catalog names are stable API (`OWIcon.notes`, `OWIcon.graph`, `OWIcon.ai`, …). Spec: [OWComponents.md § OWIcon](./OWComponents.md#owicon).
 
 ### App icon
 
@@ -274,7 +290,7 @@ App icon lives in `Assets.xcassets/AppIcon`. Design direction (product, not spec
 
 ### Selection
 
-- Sidebar: system List selection + `textPrimary` / `textSecondary` per [Components.md § Sidebar](./Components.md#sidebar)
+- Sidebar: **pill** on `selectionPill` via `OWSidebarRow`; see [OWComponents.md § OWSidebarRow](./OWComponents.md#owsidebarrow)
 - Editor: accent-tinted caret; block focus ring `accent` at 40% opacity, 2pt width
 - Graph: node stroke `accent`, width 2pt
 
@@ -296,18 +312,33 @@ Users who need higher contrast may use system **Increase Contrast**; tokens shou
 
 ---
 
+## Resize & column behavior
+
+OpenWrite uses `NavigationSplitView` for column geometry only; visual chrome is custom. **Resize rules** (clamps, collapse priority, 900pt breakpoint) are canonical in [ProductDirection.md § Resize rules](./ProductDirection.md#resize-rules).
+
+Summary:
+
+- Sidebar **260–300pt**; inspector **280–360pt** (default open ≤ **320pt**); main **≥ 480pt**.
+- **Inspector collapses first** when the window narrows; sidebar second.
+- Editor text column stays **max 720pt** centered inside main — not a fourth split divider.
+
+---
+
 ## Anti-patterns
 
-Do **not**:
+Do **not** ship SF Symbols, default HIG `Form`/`List` chrome, or system accent blue as the product face. Full list: **[AntiPatterns.md](./AntiPatterns.md)**.
 
-1. **Splash indexing gates** — block editing while “syncing” the entire vault (Reor anti-pattern).
-2. **Full-screen AI** on launch — author-first requires editor or last document.
-3. **Rainbow sidebar sections** — one accent, neutral structure.
-4. **Custom scrollbars** — use system scroll views.
-5. **Rounded “mobile” buttons** in the main toolbar — use `Button` styles `.bordered` / `.borderedProminent` per HIG.
-6. **Copy Anytype** colors, illustrations, onboarding illustrations, or object-type iconography.
-7. **Hard-coded `Color.red`** for non-destructive states — use `danger` token.
-8. **Arbitrary animation** on every keystroke — motion budget in [Motion.md](./Motion.md).
+Highlights:
+
+1. **SF Symbols** in any product surface — use `OWIcon`.
+2. **San Francisco as default UI font** — use bundled fonts via tokens.
+3. **AI sub-panels without back** — use `OWAIPanelHeader` when depth ≥ 1.
+4. **Splash indexing gates** — block editing while “syncing” the entire vault (Reor anti-pattern).
+5. **Full-screen AI** on launch — author-first requires editor or last document.
+6. **Default `List` sidebar** — use `OWSidebarRow`.
+7. **Inspector half the window** — collapse by default; see resize rules.
+8. **Copy Anytype** assets or exact hex — inspiration only.
+9. **Arbitrary per-keystroke animation** — [Motion.md](./Motion.md).
 
 ---
 
@@ -317,23 +348,27 @@ Do **not**:
 
 1. Sketch zone placement (sidebar / main / inspector).
 2. List required tokens; add to `Tokens.md` and `DesignTokens.swift` in one PR.
-3. Document component in `Components.md` with states, shortcuts, VoiceOver.
+3. Document in `OWComponents.md` (primitives) or `Components.md` (screens); wire tokens in `DesignTokens.swift`.
 4. Verify reduced motion and keyboard path.
 
 ### Review checklist
 
 - [ ] Uses semantic tokens only
+- [ ] **No SF Symbols** in `OpenWrite/UI/**` (see [AntiPatterns.md](./AntiPatterns.md))
+- [ ] Typography uses **bundled** fonts through `DesignTokens.Typography`
 - [ ] Editor remains visually dominant for writing flows
+- [ ] AI inspector sub-flows have **back** when stacked depth ≥ 1
+- [ ] Column widths respect resize clamps and collapse order
 - [ ] No network-required empty state
-- [ ] VoiceOver labels on icon-only controls
+- [ ] VoiceOver labels on icon-only controls (`OWIcon` + text label)
 - [ ] Animations use `Motion` durations and respect `accessibilityReduceMotion`
 
 ### References (external)
 
-- [Apple Human Interface Guidelines — macOS](https://developer.apple.com/design/human-interface-guidelines/macos)
-- [SwiftUI Documentation](https://developer.apple.com/documentation/swiftui)
+- [SwiftUI Documentation](https://developer.apple.com/documentation/swiftui) — APIs only; OpenWrite is **not** an HIG-default UI
 - OpenWrite master plan: [../OpenWriteMasterPlan.md](../OpenWriteMasterPlan.md)
+- Design direction: [ProductDirection.md](./ProductDirection.md) · [AntiPatterns.md](./AntiPatterns.md)
 
 ---
 
-*End of OpenWrite Design Language v1.0*
+*End of OpenWrite Design Language v2.1*

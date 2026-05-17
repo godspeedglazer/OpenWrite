@@ -61,9 +61,11 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
         properties: PageProperties.defaults(for: .note, title: "Welcome to OpenWrite"),
         rootBlocks: [
             NoteBlock(kind: .heading1, text: "Welcome to OpenWrite"),
-            NoteBlock(kind: .paragraph, text: "Local-first notes with NDL v0 and typed pages."),
+            NoteBlock(kind: .paragraph, text: "Local-first notes with NDL v0 and typed pages. Start writing below — this vault stays on your Mac."),
+            NoteBlock(kind: .paragraph, text: "Try wikilinks like [[Another page]], switch types from the chip above the title, and open the graph to see connections."),
             NoteBlock(kind: .bullet, text: "Encrypted vault at rest (stub in Phase 1)"),
             NoteBlock(kind: .bullet, text: "Pick a page type — note, task, reference, journal, project"),
+            NoteBlock(kind: .bullet, text: "Use + in the sidebar to add more objects"),
             NoteBlock(kind: .quote, text: "Your corpus stays on this Mac by default.")
         ]
     )

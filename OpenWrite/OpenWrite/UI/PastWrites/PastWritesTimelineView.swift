@@ -19,9 +19,9 @@ struct PastWritesTimelineView: View {
         VStack(alignment: .leading, spacing: 12) {
             header
             if entries.isEmpty {
-                ContentUnavailableView(
-                    "No past writes yet",
-                    systemImage: "clock.arrow.circlepath",
+                OWEmptyState(
+                    title: "No past writes yet",
+                    icon: .pastWrites,
                     description: Text("Edits in the vault are grouped into sessions here. Optional rem+ import is enabled when `db.sqlite3` is found.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
