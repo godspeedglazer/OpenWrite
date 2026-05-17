@@ -8,7 +8,11 @@ final class OpenWriteAIServices: ObservableObject {
     @Published var availableModels: [LMStudioModel] = []
     @Published var isIndexing = false
     @Published var indexedChunkCount = 0
-
+    @Published var activityState: AIActivityState = .idle
+    @Published var lastChatError: String?
+    @Published var selectedAgentID: String = BuiltInAgents.defaultAgent.id
+    let dictation: DictationService = NoOpDictationService()
+    let voiceInput = VoiceInputService()
     let vectorStore = InMemoryVectorStore()
     private(set) var lmClient: LMStudioClient
     private(set) var embeddings: EmbeddingService
@@ -30,6 +34,16 @@ final class OpenWriteAIServices: ObservableObject {
         rebuildPipeline()
     }
 
+    func updateChatModel(_ modelID: String) {
+        lmConfig.chatModel = modelID
+        rebuildPipeline()
+    }
+
+    func updateEmbeddingModel(_ modelID: String) {
+        lmConfig.embeddingModel = modelID
+        rebuildPipeline()
+    }
+
     func rebuildPipeline() {
         lmClient = LMStudioClient(config: lmConfig)
         embeddings = LMStudioEmbeddingService(
@@ -41,7 +55,18 @@ final class OpenWriteAIServices: ObservableObject {
         rag = LiveRAGService(retrieval: retrieval, client: lmClient)
     }
 
+    var selectedAgent: AgentConfig {
+        BuiltInAgents.agent(id: selectedAgentID)
+    }
+
+    func setActivity(_ state: AIActivityState) {
+        activityState = state
+        if case .error = state { return }
+        if state != .idle { lastChatError = nil }
+    }
+
     func checkConnection() async {
+        setActivity(.connecting)
         lmStatus = "Checking…"
         do {
             let models = try await lmClient.listModels()
@@ -51,21 +76,63 @@ final class OpenWriteAIServices: ObservableObject {
                 rebuildPipeline()
             }
             lmStatus = models.isEmpty ? "Connected (no models)" : "Connected · \(models.count) models"
+            setActivity(.idle)
         } catch {
             availableModels = []
             lmStatus = "Error: \(error.localizedDescription)"
+            setActivity(.error(Self.actionableConnectionError(error)))
+        }
+    }
+
+    /// Runs a connection check after chat failure and returns a user-facing message.
+    func diagnoseChatFailure(_ error: Error) async -> String {
+        let base = Self.actionableChatError(error, config: lmConfig)
+        setActivity(.connecting)
+        do {
+            let models = try await lmClient.listModels()
+            availableModels = models
+            let modelList = models.isEmpty
+                ? "Server reachable but no models loaded in LM Studio."
+                : "Server OK · \(models.count) model\(models.count == 1 ? "" : "s") loaded."
+            let chatListed = models.contains { $0.id == lmConfig.chatModel }
+            let embedListed = models.contains { $0.id == lmConfig.resolvedEmbeddingModel }
+            var hints: [String] = [modelList]
+            if !chatListed, !lmConfig.chatModel.isEmpty {
+                hints.append("Chat model “\(lmConfig.chatModel)” is not in the server list — pick a Chat model in the sidebar.")
+            }
+            if !embedListed, lmConfig.usesDedicatedEmbeddingModel {
+                hints.append("Embedding model “\(lmConfig.resolvedEmbeddingModel)” is not loaded — set Embedding model or load it in LM Studio.")
+            }
+            lmStatus = models.isEmpty ? "Connected (no models)" : "Connected · \(models.count) models"
+            setActivity(.error("\(base)\n\n\(hints.joined(separator: " "))"))
+            lastChatError = activityState.statusMessage
+            return lastChatError ?? base
+        } catch {
+            let connectionHint = Self.actionableConnectionError(error)
+            lmStatus = "Error: \(error.localizedDescription)"
+            let combined = "\(base)\n\nConnection test failed: \(connectionHint)"
+            setActivity(.error(combined))
+            lastChatError = combined
+            return combined
         }
     }
 
     func reindex(documents: [VaultDocument]) async {
         isIndexing = true
-        defer { isIndexing = false }
+        setActivity(.indexing)
+        defer {
+            isIndexing = false
+            if case .indexing = activityState {
+                setActivity(.idle)
+            }
+        }
         let payload = documents.map { (id: $0.id, title: $0.title, blocks: $0.rootBlocks) }
         do {
             try await indexer.rebuildAll(documents: payload)
             indexedChunkCount = await vectorStore.chunkCount
         } catch {
             lmStatus = "Index error: \(error.localizedDescription)"
+            setActivity(.error("Indexing failed: \(error.localizedDescription)"))
         }
     }
 
@@ -80,5 +147,56 @@ final class OpenWriteAIServices: ObservableObject {
         } catch {
             lmStatus = "Index error: \(error.localizedDescription)"
         }
+    }
+
+    static func actionableChatError(_ error: Error, config: LMStudioConfig) -> String {
+        if let lm = error as? LMStudioError {
+            switch lm {
+            case .disabled:
+                return "AI is disabled. Enable LM Studio and load a chat model."
+            case .invalidURL:
+                return "Invalid LM Studio URL (\(config.baseURL.absoluteString)). Use http://127.0.0.1:1234 in the sidebar."
+            case .httpStatus(let code, let detail):
+                if code == 404 {
+                    return "Chat model not found. Load “\(config.chatModelDisplay)” in LM Studio or change Chat model in the sidebar."
+                }
+                if let detail, !detail.isEmpty {
+                    return "LM Studio returned HTTP \(code): \(detail)"
+                }
+                return "LM Studio returned HTTP \(code). Check that the server is running and the chat model is loaded."
+            case .emptyResponse:
+                return "LM Studio returned an empty reply. Confirm the chat model is loaded and not out of memory."
+            case .payloadTooLarge:
+                return lm.localizedDescription ?? "Prompt too large."
+            case .embeddingsUnavailable:
+                return "Embeddings unavailable — indexing uses a local fallback. Chat may still work if the chat model is loaded."
+            case .decodeFailed:
+                return "Could not parse LM Studio response. Update LM Studio or verify the OpenAI-compatible API is enabled."
+            }
+        }
+        let description = error.localizedDescription
+        if description.localizedCaseInsensitiveContains("could not connect")
+            || description.localizedCaseInsensitiveContains("connection refused")
+            || description.localizedCaseInsensitiveContains("network") {
+            return "Cannot reach LM Studio at \(config.baseURL.absoluteString). Start the local server, then use Check connection in the sidebar."
+        }
+        return "\(description) Use Check connection in the sidebar if this persists."
+    }
+
+    static func actionableConnectionError(_ error: Error) -> String {
+        if let lm = error as? LMStudioError {
+            switch lm {
+            case .invalidURL:
+                return "Invalid base URL. Use http://127.0.0.1:1234"
+            case .httpStatus(let code, let detail):
+                if let detail, !detail.isEmpty {
+                    return "HTTP \(code): \(detail)"
+                }
+                return "HTTP \(code) from LM Studio"
+            default:
+                return lm.localizedDescription ?? "Connection failed"
+            }
+        }
+        return "Cannot reach LM Studio — start the server on port 1234 and try again."
     }
 }

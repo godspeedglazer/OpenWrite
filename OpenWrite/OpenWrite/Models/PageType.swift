@@ -7,6 +7,10 @@ enum PageType: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
     case reference
     case journal
     case project
+    case book
+    case document
+    case wikiSite = "wiki_site"
+    case collection
 
     var id: String { rawValue }
 
@@ -17,6 +21,10 @@ enum PageType: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
         case .reference: return "Reference"
         case .journal: return "Journal"
         case .project: return "Project"
+        case .book: return "Book"
+        case .document: return "Document"
+        case .wikiSite: return "Wiki Site"
+        case .collection: return "Collection"
         }
     }
 
@@ -27,6 +35,10 @@ enum PageType: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
         case .reference: return "link"
         case .journal: return "book.closed"
         case .project: return "folder"
+        case .book: return "books.vertical"
+        case .document: return "doc.richtext"
+        case .wikiSite: return "globe"
+        case .collection: return "tray.full"
         }
     }
 
@@ -37,7 +49,21 @@ enum PageType: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
         case .reference: return "purple"
         case .journal: return "green"
         case .project: return "indigo"
+        case .book: return "brown"
+        case .document: return "teal"
+        case .wikiSite: return "cyan"
+        case .collection: return "gray"
         }
+    }
+
+    /// Object types shown in the quick type picker (excludes structure-first presets).
+    static var quickPickTypes: [PageType] {
+        [.note, .task, .reference, .journal, .project]
+    }
+
+    /// Types created primarily via structure templates.
+    static var structurePageTypes: [PageType] {
+        [.book, .document, .wikiSite, .collection]
     }
 }
 
@@ -55,6 +81,10 @@ struct PageTypeRegistry: Codable, Hashable, Sendable {
 
     var allSelectable: [PageType] {
         builtIn
+    }
+
+    var quickPickSelectable: [PageType] {
+        builtIn.filter { PageType.quickPickTypes.contains($0) }
     }
 
     func displayName(for typeID: String) -> String {

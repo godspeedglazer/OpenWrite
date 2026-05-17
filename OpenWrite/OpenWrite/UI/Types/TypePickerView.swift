@@ -17,7 +17,7 @@ struct TypePickerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(mode == .create ? "New page" : "Page type")
+            Text(mode == .create ? "Quick page type" : "Page type")
                 .font(.headline)
 
             if mode == .create {
@@ -26,7 +26,7 @@ struct TypePickerView: View {
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 10)], spacing: 10) {
-                ForEach(vaultStore.typeRegistry.allSelectable) { pageType in
+                ForEach(vaultStore.typeRegistry.quickPickSelectable) { pageType in
                     typeButton(pageType)
                 }
             }

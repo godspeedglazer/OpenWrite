@@ -49,6 +49,72 @@ struct LMStudioConfig: Codable, Hashable, Sendable {
         if !trimmed.isEmpty { return trimmed }
         return chatModel
     }
+
+    /// Sidebar / settings display for the chat completions model.
+    var chatModelDisplay: String {
+        let trimmed = chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Not set" : trimmed
+    }
+
+    /// Sidebar / settings display for the embeddings model (falls back to chat model when blank).
+    var embeddingModelDisplay: String {
+        let trimmed = embeddingModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        let chat = chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if chat.isEmpty { return "Same as chat model" }
+        return "\(chat) (same as chat)"
+    }
+
+    var usesDedicatedEmbeddingModel: Bool {
+        !embeddingModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
+/// High-level AI pipeline phase for chat and indexing UI.
+enum AIActivityState: Equatable, Sendable {
+    case idle
+    case connecting
+    case indexing
+    case retrieving
+    case streaming
+    case error(String)
+
+    var isBusy: Bool {
+        switch self {
+        case .idle, .error:
+            return false
+        case .connecting, .indexing, .retrieving, .streaming:
+            return true
+        }
+    }
+
+    var statusMessage: String? {
+        switch self {
+        case .idle:
+            return nil
+        case .connecting:
+            return "Connecting to LM Studio…"
+        case .indexing:
+            return "Indexing vault…"
+        case .retrieving:
+            return "Searching vault…"
+        case .streaming:
+            return "Calling chat model…"
+        case .error(let message):
+            return message
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .idle: return "Idle"
+        case .connecting: return "Connecting"
+        case .indexing: return "Indexing"
+        case .retrieving: return "Retrieving"
+        case .streaming: return "Streaming"
+        case .error: return "Error"
+        }
+    }
 }
 
 enum LMStudioURLPolicy {

@@ -75,44 +75,126 @@ struct ContentView: View {
                 }
             }
 
-            Section("AI") {
-                LabeledContent("LM Studio", value: aiServices.lmConfig.baseURL.absoluteString)
-                LabeledContent("Model", value: aiServices.lmConfig.chatModel)
+            Section("LM Studio") {
+                LabeledContent("Server", value: aiServices.lmConfig.baseURL.absoluteString)
+                    .font(.caption)
+
+                modelRoleRow(
+                    title: "Chat model",
+                    selection: chatModelBinding,
+                    placeholder: "local-model"
+                )
+
+                modelRoleRow(
+                    title: "Embedding model",
+                    selection: embeddingModelBinding,
+                    placeholder: "Same as chat model"
+                )
+
+                HStack {
+                    Text("Activity")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(aiServices.activityState.shortLabel)
+                        .font(.caption.weight(.medium))
+                }
+
                 Text(aiServices.lmStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 LabeledContent("Indexed chunks", value: "\(aiServices.indexedChunkCount)")
-                if aiServices.isIndexing {
-                    ProgressView("Indexing…")
-                        .controlSize(.small)
+
+                if aiServices.isIndexing || aiServices.activityState == .indexing {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Indexing vault…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+
                 Button("Check connection") {
                     Task { await aiServices.checkConnection() }
                 }
+                .disabled(aiServices.activityState == .connecting)
+
                 Button("Rebuild index") {
                     Task { await aiServices.reindex(documents: vaultStore.documents) }
                 }
+                .disabled(aiServices.isIndexing)
             }
         }
         .listStyle(.sidebar)
         .frame(minWidth: 240)
     }
 
-    private var newPageSheet: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Create typed page")
-                .font(.title2.bold())
-            TypePickerView(documentID: nil, mode: .create) { newID in
-                vaultStore.selectedDocumentID = newID
-                showNewPageSheet = false
-            }
-            HStack {
-                Spacer()
-                Button("Cancel") { showNewPageSheet = false }
+    private var chatModelBinding: Binding<String> {
+        Binding(
+            get: { aiServices.lmConfig.chatModel },
+            set: { aiServices.updateChatModel($0) }
+        )
+    }
+
+    private var embeddingModelBinding: Binding<String> {
+        Binding(
+            get: { aiServices.lmConfig.embeddingModel },
+            set: { aiServices.updateEmbeddingModel($0) }
+        )
+    }
+
+    @ViewBuilder
+    private func modelRoleRow(title: String, selection: Binding<String>, placeholder: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if aiServices.availableModels.isEmpty {
+                TextField(placeholder, text: selection)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
+            } else {
+                Picker(title, selection: selection) {
+                    if title == "Embedding model" {
+                        Text(placeholder).tag("")
+                    }
+                    ForEach(aiServices.availableModels) { model in
+                        Text(model.id).tag(model.id)
+                    }
+                }
+                .labelsHidden()
             }
         }
-        .padding(24)
-        .frame(minWidth: 360, minHeight: 280)
+    }
+
+    private var newPageSheet: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Create page")
+                    .font(.title2.bold())
+
+                StructureTemplatePicker { newID in
+                    vaultStore.selectedDocumentID = newID
+                    showNewPageSheet = false
+                }
+
+                Divider()
+
+                TypePickerView(documentID: nil, mode: .create) { newID in
+                    vaultStore.selectedDocumentID = newID
+                    showNewPageSheet = false
+                }
+
+                HStack {
+                    Spacer()
+                    Button("Cancel") { showNewPageSheet = false }
+                }
+            }
+            .padding(24)
+        }
+        .frame(minWidth: 400, minHeight: 420)
     }
 
     @ViewBuilder

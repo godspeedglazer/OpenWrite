@@ -36,6 +36,54 @@ final class VaultStore: ObservableObject {
         return doc
     }
 
+    /// Creates a root page from a structure preset and optional child pages (wiki site, collection).
+    @discardableResult
+    func createFromStructure(
+        _ structure: StructureTemplate,
+        title: String? = nil
+    ) -> VaultDocument {
+        let rootTitle = title ?? structure.displayName
+        let template = TypeTemplate.template(for: structure, title: rootTitle)
+        var root = VaultDocument.fromTemplate(template)
+        root.metadata[StructureTemplate.MetadataKey.structureTemplate] = structure.rawValue
+
+        let childSpecs = structure.childPageSpecs(rootTitle: rootTitle)
+        var childIDs: [UUID] = []
+
+        for spec in childSpecs {
+            let childBlocks: [NoteBlock] = if let outline = spec.outline {
+                StructureTemplate.blocks(from: outline)
+            } else {
+                [
+                    NoteBlock(kind: .heading1, text: spec.title),
+                    NoteBlock(kind: .paragraph, text: "")
+                ]
+            }
+            var child = VaultDocument(
+                title: spec.title,
+                pageType: spec.pageType,
+                properties: PageProperties.defaults(for: spec.pageType, title: spec.title),
+                rootBlocks: childBlocks
+            )
+            child.metadata[StructureTemplate.MetadataKey.parentDocumentID] = root.id.uuidString
+            child.metadata[StructureTemplate.MetadataKey.structureTemplate] = structure.rawValue
+            childIDs.append(child.id)
+            documents.append(child)
+        }
+
+        if !childIDs.isEmpty {
+            root.metadata[StructureTemplate.MetadataKey.childDocumentIDs] = childIDs
+                .map(\.uuidString)
+                .joined(separator: ",")
+            let childTitles = childSpecs.map(\.title)
+            root.rootBlocks = structure.makeRootBlocks(title: rootTitle, childTitles: childTitles)
+        }
+
+        documents.append(root)
+        selectedDocumentID = root.id
+        return root
+    }
+
     func updateDocument(_ document: VaultDocument) {
         guard let index = documents.firstIndex(where: { $0.id == document.id }) else { return }
         var updated = document

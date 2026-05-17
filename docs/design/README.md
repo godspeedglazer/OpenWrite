@@ -30,9 +30,13 @@ These documents are written for:
 | [**BrandAndLogo.md**](./BrandAndLogo.md) | Logo concept directions, accent colors, app icon sizes, Figma handoff, Notion-simple rules |
 | [**OpenWriteDesignLanguage.md**](./OpenWriteDesignLanguage.md) | Principles, visual identity, macOS native feel, layout grammar, content tone |
 | [**Tokens.md**](./Tokens.md) | Semantic colors, typography scale, 4pt spacing grid, radius, shadows; Swift name mapping |
-| [**Components.md**](./Components.md) | Sidebar, workbench tabs, inspector, note editor, capture sheet, graph, AI panel, vault states |
+| [**Components.md**](./Components.md) | Sidebar, workbench, inspector tabs, editor, AI chat, inline assist, capture, graph, vault states |
+| [**EditorAndAIPanel.md**](./EditorAndAIPanel.md) | Overlay vs bubble vs inspector — **chat in inspector**, refine inline popover v1 |
+| [**AIActivityStates.md**](./AIActivityStates.md) | Vault chat + related-notes UX state machines (aligned with `ChatPanelModel`) |
+| [**InlineAIEditing.md**](./InlineAIEditing.md) | Selection refine — `InlineAssistController` (sheet v1; popover + Apply target) |
 | [**Motion.md**](./Motion.md) | Durations, curves, reduced motion, window/sheet transitions |
 | [**Accessibility.md**](./Accessibility.md) | VoiceOver, contrast, keyboard, focus, Dynamic Type limits |
+| [**InlineAIEditing.md**](./InlineAIEditing.md) | Inline refine, dual models, threading, v1 inspector bubble pattern |
 
 ---
 
@@ -42,7 +46,10 @@ These documents are written for:
 2. **BrandAndLogo.md** — Use when designing or exporting the app icon, wordmark, or marketing lockups in Figma.
 3. **Tokens.md** — Keep open while styling; every visual constant should trace to `DesignTokens`.
 4. **Components.md** — Use when building or reviewing a specific surface.
-5. **Motion.md** + **Accessibility.md** — Consult before shipping animations or new interactive controls.
+5. **EditorAndAIPanel.md** — Read before adding new AI surfaces (where chat vs inline belongs).
+6. **AIActivityStates.md** — Use when changing chat streaming, errors, or composer enablement.
+7. **InlineAIEditing.md** — Use when implementing selection refine (popover v1).
+8. **Motion.md** + **Accessibility.md** — Consult before shipping animations or new interactive controls.
 
 ---
 
@@ -53,9 +60,13 @@ These documents are written for:
 | Token names & values | `OpenWrite/Design/DesignTokens.swift` |
 | Global accent (asset) | `Assets.xcassets/AccentColor.colorset` — should match `DesignTokens.Color.accent` |
 | App icon | `Assets.xcassets/AppIcon.appiconset` — see [BrandAndLogo.md](./BrandAndLogo.md); regenerate placeholder via `scripts/generate_app_icon_placeholder.sh` |
-| Workbench navigation | `UI/Workbench/SidebarSection.swift`, `WorkbenchState.swift` |
-| Root shell (current) | `UI/ContentView.swift` — evolves toward full workbench per Components spec |
-| Editor | `UI/EditorView.swift` |
+| Workbench navigation | `UI/Workbench/SidebarSection.swift`, `WorkbenchState.swift`, `InspectorTab.swift` |
+| Root shell | `UI/ContentView.swift` — `NavigationSplitView` + inspector toggle |
+| Inspector | `UI/Workbench/WorkbenchInspectorView.swift` |
+| Vault chat | `UI/AI/ChatPanelView.swift` |
+| Related notes | `UI/AI/RelatedNotesView.swift` |
+| Editor + inline refine | `UI/EditorView.swift`, `UI/Editor/InlineAssistController.swift`, `SelectablePlainTextEditor` |
+| Past Writes inspector | `UI/PastWrites/PastWritesTimelineView.swift` |
 | Capture | `UI/Capture/QuickCaptureController.swift` |
 
 When docs and code disagree, **update docs first** if the code reflects an intentional experiment; otherwise align code to docs before release.

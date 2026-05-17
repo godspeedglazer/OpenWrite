@@ -1,7 +1,7 @@
 # OpenWrite UI Components
 
-**Version:** 1.0  
-**Implementation status:** Partial — scaffold in `UI/`; this spec is target-state for E-08 Workbench shell and related epics.
+**Version:** 1.1  
+**Implementation status:** Workbench shell + inspector AI panels + editor inline refine **scaffold** (`ContentView`, `WorkbenchInspectorView`, `ChatPanelView`, `RelatedNotesView`, `EditorView`, `InlineAssistController`). Refine uses a **sheet** today; **popover + Apply** is design target — [InlineAIEditing.md](./InlineAIEditing.md). Tabs, graph, capture sheet remain target-state.
 
 Each component lists **anatomy**, **tokens**, **states**, **keyboard**, and **VoiceOver** expectations. Build with SwiftUI; use AppKit bridges only for text editing performance when NDL editor v1 requires it.
 
@@ -16,9 +16,10 @@ Each component lists **anatomy**, **tokens**, **states**, **keyboard**, and **Vo
 5. [Note editor](#note-editor)
 6. [Capture sheet](#capture-sheet)
 7. [Graph view](#graph-view)
-8. [AI panel](#ai-panel)
-9. [Vault lock states](#vault-lock-states)
-10. [Shared patterns](#shared-patterns)
+8. [AI Chat panel](#ai-chat-panel)
+9. [Inline assist](#inline-assist)
+10. [Vault lock states](#vault-lock-states)
+11. [Shared patterns](#shared-patterns)
 
 ---
 
@@ -40,8 +41,9 @@ Root container hosting sidebar navigation, primary content, and optional inspect
 
 ### Data
 
-- `WorkbenchState`: `selectedSection`, `sidebarVisible`, `inspectorVisible` (future)
+- `WorkbenchState`: `selectedSection`, `sidebarVisible`, `inspectorVisible`, `inspectorTab`
 - `VaultStore`: document list, selection, lock state
+- `NavigationSplitView`: sidebar → `editorColumn` → detail (`WorkbenchInspectorView` when `inspectorVisible`)
 
 ### Tokens
 
@@ -188,57 +190,75 @@ Tab insert/remove: `Motion.durationFast` — see [Motion.md](./Motion.md).
 
 ### Purpose
 
-Trailing column for **context**: outline, backlinks, related notes, AI chat, block properties. Author-first: collapsed by default for new users until they open AI or backlinks.
+Trailing **detail** column of `NavigationSplitView` for contextual tools: vault chat, semantic neighbors, and Past Writes. Implemented as `WorkbenchInspectorView` with `InspectorTab` segmented control. Author-first: inspector visible by default in v1 scaffold; user can hide via edge toggle.
 
-### Anatomy
+Placement rationale (chat vs inline refine): [EditorAndAIPanel.md](./EditorAndAIPanel.md).
+
+### Anatomy (implemented)
 
 ```
-┌ Inspector ────────────────┐
-│ [Outline] [Links] [AI]    │  ← segmented picker
-│ ─────────────────────────  │
-│  (panel content)           │
-│                            │
-└────────────────────────────┘
+┌ Inspector ─────────────────────────────┐
+│ [Chat] [Related] [Past Writes]         │  ← InspectorTab, .segmented
+│ ─────────────────────────────────────  │
+│  ChatPanelView | RelatedNotesView |    │
+│  PastWritesTimelineView                │
+└────────────────────────────────────────┘
 ```
 
 ### Specifications
 
-| Property | Value |
-|----------|-------|
-| Width | 280–360pt resizable |
-| Background | `Color.surface` |
-| Padding | `Spacing.inspectorPadding` |
-| Segment control | standard macOS picker |
+| Property | Value | Code |
+|----------|-------|------|
+| Min width | 300pt | `WorkbenchInspectorView` |
+| Ideal width | 340pt | same |
+| Tab picker padding | 10pt horizontal | `.padding(10)` on `Picker` |
+| Panel body | `maxWidth/Height: .infinity` | `Group` switch on `inspectorTab` |
 
-### Panels
+### Inspector tabs (`InspectorTab`)
 
-| Panel | Contents |
-|-------|----------|
-| **Outline** | NDL heading tree, jump-to-block |
-| **Links** | Backlinks + outgoing wikilinks |
-| **AI** | Related notes, Q&A, citations |
-| **Properties** | Created, modified, tags (v2) |
+| Tab | Title | SF Symbol | View | Behavior |
+|-----|-------|-----------|------|----------|
+| `chat` | Chat | `bubble.left.and.bubble.right` | `ChatPanelView` | Vault-wide RAG Q&A; see [AI Chat panel](#ai-chat-panel) |
+| `related` | Related | `link.circle` | `RelatedNotesView` | Semantic neighbors for **selected note**; debounced load |
+| `pastWrites` | Past Writes | `clock.arrow.circlepath` | `PastWritesTimelineView` | Session timeline; filters by `selectedDocumentID` when set |
+
+**Future tabs (not in enum today):** Outline (NDL headings), backlinks list, block properties — may merge with editor header or add segments without moving chat.
+
+### Show / hide
+
+| Control | Location | Behavior |
+|---------|----------|----------|
+| Inspector toggle | Right edge of `editorColumn` | `workbench.inspectorVisible`; `sidebar.right` / `sidebar.left` icon; 0.2s `easeInOut` |
+| Hidden detail | `NavigationSplitView` detail | `Color.clear` 1pt placeholder |
 
 ### Tokens
 
 | Element | Token |
 |---------|-------|
-| Panel title | `Typography.callout` + `textSecondary` |
-| Citation chip | `codeSmall`, `surfaceElevated`, `Radius.small` |
-| Divider | `separator` |
+| Panel title (per sub-view) | `.headline` |
+| Segment control | system `.segmented` |
+| Divider | system `Divider()` between chrome and body |
+| Citation / source cards | `caption` / `caption2`, `secondary` @ 8% bg — see chat sources |
 
 ### States
 
 | State | UI |
 |-------|-----|
-| Collapsed | Main column expands; toggle via toolbar |
-| Empty (no note) | “Select a note for details” |
-| AI loading | Streaming text + stop button (`danger` on stop optional) |
+| Collapsed | Detail column minimal; editor uses full content width |
+| Chat active | Default tab `inspectorTab == .chat` on fresh `WorkbenchState` |
+| Related: no note | `ContentUnavailableView` — “No note selected” |
+| Related: loading | Header `ProgressView` |
+| Past Writes: filtered | When note selected, timeline shows that note’s sessions only |
 
 ### VoiceOver
 
-- Inspector visibility announced when toggled
-- Citation links: “Citation from {note}, block {id}”
+- Inspector visibility announced when toggled (target)
+- Related row: “{title}, related note, {score} percent, button”
+- Chat sources: “Source, {documentTitle}, chunk {id prefix}”
+
+### Code reference
+
+`UI/Workbench/WorkbenchInspectorView.swift`, `InspectorTab.swift`, `WorkbenchState.swift`
 
 ---
 
@@ -246,70 +266,90 @@ Trailing column for **context**: outline, backlinks, related notes, AI chat, blo
 
 ### Purpose
 
-Primary authoring surface for NDL block trees. Current `EditorView` renders a read-oriented column; editor v1 adds focus, block handles, and slash commands.
+Primary authoring surface for the open vault note. **`EditorView`** (implemented) uses **`SelectablePlainTextEditor`** (AppKit `NSTextView` bridge) synced to `VaultDocument.plainText`, with optional **rendered preview** of NDL blocks. Typed-page metadata (`PageTypeBadge`, `TypePickerView`, `PropertyInspectorView`) lives in the editor header—not the inspector.
 
-### Anatomy
+**Inline refine:** header button **Refine selection** → `InlineAssistController` → result `.sheet` (read-only v1). See [Inline assist](#inline-assist).
+
+Future: block-granular NDL editor with handles and slash commands; preview path already renders block kinds via `blockView`.
+
+### Anatomy (implemented)
 
 ```
-┌ Main (editor) ────────────────────────────────┐
-│  Document title (editable)                     │
-│  ───────────────────────────────────────────  │
-│  ## Heading                                    │
-│  Paragraph text…                               │
-│  • Bullet                                      │
-│  > Quote                                       │
-│  `code block`                                  │
-│  [[Wikilink]]                                  │
-└────────────────────────────────────────────────┘
-        max-width 720pt centered
+┌ EditorView ─────────────────────────────────────────────┐
+│ [PageType badge]     [updatedAt] [Preview] [Refine selection]│
+│  displayTitle (.largeTitle.bold)                          │
+│  TypePickerView (switch type)                             │
+│  PropertyInspectorView (rounded secondary bg)              │
+│ ─────────────────────────────────────────────────────────  │
+│  TextEditor (plain)  OR  ScrollView block preview        │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### Block types (NDL)
+| Region | Implementation |
+|--------|----------------|
+| Header chrome | `VStack` 24pt horizontal pad, 24pt top |
+| Edit surface | `SelectablePlainTextEditor` + 12pt pad, 6% secondary background, 8pt corner radius |
+| Refine | `Label("Refine selection", sparkles)`; disabled when `!canRefineSelection` or refining |
+| Preview | `Toggle("Preview")`; `renderedPreview` iterates `rootBlocks` (excludes `.property`) |
+| Missing doc | `ContentUnavailableView` — “Note missing” |
 
-| Kind | Typography | Extra chrome |
-|------|------------|--------------|
-| `heading1–3` | `heading1`–`heading3` | — |
-| `paragraph` | `body` | — |
-| `bullet` | `body` + bullet glyph | `spacing2` HStack |
-| `quote` | `body` | 3pt leading bar `separator` |
-| `code` | `code` | `codeBackground`, `Radius.small`, `spacing2` pad |
-| `wikilink` | `body` | `wikilink` color |
-| `divider` | — | `Divider()` |
+### Edit / sync behavior
 
-### Tokens
+| Event | Behavior |
+|-------|----------|
+| `onAppear` | `syncFromDocument` → load `plainText` into `@State editingText` |
+| `onChange(editingText)` | `vaultStore.updatePlainText` + `pastWrites.recordEdit` |
+| `onChange(document.updatedAt)` | Re-sync from store if external change and not in preview mode |
+| `onChange(documentID)` | Re-sync when selection changes |
 
-| Element | Token |
-|---------|-------|
-| Outer pad | `editorPadding` |
-| Block gap | `spacing3` |
-| Title | `documentTitle` |
-| Focus ring | `accent` @ 40%, 2pt |
+### Block types (preview — `blockView`)
+
+| Kind | Rendering |
+|------|-----------|
+| `heading1–3` | `.title` / `.title2` / `.title3` |
+| `paragraph` | `Text(block.text)` |
+| `bullet` | `•` + text |
+| `quote` | Leading 3pt bar + text |
+| `code` | Monospaced + 12% secondary background |
+| `wikilink` | `.foregroundStyle(.tint)` |
+| `divider` | `Divider()` |
+| `property` | Capsule chip (also in header inspector) |
+
+### Tokens (current vs target)
+
+| Element | Current | Target token |
+|---------|---------|--------------|
+| Editor field bg | `Color.secondary.opacity(0.06)` | `codeBackground` / `surface` |
+| Property strip | 6% secondary, 10pt radius | `surface` + `Radius.medium` |
+| Title | `.largeTitle.bold` | `documentTitle` |
 
 ### States
 
 | State | UI |
 |-------|-----|
-| Empty document | Placeholder title “Untitled” — `textTertiary` |
-| Block focused | Subtle `accentMuted` row background |
-| Read-only (locked vault) | No caret; banner above title |
+| No selection (parent) | `ContentView` shows “Select a note” |
+| Note missing | `ContentUnavailableView` in `EditorView` |
+| Edit mode | `TextEditor` focused; commits on change |
+| Preview mode | Read-only block column; edits paused until toggle off |
+| Read-only vault (future) | Disable `TextEditor`; banner |
 
-### Keyboard
+### Keyboard (target + partial)
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+B` | Bold (when rich text supported) |
-| `Cmd+K` | Insert wikilink |
-| `Cmd+Enter` | Toggle heading level (stub) |
-| `Option+↑/↓` | Move block (v2) |
+| Shortcut | Action | Status |
+|----------|--------|--------|
+| `Cmd+Shift+P` | Toggle preview (proposed) | Toggle in header only today |
+| `Cmd+B` / `Cmd+K` | Rich text / wikilink | NDL editor v2 |
+| Inline refine | Selection popover | [InlineAIEditing.md](./InlineAIEditing.md) |
 
 ### VoiceOver
 
-- Title: “Document title, text field”
-- Block: “Heading level 2, {text}” / “Bullet, {text}”
+- Title: static `Text` today — future editable field
+- Preview toggle: “Preview, switch”
+- `SelectablePlainTextEditor`: “Note body, text field”
 
 ### Code reference
 
-See `EditorView.blockView` — migrate colors to `DesignTokens`.
+`UI/EditorView.swift`, `UI/Types/PropertyInspectorView.swift`, `PageTypeBadge`
 
 ---
 
@@ -438,72 +478,154 @@ Cap visible nodes (e.g. 200) with “Show more” — calm beats flashy physics.
 
 ---
 
-## AI panel
+## AI Chat panel
 
 ### Purpose
 
-Local RAG and LM Studio Q&A in the inspector **AI** segment. Human remains author; panel shows retrieval and citations.
+**Vault chat:** local RAG over indexed note chunks, streamed answers with **source cards**, in the inspector **Chat** tab. Implemented as `ChatPanelView` + `ChatPanelModel`. Semantic **related notes** are a **separate tab** (`RelatedNotesView`) — do not combine into one scrolling panel.
 
-### Anatomy
+State machine: [AIActivityStates.md](./AIActivityStates.md). Placement: [EditorAndAIPanel.md](./EditorAndAIPanel.md).
+
+### Anatomy (implemented)
 
 ```
-┌ AI ─────────────────────────┐
-│ Related notes               │
-│  • Meeting notes (0.82)     │
-│  • Research brief (0.71)    │
-│ ─────────────────────────── │
-│ Ask your vault              │
-│ ┌─────────────────────────┐ │
-│ │ Question…               │ │
-│ └─────────────────────────┘ │
-│ [Ask]                       │
-│ ─────────────────────────── │
-│ Answer stream…              │
-│ [1] Meeting notes ¶3        │
-└─────────────────────────────┘
+┌ Vault chat ──────────────────────────────┐
+│ Vault chat          [status]  [Clear]    │  ← header
+│ ───────────────────────────────────────  │
+│  (empty) ContentUnavailableView          │
+│  OR message bubbles (LazyVStack)         │
+│     user: trailing, accent 18% bg        │
+│     assistant: leading, secondary 12% bg │
+│     sources: up to 6 RetrievalHit cards  │
+│ ───────────────────────────────────────  │
+│ [Ask about your notes…]  [arrow.up]      │  ← composer
+└──────────────────────────────────────────┘
 ```
 
-### Specifications
+### Message model (`ChatMessage`)
+
+| Field | Use |
+|-------|-----|
+| `role` | `.user` \| `.assistant` \| `.system` |
+| `text` | Bubble content; selectable |
+| `sourceHits` | Shown under assistant after `buildContext` |
+| `isStreaming` | Placeholder `…` when empty and streaming |
+
+### Header
+
+| Element | Behavior |
+|---------|----------|
+| Title | “Vault chat” `.headline` |
+| `statusLine` | Caption: “Retrieving context…”, “{n} sources”, “No indexed matches”, “Error” |
+| Clear | Cancels stream task; disabled when `messages.isEmpty` |
+
+### Composer
 
 | Element | Spec |
 |---------|------|
-| Related row | `callout`, chevron, relevance score `caption` `textTertiary` |
-| Input | `TextField` or `TextEditor` 2–4 lines |
-| Ask button | `.borderedProminent`, disabled when LM unreachable |
-| Citation | `codeSmall` chip, click jumps to block |
-| Streaming | Typewriter with 16ms throttle max; no flashy cursor |
+| Field | `TextField` multiline 1–4 lines, rounded border, placeholder “Ask about your notes…” |
+| Send | `arrow.up.circle.fill` title2; disabled when `isBusy` or invalid draft |
+| Submit | `onSubmit` + `Cmd+Return` |
+| Sanitization | `AIInput.sanitizeQuery` before send |
+
+### Sources block
+
+Under assistant messages with hits (max 6):
+
+- Title row: `documentTitle` (caption semibold)
+- Snippet: 2 lines, secondary
+- Chunk id: `chunk:{uuid prefix}…` monospaced tertiary
+- Card: 6pt pad, 8% secondary background, 6pt radius
+
+**Future:** tap source → open note + scroll to chunk.
+
+### Related notes tab (same inspector, different view)
+
+Not part of `ChatPanelView` — documented here for contrast.
+
+| Element | `RelatedNotesView` |
+|---------|------------------|
+| Header | “Related notes” + loading spinner |
+| Rows | Title, `score` as `NN%`, snippet 3 lines |
+| Action | Tap → `vaultStore.selectedDocumentID = hit.documentID` |
+| Trigger | Debounced on selection + `indexedChunkCount` change |
 
 ### Tokens
 
-| Element | Token |
-|---------|-------|
-| Panel bg | inherits `surface` |
-| Citation chip bg | `accentMuted` |
-| Error | `danger` caption |
-| Connection ok | `success` dot 6pt |
+| Element | Current |
+|---------|---------|
+| User bubble | `accentColor.opacity(0.18)` |
+| Assistant bubble | `secondary.opacity(0.12)` |
+| System bubble | `orange.opacity(0.12)` (reserved) |
+| Source card | `secondary.opacity(0.08)` |
 
 ### States
 
+Full diagram: [AIActivityStates.md](./AIActivityStates.md).
+
 | State | UI |
 |-------|-----|
-| LM Studio checking | “Checking…” `caption` |
-| Reachable | “Reachable” `success` |
-| Unreachable | “Unreachable” + retry; Ask disabled |
-| Streaming | Stop button visible |
-| Empty vault | “Add notes to enable related documents” |
+| Empty | `ContentUnavailableView` — “Ask your vault” / sparkles |
+| Retrieving | `statusLine` + assistant `…` |
+| Streaming | Growing assistant text; scroll to latest |
+| Error | Error string in bubble; header “Error” |
+| Busy | Send disabled |
 
-### Privacy copy
+**LM Studio / index:** sidebar `Section("AI")` in `ContentView` — URL, model, status, chunk count, Check connection, Rebuild index. Target: disable send when unreachable.
 
-Static footnote: “Queries stay on this Mac. Nothing is sent except to your configured LM Studio endpoint.”
+### Privacy copy (target)
+
+Static footnote in chat footer: “Queries stay on this Mac. Nothing is sent except to your configured LM Studio endpoint.”
 
 ### VoiceOver
 
-- Related list: “Related note, {title}, relevance {percent}”
-- Citation: “Source, {title}, block {id}, button”
+- Empty: system `ContentUnavailableView` labels
+- Messages: enable `.textSelection(.enabled)` for review
+- Send: “Send question, button”
 
 ### Code reference
 
-`ContentView` AI section + `LMStudioClient` — migrate to inspector panel.
+`UI/AI/ChatPanelView.swift`, `AI/RAGService.swift`, `AI/OpenWriteAIServices.swift`
+
+---
+
+## Inline assist
+
+### Purpose
+
+**Selection refine** in the editor column — not inspector chat. Implemented via `InlineAssistController` + `SelectablePlainTextEditor`. **Design target:** popover at selection with Apply; **shipped v1:** toolbar button + result sheet (read-only). Full spec: [InlineAIEditing.md](./InlineAIEditing.md). Placement: [EditorAndAIPanel.md](./EditorAndAIPanel.md).
+
+### Anatomy (implemented)
+
+| Step | Behavior |
+|------|----------|
+| Select text | `textViewDidChangeSelection` → debounced `scheduleSelectionCapture` (0.4s) |
+| Valid snapshot | `latestSnapshot` set; **Refine selection** enabled |
+| Tap refine | `refineSelection(using: aiServices.rag)`; sheet opens; `phase = .refining` |
+| Complete | `ready(text)` or `failed(message)` in sheet |
+| Done | `dismissRefine()` — does not merge text into note yet |
+
+### v1 scope
+
+| In scope (shipped) | Target (next) |
+|--------------------|---------------|
+| Selection debounce + char cap | Popover vs sheet |
+| Async refine (`BuiltInAgents.refineProse`) | **Apply** replaces `selectedRange` |
+| Result sheet, selectable text | Preset chips + custom instruction |
+| Non-blocking editor | Context menu entry |
+
+| Out of scope | |
+|--------------|--|
+| Multi-turn refine thread | Vault-wide RAG in refine flow |
+| Floating global chat bubble | |
+
+### States
+
+`InlineAssistPhase`: idle → refining → ready \| failed. Diagram: [InlineAIEditing.md](./InlineAIEditing.md).
+
+### Code reference
+
+`UI/Editor/InlineAssistController.swift`, `UI/EditorView.swift` (`refineResultSheet`)
 
 ---
 
@@ -584,13 +706,19 @@ System `contextMenu` with destructive actions last, `role: .destructive`.
 
 ## Implementation checklist (E-08)
 
-- [ ] Three-column `NavigationSplitView` with inspector
-- [ ] `SidebarSection` drives main column switch
-- [ ] Token migration in `EditorView` and `ContentView`
+- [x] Three-column `NavigationSplitView` with inspector (`ContentView`)
+- [x] Inspector tabs: Chat, Related, Past Writes (`WorkbenchInspectorView`)
+- [x] `ChatPanelView` RAG streaming + sources
+- [x] `EditorView` plain-text edit + NDL preview toggle
+- [ ] `SidebarSection` drives main column switch (notes / graph / search)
+- [ ] Token migration in `EditorView` and `ContentView` → `DesignTokens`
 - [ ] Capture sheet UI wired to `QuickCaptureController`
 - [ ] Graph view stub with design tokens
 - [ ] Vault lock full-screen gate
+- [x] Inline refine scaffold ([InlineAIEditing.md](./InlineAIEditing.md))
+- [ ] Refine popover + Apply merge into selection
+- [ ] Chat: stop button + LM unreachable disables send
 
 ---
 
-*See also: [Tokens.md](./Tokens.md) · [Accessibility.md](./Accessibility.md) · [Motion.md](./Motion.md)*
+*See also: [EditorAndAIPanel.md](./EditorAndAIPanel.md) · [AIActivityStates.md](./AIActivityStates.md) · [InlineAIEditing.md](./InlineAIEditing.md) · [Tokens.md](./Tokens.md) · [Accessibility.md](./Accessibility.md) · [Motion.md](./Motion.md)*

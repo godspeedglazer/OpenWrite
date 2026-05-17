@@ -7,8 +7,12 @@ struct TypeTemplate: Identifiable, Hashable, Sendable {
     let suggestedTitle: String
     let rootBlocks: [NoteBlock]
     let properties: PageProperties
+    var structureTemplate: StructureTemplate? = nil
 
     static func template(for pageType: PageType, title: String? = nil) -> TypeTemplate {
+        if let structure = StructureTemplate.from(pageType: pageType) {
+            return template(for: structure, title: title)
+        }
         let suggested = title ?? pageType.displayName
         switch pageType {
         case .note:
@@ -21,11 +25,29 @@ struct TypeTemplate: Identifiable, Hashable, Sendable {
             return journalTemplate(title: suggested)
         case .project:
             return projectTemplate(title: suggested)
+        case .book, .document, .wikiSite, .collection:
+            return template(for: StructureTemplate.from(pageType: pageType)!, title: title)
         }
+    }
+
+    static func template(for structure: StructureTemplate, title: String? = nil) -> TypeTemplate {
+        let suggested = title ?? structure.displayName
+        let childTitles = structure.childPageSpecs(rootTitle: suggested).map(\.title)
+        return TypeTemplate(
+            pageType: structure.pageType,
+            suggestedTitle: suggested,
+            rootBlocks: structure.makeRootBlocks(title: suggested, childTitles: childTitles),
+            properties: PageProperties.defaults(for: structure.pageType, title: suggested),
+            structureTemplate: structure
+        )
     }
 
     static func allBuiltIn() -> [TypeTemplate] {
         PageType.allCases.map { template(for: $0) }
+    }
+
+    static func allStructurePresets() -> [TypeTemplate] {
+        StructureTemplate.allCases.map { template(for: $0) }
     }
 
     // MARK: - Per-type layouts

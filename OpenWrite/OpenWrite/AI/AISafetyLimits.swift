@@ -13,6 +13,10 @@ enum AISafetyLimits {
     static let systemPromptReservedTokens = 320
     static let maxCompletionTokens = 1024
     static let searchDebounceSeconds: TimeInterval = 0.35
+    static let inlineSelectionDebounceSeconds: TimeInterval = 0.4
+    static let maxInlineSelectionChars = 1500
+    static let maxInlineRefineContextChunks = 4
+    static let maxInlineRefinePromptTokens = 2000
     static let hybridVectorWeight = 0.7
     static let embeddingDimensions = 384
     static let maxEmbeddingInputChars = 2000

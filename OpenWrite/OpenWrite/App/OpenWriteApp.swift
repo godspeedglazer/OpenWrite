@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct OpenWriteApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     @StateObject private var vaultStore = VaultStore()
     @StateObject private var aiServices = OpenWriteAIServices()
     @StateObject private var pastWrites = InMemoryPastWritesService()

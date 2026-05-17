@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		AA0001010000000000000001 /* OpenWriteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000001 /* OpenWriteApp.swift */; };
+		AA0001010000000000000033 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000033 /* AppDelegate.swift */; };
 		AA0001010000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000002 /* ContentView.swift */; };
 		AA0001010000000000000003 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000003 /* EditorView.swift */; };
 		AA0001010000000000000004 /* VaultDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000004 /* VaultDocument.swift */; };
@@ -46,10 +47,19 @@
 		AA0001010000000000000025 /* OpenWriteAIServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000025 /* OpenWriteAIServices.swift */; };
 		AA0001010000000000000026 /* ChatPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000026 /* ChatPanelView.swift */; };
 		AA0001010000000000000027 /* RelatedNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000027 /* RelatedNotesView.swift */; };
+		AA0001010000000000000028 /* AgentConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000028 /* AgentConfig.swift */; };
+		AA0001010000000000000029 /* BuiltInAgents.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000029 /* BuiltInAgents.swift */; };
+		AA000101000000000000002A /* DictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000002A /* DictationService.swift */; };
+		AA0001010000000000000032 /* VoiceInputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000032 /* VoiceInputService.swift */; };
+		AA000101000000000000002B /* AgentPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000002B /* AgentPickerView.swift */; };
+		AA000101000000000000002C /* InlineAssistController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000002C /* InlineAssistController.swift */; };
+		AA0001010000000000000030 /* StructureTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000030 /* StructureTemplate.swift */; };
+		AA0001010000000000000031 /* StructureTemplatePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000031 /* StructureTemplatePicker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		BB0001010000000000000001 /* OpenWriteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWriteApp.swift; sourceTree = "<group>"; };
+		BB0001010000000000000033 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		BB0001010000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000003 /* EditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000004 /* VaultDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultDocument.swift; sourceTree = "<group>"; };
@@ -88,6 +98,14 @@
 		BB0001010000000000000025 /* OpenWriteAIServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWriteAIServices.swift; sourceTree = "<group>"; };
 		BB0001010000000000000026 /* ChatPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPanelView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000027 /* RelatedNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelatedNotesView.swift; sourceTree = "<group>"; };
+		BB0001010000000000000028 /* AgentConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentConfig.swift; sourceTree = "<group>"; };
+		BB0001010000000000000029 /* BuiltInAgents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuiltInAgents.swift; sourceTree = "<group>"; };
+		BB000101000000000000002A /* DictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationService.swift; sourceTree = "<group>"; };
+		BB0001010000000000000032 /* VoiceInputService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInputService.swift; sourceTree = "<group>"; };
+		BB000101000000000000002B /* AgentPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentPickerView.swift; sourceTree = "<group>"; };
+		BB000101000000000000002C /* InlineAssistController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InlineAssistController.swift; sourceTree = "<group>"; };
+		BB0001010000000000000030 /* StructureTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StructureTemplate.swift; sourceTree = "<group>"; };
+		BB0001010000000000000031 /* StructureTemplatePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StructureTemplatePicker.swift; sourceTree = "<group>"; };
 		CC0001010000000000000001 /* OpenWrite.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenWrite.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -137,6 +155,7 @@
 		EE0001010000000000000010 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				BB0001010000000000000033 /* AppDelegate.swift */,
 				BB0001010000000000000001 /* OpenWriteApp.swift */,
 			);
 			path = App;
@@ -162,6 +181,7 @@
 				BB0001010000000000000015 /* PageType.swift */,
 				BB0001010000000000000016 /* PageProperties.swift */,
 				BB0001010000000000000017 /* TypeTemplate.swift */,
+				BB0001010000000000000030 /* StructureTemplate.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -184,6 +204,10 @@
 				BB0001010000000000000023 /* EmbeddingService.swift */,
 				BB0001010000000000000013 /* RAGService.swift */,
 				BB0001010000000000000025 /* OpenWriteAIServices.swift */,
+				BB0001010000000000000028 /* AgentConfig.swift */,
+				BB0001010000000000000029 /* BuiltInAgents.swift */,
+				BB000101000000000000002A /* DictationService.swift */,
+				BB0001010000000000000032 /* VoiceInputService.swift */,
 			);
 			path = AI;
 			sourceTree = "<group>";
@@ -193,6 +217,7 @@
 			children = (
 				BB0001010000000000000002 /* ContentView.swift */,
 				BB0001010000000000000003 /* EditorView.swift */,
+				EE000101000000000000002E /* Editor */,
 				EE000101000000000000002A /* Types */,
 				EE0001010000000000000025 /* Workbench */,
 				EE0001010000000000000026 /* Capture */,
@@ -207,6 +232,7 @@
 			children = (
 				BB0001010000000000000026 /* ChatPanelView.swift */,
 				BB0001010000000000000027 /* RelatedNotesView.swift */,
+				BB000101000000000000002B /* AgentPickerView.swift */,
 			);
 			path = AI;
 			sourceTree = "<group>";
@@ -215,6 +241,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0001010000000000000018 /* TypePickerView.swift */,
+				BB0001010000000000000031 /* StructureTemplatePicker.swift */,
 				BB0001010000000000000019 /* PropertyInspectorView.swift */,
 			);
 			path = Types;
@@ -284,15 +311,6 @@
 			path = PastWrites;
 			sourceTree = "<group>";
 		};
-		EE000101000000000000002D /* AI */ = {
-			isa = PBXGroup;
-			children = (
-				BB0001010000000000000026 /* ChatPanelView.swift */,
-				BB0001010000000000000027 /* RelatedNotesView.swift */,
-			);
-			path = AI;
-			sourceTree = "<group>";
-		};
 		EE0001010000000000000029 /* PastWrites */ = {
 			isa = PBXGroup;
 			children = (
@@ -307,6 +325,14 @@
 				BB0001010000000000000011 /* QuickCaptureController.swift */,
 			);
 			path = Capture;
+			sourceTree = "<group>";
+		};
+		EE000101000000000000002E /* Editor */ = {
+			isa = PBXGroup;
+			children = (
+				BB000101000000000000002C /* InlineAssistController.swift */,
+			);
+			path = Editor;
 			sourceTree = "<group>";
 		};
 		EE0001010000000000000027 /* Import */ = {
@@ -395,6 +421,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0001010000000000000001 /* OpenWriteApp.swift in Sources */,
+				AA0001010000000000000033 /* AppDelegate.swift in Sources */,
 				AA0001010000000000000002 /* ContentView.swift in Sources */,
 				AA0001010000000000000003 /* EditorView.swift in Sources */,
 				AA0001010000000000000004 /* VaultDocument.swift in Sources */,
@@ -432,6 +459,14 @@
 				AA0001010000000000000025 /* OpenWriteAIServices.swift in Sources */,
 				AA0001010000000000000026 /* ChatPanelView.swift in Sources */,
 				AA0001010000000000000027 /* RelatedNotesView.swift in Sources */,
+				AA0001010000000000000028 /* AgentConfig.swift in Sources */,
+				AA0001010000000000000029 /* BuiltInAgents.swift in Sources */,
+				AA000101000000000000002A /* DictationService.swift in Sources */,
+				AA0001010000000000000032 /* VoiceInputService.swift in Sources */,
+				AA000101000000000000002B /* AgentPickerView.swift in Sources */,
+				AA000101000000000000002C /* InlineAssistController.swift in Sources */,
+				AA0001010000000000000030 /* StructureTemplate.swift in Sources */,
+				AA0001010000000000000031 /* StructureTemplatePicker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

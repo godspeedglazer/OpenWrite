@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-05-17
 
-Per-feature documents describe **user-visible behavior**, acceptance criteria, and links to architecture and epics. Until individual files exist, use [RoadmapEpics.md](../RoadmapEpics.md) as the authoritative breakdown.
+Per-feature documents describe **user-visible behavior**, acceptance criteria, and links to architecture and epics. Competitive status for each capability lives in [FeatureParityMatrix.md](../FeatureParityMatrix.md).
 
 ---
 
@@ -10,27 +10,35 @@ Per-feature documents describe **user-visible behavior**, acceptance criteria, a
 
 | Feature | Epic | Doc | Status |
 |---------|------|-----|--------|
-| Vault encryption | E-01 | [vault-encryption.md](./vault-encryption.md) | *Planned* |
+| Vault encryption | E-01 | [VaultEncryption.md](./VaultEncryption.md) | *Partial* |
+| Backlinks & graph | E-06 | [GraphView.md](./GraphView.md) | *Partial* |
+| Workbench shell | E-08 | [Workbench.md](./Workbench.md) | *Partial* |
+| Import & export | E-07, E-10 | [ImportExport.md](./ImportExport.md) | *Partial* |
+| Past Writes (sessions) | — | [PastWrites.md](./PastWrites.md) | *Partial* |
 | NDL block editor | E-02 | [ndl-editor.md](./ndl-editor.md) | *Planned* |
 | LM Studio RAG | E-03 | [lm-studio-rag.md](./lm-studio-rag.md) | *Planned* |
 | FSEvents indexer | E-04 | — | *Planned* |
 | Hybrid search | E-05 | [hybrid-search.md](./hybrid-search.md) | *Planned* |
-| Backlinks & graph | E-06 | [backlinks-graph.md](./backlinks-graph.md) | *Planned* |
-| Markdown / Obsidian import | E-07 | — | *Planned* |
-| Workbench shell | E-08 | [workbench-shell.md](./workbench-shell.md) | *Planned* |
 | Fast capture | E-09 | [fast-capture.md](./fast-capture.md) | *Planned* |
 | Publish pipeline | E-10 | — | *Planned (stub)* |
+
+**Legacy kebab-case names** (`vault-encryption.md`, `workbench-shell.md`, etc.) are listed in [docs/README.md](../README.md) until migrated; prefer **PascalCase** filenames for new docs.
 
 ---
 
 ## How to add a feature doc
 
-Follow [Contributing/DocumentationStandards.md](../Contributing/DocumentationStandards.md), then add a row to this table and [docs/README.md](../README.md).
+Follow [Contributing/DocumentationStandards.md](../Contributing/DocumentationStandards.md), then:
+
+1. Add a row to this table and [docs/README.md](../README.md).
+2. Add or update rows in [FeatureParityMatrix.md](../FeatureParityMatrix.md) with epic/ADR links.
+3. Check the epic in [RoadmapEpics.md](../RoadmapEpics.md) when behavior ships.
 
 ---
 
 ## Cross-links
 
+- Parity matrix: [FeatureParityMatrix.md](../FeatureParityMatrix.md)
 - Epics: [RoadmapEpics.md](../RoadmapEpics.md)
 - Architecture: [Architecture/Overview.md](../Architecture/Overview.md)
 - AI: [Architecture/AI-Pipeline.md](../Architecture/AI-Pipeline.md)

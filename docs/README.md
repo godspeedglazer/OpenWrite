@@ -19,7 +19,7 @@ Welcome to the canonical documentation index for OpenWrite. This hub is the entr
 | NDL / editor work | [NDL/Specification.md](./NDL/Specification.md) | [NDL/Migration.md](./NDL/Migration.md) |
 | AI / search work | [Architecture/AI-Pipeline.md](./Architecture/AI-Pipeline.md) | [Glossary.md](./Glossary.md) (RAG, dual-generator) |
 | Designer | [design/README.md](./design/README.md) | [ProductPhilosophy.md](./ProductPhilosophy.md) |
-| PM / planning | [RoadmapEpics.md](./RoadmapEpics.md) | [OpenWriteMasterPlan.md](./OpenWriteMasterPlan.md) phased roadmap |
+| PM / planning | [RoadmapEpics.md](./RoadmapEpics.md) | [FeatureParityMatrix.md](./FeatureParityMatrix.md), [OpenWriteMasterPlan.md](./OpenWriteMasterPlan.md) |
 
 ---
 
@@ -30,6 +30,7 @@ Welcome to the canonical documentation index for OpenWrite. This hub is the entr
 | [**OpenWriteMasterPlan.md**](./OpenWriteMasterPlan.md) | **Authoritative** product vision, competitor synthesis, architecture target, NDL v0 summary, privacy model, phased roadmap (MVP → v2). Link here; do not paste the full plan into other docs. |
 | [**ProductPhilosophy.md**](./ProductPhilosophy.md) | Why local-first, dual-generator AI, simplicity vs Anytype, outliner + blocks, privacy-as-architecture. |
 | [**RoadmapEpics.md**](./RoadmapEpics.md) | Phase 2 implementation epics (E-01 … E-10), dependencies, acceptance criteria, Swift module mapping. |
+| [**FeatureParityMatrix.md**](./FeatureParityMatrix.md) | Competitive parity vs Logseq, AFFiNE, Anytype, Reor, Obsidian; Pass 1 absorption; epic/ADR links per row. |
 | [UserPersonas.md](./UserPersonas.md) | *Planned* — primary personas and jobs-to-be-done. |
 | [UserJourneys.md](./UserJourneys.md) | *Planned* — capture → edit → research → export flows. |
 | [VersioningFramework.md](./VersioningFramework.md) | *Planned* — vault bundle, NDL, and index schema versioning. |
@@ -77,15 +78,20 @@ Feature docs describe **user-visible behavior**, acceptance criteria, and links 
 | Document | Epic | Status |
 |----------|------|--------|
 | [features/README.md](./features/README.md) | — | Feature doc index |
-| [features/vault-encryption.md](./features/vault-encryption.md) | E-01 | *Planned* |
+| [features/VaultEncryption.md](./features/VaultEncryption.md) | E-01 | *Partial* |
+| [features/GraphView.md](./features/GraphView.md) | E-06 | *Partial* |
+| [features/Workbench.md](./features/Workbench.md) | E-08 | *Partial* |
+| [features/ImportExport.md](./features/ImportExport.md) | E-07, E-10 | *Partial* |
+| [features/PastWrites.md](./features/PastWrites.md) | — | *Partial* |
+| [features/vault-encryption.md](./features/vault-encryption.md) | E-01 | *Planned* (kebab alias — prefer `VaultEncryption.md`) |
 | [features/ndl-editor.md](./features/ndl-editor.md) | E-02 | *Planned* |
 | [features/lm-studio-rag.md](./features/lm-studio-rag.md) | E-03 | *Planned* |
 | [features/hybrid-search.md](./features/hybrid-search.md) | E-05 | *Planned* |
-| [features/backlinks-graph.md](./features/backlinks-graph.md) | E-06 | *Planned* |
+| [features/backlinks-graph.md](./features/backlinks-graph.md) | E-06 | *Planned* (prefer `GraphView.md`) |
 | [features/fast-capture.md](./features/fast-capture.md) | E-09 | *Planned* |
-| [features/workbench-shell.md](./features/workbench-shell.md) | E-08 | *Planned* |
+| [features/workbench-shell.md](./features/workbench-shell.md) | E-08 | *Planned* (prefer `Workbench.md`) |
 
-Until feature files exist, use [RoadmapEpics.md](./RoadmapEpics.md) epic sections as the source of truth.
+Parity tracking: [FeatureParityMatrix.md](./FeatureParityMatrix.md). Until remaining kebab-case files exist, use [RoadmapEpics.md](./RoadmapEpics.md) epic sections as the source of truth.
 
 ---
 
@@ -146,7 +152,7 @@ reor-main/, AFFiNE-canary/, …       # Reference clones (gitignored, not shippe
 
 | Event | Action |
 |-------|--------|
-| New user-facing feature | Add or update `docs/features/<name>.md`; link from this README. |
+| New user-facing feature | Add or update `docs/features/<Name>.md`; link from this README and [FeatureParityMatrix.md](./FeatureParityMatrix.md). |
 | Architectural change | Add ADR under `docs/adr/`; link from [Architecture/Overview.md](./Architecture/Overview.md). |
 | NDL syntax change | Update [NDL/Specification.md](./NDL/Specification.md) + [NDL/Migration.md](./NDL/Migration.md). |
 | Epic completed | Check boxes in [RoadmapEpics.md](./RoadmapEpics.md); update feature doc status. |
@@ -172,4 +178,5 @@ Vendored trees are for study only. See [OpenWriteMasterPlan.md § Workspace inve
 - Build: root [README.md](../README.md)
 - Master plan: [OpenWriteMasterPlan.md](./OpenWriteMasterPlan.md)
 - Epics: [RoadmapEpics.md](./RoadmapEpics.md)
+- Parity matrix: [FeatureParityMatrix.md](./FeatureParityMatrix.md)
 - Git: [GitWorkflow.md](./GitWorkflow.md)

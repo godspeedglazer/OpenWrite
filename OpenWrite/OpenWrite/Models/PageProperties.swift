@@ -143,6 +143,14 @@ struct PageProperties: Codable, Hashable, Sendable {
             return [.title, .mood, .location, .tags, .startedAt]
         case .project:
             return [.title, .status, .dueDate, .priority, .assignee, .startedAt, .completedAt, .tags, .summary]
+        case .book:
+            return [.title, .author, .tags, .summary, .status]
+        case .document:
+            return [.title, .tags, .summary, .status]
+        case .wikiSite:
+            return [.title, .url, .tags, .summary]
+        case .collection:
+            return [.title, .tags, .summary]
         }
     }
 
@@ -160,6 +168,14 @@ struct PageProperties: Codable, Hashable, Sendable {
             props[.rating] = .rating(3)
         case .journal:
             props[.mood] = .text("")
+        case .book:
+            props[.status] = .text(ProjectStatus.planning.rawValue)
+        case .document:
+            props[.status] = .text(ProjectStatus.active.rawValue)
+        case .wikiSite:
+            break
+        case .collection:
+            break
         case .note:
             break
         }
