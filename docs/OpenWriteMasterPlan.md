@@ -1,9 +1,11 @@
 # OpenWrite Master Plan
 
-**Version:** 0.1 (Phase 1 scaffold)  
+**Version:** 0.2 (research synthesis)  
 **Platform:** Native macOS (Swift / SwiftUI)  
 **Bundle ID:** `com.openwrite.app`  
 **Last updated:** 2026-05-17
+
+**Product & process docs:** [ProductPhilosophy.md](./ProductPhilosophy.md) · [UserPersonas.md](./UserPersonas.md) · [UserJourneys.md](./UserJourneys.md) · [VersioningFramework.md](./VersioningFramework.md) · [ADRs](./adr/) · [RoadmapEpics.md](./RoadmapEpics.md)
 
 ---
 
@@ -11,13 +13,13 @@
 
 OpenWrite is the ultimate **local-first writer**: a private knowledge workspace that combines deep AI research (Reor lineage), block-structured editing (Affine-inspired UX without copying code), graph-native linking (beats rigid folder silos), and publishing-ready output (Buffer-style workflows)—all on macOS with no mandatory cloud.
 
-**North star:** One vault you own. Notes as a designed language (NDL), not plain Markdown files with accidental structure. AI that runs beside you via LM Studio (or compatible local servers), never exfiltrating your corpus by default.
+**North star:** One vault you own. Notes as a designed language (NDL), not plain Markdown files with accidental structure. AI that runs beside you via LM Studio (or compatible local servers), never exfiltrating your corpus by default—the **dual-generator** model: you write; the LLM retrieves and suggests.
 
 **Success criteria (v1):**
 
 - Open a locked vault in under 2 seconds on Apple Silicon with warm keychain unlock.
-- Edit block-structured notes with NDL v0; round-trip lossless on disk.
-- Semantic “related notes” and Q&A over the vault via local embeddings + LM Studio.
+- Edit block-structured notes with NDL v0; round-trip lossless on disk inside encrypted `.owdoc` blobs.
+- Semantic “related notes” and Q&A over the vault via local embeddings + LM Studio with citations to block IDs.
 - Feel faster and calmer than Anytype for daily capture; clearer than Logseq for non-power-users; more intentional than Obsidian’s plugin soup.
 
 ---
@@ -30,40 +32,172 @@ OpenWrite is the ultimate **local-first writer**: a private knowledge workspace 
 4. **AI is augment, not author** — Human remains a “generator”; RAG retrieves from *your* notes (Reor model).
 5. **Native macOS** — SwiftUI, AppKit bridges only where needed; respect sandboxing and HIG.
 6. **Composable blocks** — Affine-like structure (page → blocks → children) without AFFiNE/Anytype code.
-7. **Extensible later** — Plugins and sync are v2+; MVP is opinionated and small.
+7. **Extensible later** — Plugins and sync are v2+; MVP is opinionated and small with **native graph, search, and AI**—no plugin duct tape.
 8. **Clean room** — Learn from competitors; never ship Anytype source or non-compliant forks.
 
 ---
 
-## Competitor Synthesis (placeholder)
+## Workspace inventory
 
-*Fill in as research agents land; bullets are hypotheses to validate.*
+Six vendored reference trees live beside the shipping app. They are **local study clones**, not dependencies.
 
-### Reor (foundation — in-tree reference: `reor-main/`)
+| Path | App | Tech | License | Size / notes |
+|------|-----|------|---------|--------------|
+| `reor-main/` | **Reor** (stated foundation) | TS, React, Electron, LanceDB, Transformers.js | **AGPL-3.0** | ~43k LOC; local RAG + markdown vault |
+| `AFFiNE-canary/` | AFFiNE | Yarn monorepo, BlockSuite, optional Rust | **MIT** (frontend); **EE** on `packages/backend/server` | ~358k LOC; workbench + blocks |
+| `anytype-ts-develop/` | Anytype Desktop | TS, Electron, Vite, Bun | **ASAL 1.0** — open code, **not** open source | ~197k LOC; **inspiration only** |
+| `logseq-master/` | Logseq | ClojureScript, Electron, SQLite graph | **AGPL-3.0** | ~250k LOC; outliner + block graph |
+| `massCode-main/` | massCode | Electron, snippets/notes | **AGPL-3.0** | ~75k LOC; optional import patterns |
+| `rem-main/` | rem (user hard-fork candidate) | Native Swift, SQLite, LM Studio | **MIT** | Screen-memory app + semantic search patterns |
 
-- **Take:** Local RAG, vector index per note, related-note sidebar, Q&A over corpus.
-- **Gap for OpenWrite:** Electron stack → native Swift; unify with block editor + encrypted vault; standardize on LM Studio API.
+**Also present (not vendored source):**
 
-### AFFiNE (structure reference — in-tree: `AFFiNE-canary/`)
+| Path | Role |
+|------|------|
+| `OpenWrite/` | **Shipping product** — Xcode app (tracked in git) |
+| `docs/` | Master plan, workflow docs |
+| `buffer/` | Buffer.app binary (`com.returnlabs.buffer`) — publish UX reference only |
+| `Obsidian (…)/` | Empty placeholder — closed-source competitor |
+| `OpenWrite Project Folder/` | Empty legacy placeholder |
 
-- **Take:** Block/page model, edgeless vs doc modes, collaboration patterns (study only).
-- **Gap:** No Rust/TS runtime in app; NDL + native rendering; offline-only MVP.
+**Blockers resolved in Phase 1:** OpenWrite scaffold and master plan exist. Reference trees still need per-repo `npm`/`yarn`/`bun` install before building upstream.
 
-### Anytype (object graph)
+**Recommended reading order for agents:** `reor-main/README.md` → `docs/OpenWriteMasterPlan.md` → `AFFiNE-canary` workbench modules → `logseq-master` outliner/deps → `anytype-ts-develop` (UX only, ASAL) → skip `buffer/` binary except product notes.
 
-- **Take:** Types, relations, graph-first navigation.
-- **Gap:** Simpler type system in v0; faster capture; no blockchain/sync complexity in MVP.
-- **Legal:** No code copy; independent object model.
+---
 
-### Logseq / Obsidian (outliner / files)
+## Reference trees policy
 
-- **Take:** Backlinks, daily notes, plugin ecosystems.
-- **Gap:** First-class block model and NDL; fewer knobs; encrypted vault default; built-in local AI.
+Reference trees are **vendored, gitignored, and not shipped** in the OpenWrite app bundle.
 
-### Buffer (publishing)
+| Rule | Detail |
+|------|--------|
+| **Git** | Listed in root `.gitignore` (`reor-main/`, `AFFiNE-canary/`, `anytype-ts-develop/`, `logseq-master/`, `massCode-main/`, `rem-main/`, `buffer/`, `Obsidian*/`). Only `OpenWrite/`, `docs/`, and root `README.md` are product-tracked. |
+| **Build** | No reference package is linked into the Xcode target. No `node_modules` from vendors in CI. |
+| **Purpose** | Architecture study, algorithm porting (clean-room), UX benchmarking. |
+| **Submodules** | Optional later: pin commits via git submodule if team wants reproducible reference revs; default is “clone locally, don’t commit.” |
+| **REM copies** | User may add `rem/` or `REM*/` forks; same ignore rules. Do not alter upstream folders when a separate copy is provided. |
+| **Shipping** | App Store / notarized build contains **only** `OpenWrite/` sources and declared SPM deps. |
 
-- **Take:** Draft → schedule → channel mental model.
-- **Gap:** “Publish views” as NDL export targets (Markdown, thread, newsletter) in v1+.
+---
+
+## Competitor synthesis
+
+### Reor (foundation — AGPL; clean-room Swift)
+
+**Thesis:** *“A RAG app with two generators: the LLM and the human.”* Q&A and related-notes augment writing; Writing Assistant was never shipped in upstream UI.
+
+| Inherit (behavior) | Replace (implementation) |
+|--------------------|---------------------------|
+| Dual-generator RAG, hybrid vector + keyword search | Electron + React + Tamagui soup |
+| Vault directory as truth; chunk-by-heading index | LanceDB in Node → SQLite/GRDB + vector extension |
+| Per-note embeddings, related sidebar, agent tools | Bundled Ollama → **LM Studio** OpenAI-compatible API |
+| `[[wikilink]]`, chat with citations | BlockNote web editor → **NDL** + native SwiftUI |
+| OpenAI-compatible `apiURL` config | `electron-store` plaintext → **Keychain + encrypted vault** |
+
+**Critical Reor paths (spec only):** `electron/main/common/chunking.ts`, `electron/main/vector-database/`, `src/lib/db.ts`, `src/lib/llm/chat.ts`, `src/components/Chat/index.tsx`.
+
+**Do not replicate:** forced dark mode, React Native in Electron, PostHog in a privacy product, full-screen indexing gate before edit, AGPL copy-paste into proprietary binary.
+
+---
+
+### AFFiNE (structure — MIT frontend; EE backend)
+
+**Take:** Workbench shell (tabs + active view), **View Islands** (route-owned header/body/inspector), root explorer (All docs, Journal, collections/tags), block tree with page vs edgeless modes, database blocks as lenses.
+
+**Gap for OpenWrite:** No BlockSuite/Yjs/TS runtime; no whiteboard/kanban parity in v1. Borrow **navigation chrome** and **smart collections** (filter rules over doc IDs), not CRDT cloud stack.
+
+**License trap:** `packages/backend/server` and native packages are **Enterprise Edition**—do not embed AFFiNE server in OpenWrite.
+
+**SwiftUI mapping:** `NavigationSplitView` + per-tab `NavigationPath`; trailing inspector for AI/related-notes (Reor) and outline; `CollectionRuleEngine` as saved predicates over note metadata.
+
+---
+
+### Logseq / Obsidian (outliner + files)
+
+**Logseq (AGPL):** Block UUID, parent, fractional order, outliner ops, SQLite authoritative store with markdown interchange (`pages/`, `journals/`, `- ` bullets). **Reuse ideas, not code.**
+
+**Obsidian:** No source in workspace; public plugin API = `Vault` + `Workspace` + CodeMirror 6. User pain: plugin fragility, paid sync, Electron lag, file-only model forcing plugins for block queries.
+
+**OpenWrite stance:** **Outliner-first NDL** with native block graph (backlinks, block refs) built in—beat “install 15 plugins” without copying Logseq’s Electron+CLJS stack.
+
+| From Obsidian | From Logseq |
+|---------------|-------------|
+| `[[wikilink]]`, vault folder mental model | Stable block IDs, parent/order, journal pages |
+| Frontmatter familiarity | Outliner ops + recycle / soft delete |
+| — | Worker-style background indexer |
+
+---
+
+### Anytype (competitor to beat — ASAL, no code copy)
+
+**Strengths:** Local-first narrative, object types, relations, graph navigation, encryption story, P2P sync (mature vs OpenWrite MVP).
+
+**OpenWrite response:** Native speed, simpler capture, **file-level vault crypto**, LM Studio RAG first-class, NDL + graph **without** Any-ID / space onboarding. Light typed properties in v1; defer kanban/calendar/DB-as-objects.
+
+**Workspace:** `anytype-ts-develop/` (~79 MB) — Electron client only; no `anytype-heart` middleware in tree. **Do not copy** schemas, assets, gRPC protos, or UI strings.
+
+---
+
+### Buffer (publishing mental model)
+
+**In workspace:** `buffer/Buffer *.app` (menu-bar Markdown, local storage, on-device LLM per public product page). No `buffer.md` in repo.
+
+**Borrow:** Draft → polish → **publish view** export (Markdown, thread, newsletter) in v2—not menubar-only scope.
+
+---
+
+## Competitive matrix
+
+Legend: ● strong · ◐ partial · ○ weak · — not focus
+
+| Dimension | Anytype | Buffer | AFFiNE | Reor | **OpenWrite (target)** |
+|-----------|---------|--------|--------|------|------------------------|
+| Primary job | Knowledge OS / object graph | Menubar capture | Notion+Miro workspace | Local AI PKM | **Writer + research vault** |
+| Platform | Electron (multi) | macOS menubar | Web + desktop + mobile | Electron | **macOS native** |
+| Default encryption | ● E2E spaces | ○ local files | ◐ self-host | ○ md folder | ● **`.openwrite` vault** |
+| Data model | Objects, relations, DB views | Plain MD | BlockSuite + DB blocks | MD + vectors | **NDL tree** + light metadata |
+| Graph / linking | ● relations | ○ | ● linked docs | ● semantic + wiki | ● wiki + graph v1 |
+| Block editor | ● | ○ WYSIWYG MD | ●● | ○ | ● composable v1 |
+| Local AI / RAG | ◐ | ● on-device | ◐ cloud mix | ● | ● **LM Studio** |
+| Publishing | ○ export | ○ personal | ◐ share | ○ | ● pipelines v2 |
+| Capture speed | ◐ type friction | ●● | ◐ | ◐ | ● **fast inbox** |
+| License reuse | **ASAL — none** | N/A | MIT patterns OK | AGPL → clean-room | Own codebase |
+
+---
+
+## Beat Anytype — prioritized backlog (P0–P2)
+
+### P0 — Must ship to credibly compete
+
+1. Sub-2s vault unlock (Keychain + warm unlock).
+2. Encrypted `.openwrite` vault — per-document AEAD; lock on sleep.
+3. **Fast capture** — global/quick entry, inbox note, minimal chrome.
+4. **NDL editor v1** — core block kinds; lossless round-trip in `.owdoc`.
+5. **LM Studio** — health check, Q&A with **citations to block IDs**.
+6. Per-note embeddings + **related-notes** inspector (Reor pattern, Swift).
+7. **Backlinks + read-only graph** without full Anytype type library.
+
+### P1 — Differentiators
+
+8. Semantic + keyword **hybrid search** across vault.  
+9. Simple property layer — tags + a few optional fields per template.  
+10. Export excellence — Markdown/PDF; publish-view templates (Buffer lineage).  
+11. **No account / no Any-ID** — single-user vault ownership.  
+12. Native UX — shortcuts, Quick Look, Spotlight (sandbox permitting).
+
+### P2 — Selective parity
+
+13. Lightweight types — Note / Task / Reference templates.  
+14. Object references in blocks — embed another note.  
+15. Local version snapshots inside vault.  
+16. Import — Markdown / Obsidian folder (Reor-validated demand).
+
+### Explicit non-goals (v1)
+
+- Kanban/calendar/DB-as-objects parity with Anytype or AFFiNE canvas.  
+- P2P mesh sync or multiplayer spaces before local encryption + graph excel.  
+- Copying Anytype middleware, Any-ID, or ASAL code paths.
 
 ---
 
@@ -72,81 +206,125 @@ OpenWrite is the ultimate **local-first writer**: a private knowledge workspace 
 ### Layer diagram (target)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  UI (SwiftUI) — Editor, Graph, AI panel, Vault unlock   │
-├─────────────────────────────────────────────────────────┤
-│  NoteDSL — Parse/serialize NDL v0, block tree ops       │
-├─────────────────────────────────────────────────────────┤
-│  Core — Vault I/O, index, Crypto, Search orchestration  │
-├─────────────────────────────────────────────────────────┤
-│  AI — LMStudioClient, embeddings adapter (future)       │
-├─────────────────────────────────────────────────────────┤
-│  On-disk — Encrypted vault bundle (.openwrite)          │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  UI (SwiftUI) — Workbench, Editor, Graph, AI inspector      │
+├─────────────────────────────────────────────────────────────┤
+│  NoteDSL — NDL AST, parse/serialize, block tree ops         │
+├─────────────────────────────────────────────────────────────┤
+│  Core — Vault I/O, Index (FSEvents), Crypto, Search        │
+├─────────────────────────────────────────────────────────────┤
+│  AI — LMStudioClient, EmbeddingProvider, RAG orchestration │
+├─────────────────────────────────────────────────────────────┤
+│  On-disk — Encrypted vault bundle (.openwrite)              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Module map (Xcode folders)
+### Module map (aligned to Xcode layout)
 
-| Folder | Responsibility |
-|--------|----------------|
-| `App/` | `@main`, lifecycle, dependency wiring |
-| `UI/` | Views, view models |
-| `Models/` | `VaultDocument`, domain types |
-| `NoteDSL/` | NDL AST, `NoteBlock`, parser v0 |
-| `Core/Vault/` | Vault open/save, document registry |
-| `Core/Crypto/` | `EncryptionService`, key handling |
-| `AI/` | `LMStudioConfig`, `LMStudioClient` |
+Current scaffold under `OpenWrite/OpenWrite/`:
 
-### Vault bundle (v0 sketch)
+| Path | Status | Responsibility |
+|------|--------|----------------|
+| `App/OpenWriteApp.swift` | **Exists** | `@main`, `VaultStore` injection |
+| `UI/ContentView.swift` | **Exists** | Vault browser shell, LM Studio health button |
+| `UI/EditorView.swift` | **Exists** | Note editor placeholder |
+| `Models/VaultDocument.swift` | **Exists** | Document root: id, title, blocks, meta |
+| `NoteDSL/NoteBlock.swift` | **Exists** | `NoteBlock`, `Kind`, `NDLSerializer` stub |
+| `Core/Vault/VaultStore.swift` | **Exists** | In-memory docs, `sealedPayload` stub |
+| `Core/Crypto/EncryptionService.swift` | **Exists** | Protocol + `NoOpEncryptionService` |
+| `AI/LMStudioConfig.swift` | **Exists** | Base URL, model, timeout, API key |
+| `AI/LMStudioClient.swift` | **Exists** | Health check via `/v1/models` |
+
+**Planned modules (Phase 2+ — add folders when implementing):**
+
+| Path | Responsibility |
+|------|----------------|
+| `NoteDSL/NDLParser.swift` | v0 line parser, round-trip tests |
+| `NoteDSL/NDLValidator.swift` | Block tree invariants |
+| `Core/Vault/VaultBundle.swift` | `.openwrite` manifest, atomic writes |
+| `Core/Vault/VaultUnlock.swift` | Keychain passphrase / device key |
+| `Core/Crypto/CryptoKitEncryptionService.swift` | AES-GCM / ChaCha20-Poly1305 |
+| `Core/Index/IndexService.swift` | FSEvents, chunk pipeline (Reor-inspired) |
+| `Core/Index/VectorStore.swift` | Embeddings + hybrid rank |
+| `Core/Graph/BacklinkIndex.swift` | Wiki + block ref index |
+| `Core/Graph/GraphViewModel.swift` | Read-only graph layout |
+| `Core/Import/ObsidianImporter.swift` | Folder → NDL (clean-room) |
+| `AI/EmbeddingProvider.swift` | LM Studio `/v1/embeddings` |
+| `AI/RAGService.swift` | Retrieve, prompt, cite block IDs |
+| `AI/AgentConfig.swift` | Templates, tools, filters (Reor-shaped) |
+| `UI/Workbench/WorkbenchState.swift` | Tabs, active view (AFFiNE-inspired) |
+| `UI/Workbench/QuickCapture.swift` | Global inbox entry |
+| `UI/Inspector/RelatedNotesPanel.swift` | Semantic sidebar |
+| `UI/Inspector/ChatPanel.swift` | Streaming Q&A |
+| `UI/Graph/GraphView.swift` | Native graph surface |
+| `Publish/ExportPipeline.swift` | MD / thread / newsletter stubs (v2) |
+
+**Dependency rule:** `UI` → `NoteDSL`, `Models`, `Core`, `AI`. `AI` must not import `UI`. `Core` must not import `AI`.
+
+### Vault bundle (v0)
 
 ```
 MyVault.openwrite/
   manifest.json          # version, doc ids, crypto params (no keys)
-  index/                 # encrypted search/vector metadata (later)
+  index/                 # encrypted search/vector metadata (v1)
   documents/
     {uuid}.owdoc         # encrypted serialized NDL + metadata
 ```
 
 ### Data flow (edit path)
 
-1. User unlocks vault → `EncryptionService` derives data key.
+1. User unlocks vault → `EncryptionService` derives data key from Keychain.
 2. `VaultStore` loads `VaultDocument` → NDL tree in memory.
 3. UI mutates `NoteBlock` tree → dirty tracking.
 4. Serialize NDL → encrypt → atomic write to `.owdoc`.
 
-### Data flow (AI path — MVP stub)
+### Data flow (AI path)
 
 1. User selects “Ask” or “Related” → `LMStudioClient` health check.
-2. (v1) Chunk + embed notes → local vector store (Reor-inspired).
-3. Retrieve top-k → prompt LM Studio chat/completions API.
-4. Present citations back to block IDs in UI.
+2. `IndexService` chunks notes (heading-aware), embeds via `EmbeddingProvider`.
+3. Hybrid retrieve top-k → `RAGService` prompts LM Studio chat API.
+4. UI shows answers with citations linking to `NoteBlock.id`.
 
 ---
 
-## Note DSL spec (v0 draft)
+## Note DSL spec (NDL v0)
 
-**NDL (Note Design Language)** is a line-oriented, human-readable serialization of a block tree. v0 optimizes for parse safety and diff-friendly storage inside encrypted documents.
+**NDL (Note Design Language)** is a line-oriented, human-readable serialization of a **block tree**. v0 merges **Logseq outliner semantics** (bullets, indent, block identity) with **AFFiNE block variety** (headings, code, callouts) while staying diff-friendly inside encrypted documents.
+
+### Design rules
+
+- **Canonical store:** `NoteBlock` tree in `.owdoc`; Markdown is **export**, not source of truth.
+- **Stable IDs:** Every block has UUID; export may append `^blk_shortid` comments for interchange (Logseq-inspired).
+- **Outliner-first:** Tab/Shift-Tab change indent level; Enter creates sibling/child per focus.
+- **One indent step in v0:** 2 spaces = one child level (parser may relax in v0.1).
 
 ### Document root
 
-- A document has: `id` (UUID), `title`, `blocks[]`, optional `meta` map.
+- `id` (UUID), `title`, `blocks[]`, optional `meta` (tags, template, dates).
 
 ### Block kinds (v0)
 
-| Kind | Prefix | Payload |
-|------|--------|---------|
-| paragraph | (none) | Plain text until block boundary |
-| heading | `#` `##` `###` | 1–3 hashes + space + text |
-| bullet | `-` | List item text |
-| quote | `>` | Quoted text |
-| code | ` ``` ` | Fenced code (language tag optional) |
-| divider | `---` | Horizontal rule |
-| link | `[[` | `[[title\|uuid]]` wikilink |
+| Kind | `NoteBlock.Kind` | Line prefix / syntax | Payload |
+|------|------------------|----------------------|---------|
+| paragraph | `.paragraph` | (none) | Plain text until boundary |
+| heading 1–3 | `.heading1` … `.heading3` | `#` `##` `###` + space | Title text |
+| bullet | `.bullet` | `- ` | List / outliner row |
+| numbered | `.numbered` | `1. ` `2. ` … | Ordered list (v0: restart per list) |
+| todo | `.todo` | `- [ ]` / `- [x]` | Checkbox item; `attributes["checked"]` |
+| quote | `.quote` | `> ` | Quoted text |
+| code | `.code` | fenced ` ``` ` | Body + optional `language` attr |
+| divider | `.divider` | `---` at column 0 | Horizontal rule |
+| wikilink | `.wikilink` | `[[title\|uuid]]` | Target title + optional UUID |
+| blockref | `.blockref` | `((uuid))` | Transclusion pointer (Logseq-style) |
+| callout | `.callout` | `> [!note]` etc. | Type in attr `callout=note\|warning\|tip` |
+| property | `.property` | `key:: value` | Block or page metadata row |
+
+**Deferred (v0.1+):** embed, image, table, database view, edgeless canvas.
 
 ### Block boundary
 
-- Blocks separated by blank line **or** explicit `---` divider line at column 0.
-- Child blocks: indent 2 spaces (one level only in v0).
+- Blocks separated by **blank line** or top-level `---` divider.
+- Child blocks: **2-space indent** under parent (bullets and todos nest).
 
 ### Example
 
@@ -155,22 +333,49 @@ MyVault.openwrite/
 
 Local-first writer for macOS.
 
-- Encrypted vault at rest
-- LM Studio for inference
+- [ ] Ship vault encryption
+  - Keychain unlock flow
 
 > Principles beat features in v0.
 
+key:: status
+value:: active
+
 [[Reor lineage|550e8400-e29b-41d4-a716-446655440000]]
+
+((a1b2c3d4-e5f6-7890-abcd-ef1234567890))
 ```
 
 ### In-memory model
 
-- `NoteBlock`: `id`, `kind`, `text`, `children: [NoteBlock]`, `attributes: [String: String]`.
-- Round-trip: `NDLSerializer` (future) ↔ on-disk UTF-8 inside encrypted blob.
+- `NoteBlock`: `id`, `kind`, `text`, `children`, `attributes`.
+- `NDLSerializer` / `NDLParser` (planned): UTF-8 inside encrypted blob; index plain-text via `ast.plainText` for embeddings.
 
 ### Non-goals (v0)
 
-- No collaborative CRDT; no embeddable databases; no full Markdown compatibility layer.
+- No collaborative CRDT; no full CommonMark compatibility; no Org-mode.
+
+---
+
+## REM integration (placeholder)
+
+**Status:** `rem-main/` present in workspace (MIT, Jason McGhee upstream). User’s **hard-fork copy** may arrive as `rem/` or `REM*/` — same gitignore policy. Prior REM discovery agent did not complete; this section is the integration contract until the user’s fork is reviewed.
+
+**What rem is:** macOS screen-memory (timeline, OCR, keyword search) with a growing **LM Studio semantic search** layer (`SemanticSearchService`, `LMStudioClient`). It is **not** a notes app; overlap with OpenWrite is **native Swift patterns**, not screen recording.
+
+| REM artifact | OpenWrite use (clean-room) |
+|--------------|----------------------------|
+| `SemanticSearchService.swift` | Hybrid semantic + keyword fallback, connection checks |
+| `LMStudioClient.swift` | Error handling, OpenAI-compatible requests (compare with `OpenWrite/AI/`) |
+| `RemDatabase.swift` / SQLite migrations | GRDB schema ideas for index metadata |
+| `Search.swift` | UX for unified search surface |
+| `SettingsManager` Codable migration | Encrypted settings blob pattern |
+
+**Not in scope for OpenWrite v1:** periodic screenshots, timeline scrubber, screen-recording permissions.
+
+**“Decoder” in REM:** primarily **Swift `Codable` decoding** for settings and LM Studio JSON responses—not a markdown DSL. NDL parsing remains in `NoteDSL/`; do not conflate.
+
+**Action when user copy lands:** diff fork vs `rem-main/`, list bug-fix highlights, update this section with file-level borrow list (MIT allows concept port; prefer rewrite in OpenWrite style).
 
 ---
 
@@ -209,16 +414,18 @@ Local-first writer for macOS.
 
 - **Primary backend:** [LM Studio](https://lmstudio.ai) OpenAI-compatible REST (`/v1/chat/completions`, `/v1/embeddings` when available).
 - **Config:** `LMStudioConfig` — base URL, model id, timeout, API key (optional for local).
+- **Reor alignment:** Replace bundled Ollama with user-managed LM Studio; port hybrid search and agent config shapes in Swift (clean-room).
 
 ### Reor-aligned features (roadmap)
 
 | Feature | Phase |
 |---------|-------|
-| Health check / model list | MVP stub |
+| Health check / model list | MVP stub (**exists**) |
 | Chat Q&A over selection | v1 |
 | Per-note embeddings + related sidebar | v1 |
-| Semantic search | v1 |
+| Semantic + hybrid search | v1 |
 | Inline “continue writing” | v2 |
+| Agent tools (search, create note with confirm) | v2 |
 
 ### Client responsibilities
 
@@ -233,23 +440,24 @@ Local-first writer for macOS.
 
 - [x] Master plan + Xcode scaffold
 - [ ] Single-window vault browser shell
-- [ ] Create/open vault UI (stub crypto)
+- [ ] Create/open vault UI (stub crypto → CryptoKit)
 - [ ] NDL v0 parser/serializer minimal
-- [ ] LM Studio health check button
+- [ ] LM Studio health check button (**stub exists**)
 - [ ] One note edit/save encrypted round-trip
 
 ### v1
 
 - Full vault encryption (CryptoKit)
-- Block editor with keyboard shortcuts
+- Block editor with keyboard shortcuts (outliner)
 - Vector index + related notes panel
 - Q&A panel with citations
 - Backlinks graph view (read-only)
 - Export: Markdown, plain text
+- AFFiNE-style workbench shell (tabs + inspector)
 
 ### v2
 
-- Sync provider abstraction (optional)
+- Sync provider abstraction (optional E2E)
 - Plugin sandbox API
 - Publish pipelines (Buffer-like queues)
 - iOS companion (if product direction holds)
@@ -257,25 +465,86 @@ Local-first writer for macOS.
 
 ---
 
+## Agent execution phases (next 90 days)
+
+Rough calendar for autonomous / human agents. Adjust per velocity; dependencies flow top-to-bottom.
+
+| Phase | Weeks | Goals | Primary modules |
+|-------|-------|-------|-----------------|
+| **A — Vault & crypto** | 1–3 | Real `.openwrite` bundle, unlock UI, CryptoKit AEAD, one `.owdoc` round-trip | `Core/Vault`, `Core/Crypto` |
+| **B — NDL v0** | 3–6 | Parser/serializer, editor binding, block kinds table above | `NoteDSL`, `UI/EditorView` |
+| **C — Workbench shell** | 5–8 | Split view, sidebar sections, quick capture, doc list | `UI/Workbench` |
+| **D — Index & search** | 7–10 | FSEvents indexer, chunker, keyword search | `Core/Index` |
+| **E — LM Studio RAG** | 9–12 | Embeddings, hybrid rank, related panel, chat + citations | `AI/*`, `UI/Inspector` |
+| **F — Graph & import** | 11–13 | Backlink index, read-only graph, Obsidian folder import | `Core/Graph`, `Core/Import` |
+
+**Exit criteria (day 90):** Encrypted vault usable daily; NDL edit + export MD; LM Studio Q&A with citations; backlinks graph; no dependency on vendored trees in release build.
+
+**Parallel safe work:** Phase A+B before D; C can start once `VaultDocument` stable; E needs D’s chunk store.
+
+---
+
 ## Legal / compliance
 
-- **Clean room:** OpenWrite is an independent implementation. Study AFFiNE, Anytype, Logseq, Obsidian, Reor, and Buffer for *ideas and UX patterns* only.
-- **No Anytype code:** Do not copy or adapt Anytype source, assets, or SDKs. Object-graph concepts may be reimplemented with original schemas and naming.
-- **Third-party in workspace:** `reor-main/` and `AFFiNE-canary/` are reference trees; do not link their code into the app target without license review and explicit architecture decision.
-- **Reor:** MIT-licensed reference for RAG behavior; reimplement in Swift rather than bundling Electron/Reor runtime.
-- **Trademarks:** “OpenWrite” working title; verify naming before public release.
+### Anytype (strict)
+
+- Anytype is **“open code” under ASAL 1.0**, not OSI open source. Commercial use, network deployment, and redistribution are restricted.
+- **Never** copy or adapt Anytype source, assets, protobuf/gRPC definitions, type names, or UI copy into OpenWrite.
+- **Never** link `anytype-ts-develop` into the app target or ship derived binaries.
+- Competitive study is limited to **public behavior**, README-level concepts, and independent reimplementation with **original schemas and naming** (e.g. `VaultDocument`, `NoteBlock`, not Anytype object IDs).
+- If in doubt, treat Anytype like a proprietary competitor with extra visibility into UX—legal review before any code contact.
+
+### Other references
+
+| Tree | License | OpenWrite rule |
+|------|---------|----------------|
+| `reor-main/` | AGPL-3.0 | **Clean-room Swift** reimplementation of algorithms; do not ship Electron/Reor runtime or commingled AGPL code in closed product without counsel |
+| `AFFiNE-canary/` | MIT + EE backend | UI/block **patterns** only; no BlockSuite link; no EE server |
+| `logseq-master/` | AGPL-3.0 | Design patterns only; no source paste |
+| `massCode-main/` | AGPL-3.0 | Optional import UX reference |
+| `rem-main/` | MIT | Concept port OK; prefer rewrite |
+| `buffer/` | Proprietary binary | UX reference only |
+
+### General
+
+- **Clean room:** Study all references for ideas and UX; ship independent implementation.
+- **Trademarks:** “OpenWrite” is a working title; verify before public release.
 - **Export control / AI:** User runs local models; document that users are responsible for model licenses.
+- **Telemetry:** Opt-in only; no default analytics in MVP.
 
 ---
 
 ## Appendix: References in workspace
 
-| Path | Role |
-|------|------|
-| `reor-main/` | Local AI PKM / RAG patterns |
-| `AFFiNE-canary/` | Block editor / page structure study |
-| `OpenWrite/` | Shipping native app (this repo’s product) |
+| Path | Role | Ship? |
+|------|------|-------|
+| `OpenWrite/` | Native macOS product | **Yes** |
+| `docs/OpenWriteMasterPlan.md` | This document | **Yes** |
+| `reor-main/` | RAG + vault behavior spec | No |
+| `AFFiNE-canary/` | Workbench + block UX | No |
+| `anytype-ts-develop/` | Competitor UX (ASAL) | No |
+| `logseq-master/` | Outliner + graph patterns | No |
+| `massCode-main/` | Snippets / import ideas | No |
+| `rem-main/` | Swift LM Studio + search patterns | No |
+| `buffer/` | Publish UX binary | No |
+
+### Reor entry points (quick index)
+
+- `reor-main/README.md`
+- `reor-main/electron/main/index.ts`
+- `reor-main/src/lib/db.ts`
+- `reor-main/src/lib/llm/chat.ts`
+
+### AFFiNE shell entry points
+
+- `AFFiNE-canary/packages/frontend/core/src/modules/workbench/`
+- `AFFiNE-canary/packages/frontend/core/src/modules/workbench/view/view-islands.tsx`
+
+### Logseq entry points
+
+- `logseq-master/deps/outliner/`
+- `logseq-master/deps/graph-parser/`
 
 ---
 
-*Document owner: OpenWrite core team. Update competitor bullets as research completes.*
+*Document owner: OpenWrite core team. Version 0.2 merges workspace inventory, Reor/AFFiNE/Logseq/Anytype/Buffer research agents, and Phase 1 scaffold paths.*

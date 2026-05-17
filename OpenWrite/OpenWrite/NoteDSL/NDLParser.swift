@@ -1,7 +1,7 @@
 import Foundation
 
 enum NDLParser {
-    /// Phase 1 stub: treats each non-empty line as a paragraph block.
+    /// Parses NDL v0 source into blocks; recognizes `@key value` property lines.
     static func parse(_ source: String) -> [NoteBlock] {
         let lines = source
             .split(whereSeparator: \.isNewline)
@@ -12,7 +12,7 @@ enum NDLParser {
             return [NoteBlock(kind: .paragraph, text: "")]
         }
 
-        return lines.map { line in
+        return lines.compactMap { line in
             if let block = parsePrefixedLine(line) {
                 return block
             }
@@ -20,9 +20,35 @@ enum NDLParser {
         }
     }
 
+    /// Split property blocks from body content and hydrate a property bag.
+    static func parseDocument(
+        source: String,
+        pageType: PageType,
+        title: String
+    ) -> (properties: PageProperties, bodyBlocks: [NoteBlock]) {
+        let blocks = parse(source)
+        var properties = PageProperties.defaults(for: pageType, title: title)
+        var body: [NoteBlock] = []
+
+        for block in blocks {
+            if block.kind == .property, let key = block.propertyKey {
+                let payload = block.propertyValuePayload
+                if let value = PagePropertyValue(ndlPayload: payload, for: key) {
+                    properties[key] = value
+                }
+            } else {
+                body.append(block)
+            }
+        }
+        return (properties, body)
+    }
+
     private static func parsePrefixedLine(_ line: String) -> NoteBlock? {
         if line == "---" {
             return NoteBlock(kind: .divider, text: "")
+        }
+        if line.hasPrefix("@") {
+            return parsePropertyLine(line)
         }
         if line.hasPrefix("### ") {
             return NoteBlock(kind: .heading3, text: String(line.dropFirst(4)))
@@ -44,5 +70,19 @@ enum NDLParser {
             return NoteBlock(kind: .wikilink, text: String(inner))
         }
         return nil
+    }
+
+    private static func parsePropertyLine(_ line: String) -> NoteBlock? {
+        let body = String(line.dropFirst())
+        guard let space = body.firstIndex(where: { $0 == " " || $0 == "\t" }) else {
+            let key = body.trimmingCharacters(in: .whitespaces)
+            guard PagePropertyKey(rawValue: key) != nil else { return nil }
+            return NoteBlock.propertyBlock(key: PagePropertyKey(rawValue: key)!, value: "")
+        }
+        let keyRaw = String(body[..<space])
+        guard let key = PagePropertyKey(rawValue: keyRaw) else { return nil }
+        var value = String(body[body.index(after: space)...])
+        value = value.replacingOccurrences(of: "\\n", with: "\n")
+        return NoteBlock.propertyBlock(key: key, value: value)
     }
 }

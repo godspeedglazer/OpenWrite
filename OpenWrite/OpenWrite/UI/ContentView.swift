@@ -2,20 +2,49 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var vaultStore: VaultStore
-    @State private var lmConfig = LMStudioConfig.default
-    @State private var lmStatus: String = "Not checked"
+    @EnvironmentObject private var aiServices: OpenWriteAIServices
+    @EnvironmentObject private var pastWrites: InMemoryPastWritesService
+    @StateObject private var workbench = WorkbenchState()
+    @State private var showNewPageSheet = false
 
     var body: some View {
         NavigationSplitView {
             sidebar
+        } content: {
+            editorColumn
         } detail: {
-            detail
+            if workbench.inspectorVisible {
+                WorkbenchInspectorView(
+                    workbench: workbench,
+                    pastWrites: pastWrites
+                )
+            } else {
+                Color.clear
+                    .frame(width: 1)
+            }
         }
         .navigationTitle("OpenWrite")
+        .sheet(isPresented: $showNewPageSheet) {
+            newPageSheet
+        }
+        .task {
+            await aiServices.reindex(documents: vaultStore.documents)
+        }
+        .onChange(of: vaultStore.documents) { _, documents in
+            Task { await aiServices.reindex(documents: documents) }
+        }
     }
 
     private var sidebar: some View {
         List(selection: $vaultStore.selectedDocumentID) {
+            Section {
+                Button {
+                    showNewPageSheet = true
+                } label: {
+                    Label("New typed page", systemImage: "plus.circle.fill")
+                }
+            }
+
             Section("Vault") {
                 if vaultStore.documents.isEmpty {
                     Text("No notes yet")
@@ -25,7 +54,18 @@ struct ContentView: View {
                         Button {
                             vaultStore.selectedDocumentID = doc.id
                         } label: {
-                            Label(doc.title, systemImage: "doc.text")
+                            HStack(spacing: 8) {
+                                Image(systemName: doc.pageType.systemImage)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 18)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(doc.displayTitle)
+                                        .lineLimit(1)
+                                    Text(doc.pageType.displayName)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(
@@ -36,45 +76,85 @@ struct ContentView: View {
             }
 
             Section("AI") {
-                LabeledContent("LM Studio", value: lmConfig.baseURL.absoluteString)
-                Text(lmStatus)
+                LabeledContent("LM Studio", value: aiServices.lmConfig.baseURL.absoluteString)
+                LabeledContent("Model", value: aiServices.lmConfig.chatModel)
+                Text(aiServices.lmStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                LabeledContent("Indexed chunks", value: "\(aiServices.indexedChunkCount)")
+                if aiServices.isIndexing {
+                    ProgressView("Indexing…")
+                        .controlSize(.small)
+                }
                 Button("Check connection") {
-                    Task { await checkLMStudio() }
+                    Task { await aiServices.checkConnection() }
+                }
+                Button("Rebuild index") {
+                    Task { await aiServices.reindex(documents: vaultStore.documents) }
                 }
             }
         }
         .listStyle(.sidebar)
-        .frame(minWidth: 220)
+        .frame(minWidth: 240)
+    }
+
+    private var newPageSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Create typed page")
+                .font(.title2.bold())
+            TypePickerView(documentID: nil, mode: .create) { newID in
+                vaultStore.selectedDocumentID = newID
+                showNewPageSheet = false
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { showNewPageSheet = false }
+            }
+        }
+        .padding(24)
+        .frame(minWidth: 360, minHeight: 280)
     }
 
     @ViewBuilder
-    private var detail: some View {
-        if let doc = vaultStore.selectedDocument {
-            EditorView(document: doc)
-        } else {
-            ContentUnavailableView(
-                "Select a note",
-                systemImage: "square.and.pencil",
-                description: Text("OpenWrite vault — encrypted local notes with NDL.")
-            )
+    private var editorColumn: some View {
+        HStack(spacing: 0) {
+            Group {
+                if let doc = vaultStore.selectedDocument {
+                    EditorView(documentID: doc.id)
+                } else {
+                    ContentUnavailableView(
+                        "Select a note",
+                        systemImage: "square.and.pencil",
+                        description: Text("OpenWrite vault — encrypted local notes with NDL typed pages.")
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            inspectorToggle
         }
     }
 
-    private func checkLMStudio() async {
-        lmStatus = "Checking…"
-        let client = LMStudioClient(config: lmConfig)
-        do {
-            let ok = try await client.healthCheck()
-            lmStatus = ok ? "Reachable" : "Unreachable"
-        } catch {
-            lmStatus = "Error: \(error.localizedDescription)"
+    private var inspectorToggle: some View {
+        VStack {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    workbench.inspectorVisible.toggle()
+                }
+            } label: {
+                Image(systemName: workbench.inspectorVisible ? "sidebar.right" : "sidebar.left")
+            }
+            .buttonStyle(.borderless)
+            .help(workbench.inspectorVisible ? "Hide inspector" : "Show inspector")
+            Spacer()
         }
+        .padding(.horizontal, 4)
     }
 }
 
 #Preview {
     ContentView()
         .environmentObject(VaultStore.preview)
+        .environmentObject(OpenWriteAIServices())
+        .environmentObject(InMemoryPastWritesService())
 }

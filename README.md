@@ -16,11 +16,33 @@ xcodebuild -scheme OpenWrite -configuration Debug build
 
 Open `OpenWrite/OpenWrite.xcodeproj` in Xcode and run the **OpenWrite** target.
 
+## Documentation
+
+**Start at the [documentation hub](docs/README.md)** — master index for architecture, NDL, design, ADRs, features, and contribution standards.
+
+| Document | Description |
+|----------|-------------|
+| [docs/README.md](docs/README.md) | Master index (link to all docs) |
+| [docs/OpenWriteMasterPlan.md](docs/OpenWriteMasterPlan.md) | Product vision, competitors, phased roadmap |
+| [docs/Architecture/Overview.md](docs/Architecture/Overview.md) | Layers, Swift module map, data flows |
+| [docs/Architecture/DataModel.md](docs/Architecture/DataModel.md) | Vault, `.owdoc`, typed pages, index |
+| [docs/Architecture/AI-Pipeline.md](docs/Architecture/AI-Pipeline.md) | Index → embed → retrieve → RAG |
+| [docs/NDL/Specification.md](docs/NDL/Specification.md) | NDL v0 grammar and examples |
+| [docs/RoadmapEpics.md](docs/RoadmapEpics.md) | Phase 2 epics (E-01–E-10) |
+| [docs/Glossary.md](docs/Glossary.md) | Terminology |
+| [docs/GitWorkflow.md](docs/GitWorkflow.md) | Branches, commits, tracked paths |
+| [docs/Contributing/DocumentationStandards.md](docs/Contributing/DocumentationStandards.md) | Doc every feature PR; ADRs for architecture |
+
 ## Repository layout
 
 | Path | Description |
 |------|-------------|
-| `docs/OpenWriteMasterPlan.md` | Product vision, architecture, NDL v0, roadmap |
+| `docs/` | Documentation hub ([README](docs/README.md)) |
+| `docs/OpenWriteMasterPlan.md` | Product vision (authoritative; link, don’t duplicate) |
+| `docs/ProductPhilosophy.md` | Principles: local-only, dual-generator AI, simplicity |
+| `docs/design/` | UI/UX design language |
+| `docs/adr/` | Architecture decision records (0001–0003) |
+| `docs/RoadmapEpics.md` | Phase 2 implementation epics (E-01–E-10) |
 | `OpenWrite/` | Xcode project and Swift sources |
 | `reor-main/` | Reference: local AI PKM (not linked into app) |
 | `AFFiNE-canary/` | Reference: block editor patterns (not linked) |
@@ -31,4 +53,4 @@ Open `OpenWrite/OpenWrite.xcodeproj` in Xcode and run the **OpenWrite** target.
 
 ## Status
 
-Phase 1 scaffold — buildable shell with core type stubs. See the master plan for MVP → v2 scope.
+Phase 1 scaffold — buildable shell with core type stubs. See [docs/OpenWriteMasterPlan.md](docs/OpenWriteMasterPlan.md) for MVP → v2 scope and [docs/RoadmapEpics.md](docs/RoadmapEpics.md) for Phase 2 delivery.
