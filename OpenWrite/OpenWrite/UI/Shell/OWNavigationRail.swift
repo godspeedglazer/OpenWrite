@@ -1,4 +1,4 @@
-// Custom left rail — fixed width, no List / NavigationSplitView sidebar chrome.
+// Custom left rail — draggable width, no List / NavigationSplitView sidebar chrome.
 // See docs/design/SidebarPhilosophy.md.
 
 import SwiftUI
@@ -82,14 +82,23 @@ struct OWNavigationRail: View {
     @Binding var showNewPageSheet: Bool
     @Binding var showAISettings: Bool
     @Binding var showCreateDatabaseSheet: Bool
+    var onCollapse: (() -> Void)? = nil
 
     @State private var objectsSectionExpanded = true
     @State private var pinnedSectionExpanded = true
     @State private var spaceSwitcherExpanded = false
 
+    private var activeVaultDocuments: [VaultDocument] {
+        vaultStore.documentsInActiveVault
+    }
+
+    private var activeVaultTypeFilter: PageType? {
+        workbench.vaultTypeFilter(for: vaultStore.activeVaultID)
+    }
+
     private var filteredDocuments: [VaultDocument] {
-        var docs = vaultStore.documents
-        if let filter = workbench.vaultTypeFilter {
+        var docs = activeVaultDocuments
+        if let filter = activeVaultTypeFilter {
             docs = docs.filter { $0.pageType == filter }
         }
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -104,7 +113,7 @@ struct OWNavigationRail: View {
         let _ = themeManager.selectedTheme
         VStack(spacing: 0) {
             ScrollView {
-                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
                     spaceSwitcherStub
                     OWRailSearchField(text: $searchQuery)
                     objectsSection
@@ -120,8 +129,19 @@ struct OWNavigationRail: View {
 
             railBottomActions
         }
-        .frame(width: DesignTokens.Layout.navigationRailWidth)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(railBackground)
+        .overlay(alignment: .topTrailing) {
+            if let onCollapse {
+                OWShellColumnCollapseButton(
+                    icon: .collapseTrailing,
+                    help: "Collapse sidebar",
+                    action: onCollapse
+                )
+                .padding(.top, DesignTokens.Spacing.spacing2)
+                .padding(.trailing, DesignTokens.Spacing.spacing1)
+            }
+        }
         .overlay(alignment: .trailing) {
             Rectangle()
                 .fill(DesignTokens.Color.borderSubtle)
@@ -143,7 +163,7 @@ struct OWNavigationRail: View {
         }
     }
 
-    /// Optional space switcher stub (Anytype-style space row at rail top).
+    /// Vault switcher — logical spaces (primary + demo) with per-vault object filters.
     private var spaceSwitcherStub: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
             HStack(spacing: DesignTokens.Spacing.spacing2) {
@@ -158,15 +178,15 @@ struct OWNavigationRail: View {
                         .frame(width: 20, alignment: .center)
                 }
                 .buttonStyle(.plain)
-                .help(spaceSwitcherExpanded ? "Collapse space menu" : "Expand space menu")
+                .help(spaceSwitcherExpanded ? "Collapse vault menu" : "Expand vault menu")
 
                 OWUnicodePageTypeIconWell(icon: .notes, size: 22)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("OpenWrite")
+                    Text(vaultStore.activeVault.name)
                         .font(OWTypography.bodyEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                    Text("Local vault")
+                    Text(vaultStore.activeVault.subtitle)
                         .font(OWTypography.caption)
                         .foregroundStyle(DesignTokens.Color.textTertiary)
                 }
@@ -193,36 +213,67 @@ struct OWNavigationRail: View {
                     .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("OpenWrite, local vault")
-            .accessibilityHint("Space switcher coming soon")
+            .accessibilityLabel("\(vaultStore.activeVault.name), \(vaultStore.activeVault.subtitle)")
 
             if spaceSwitcherExpanded {
-                Text("Additional spaces will appear here. For now, everything lives in your local vault.")
-                    .font(OWTypography.caption)
-                    .foregroundStyle(DesignTokens.Color.textTertiary)
-                    .padding(.horizontal, DesignTokens.Spacing.spacing2)
-                    .padding(.bottom, DesignTokens.Spacing.spacing1)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                VStack(spacing: DesignTokens.Spacing.spacing1) {
+                    ForEach(vaultStore.vaults) { vault in
+                        let isActive = vault.id == vaultStore.activeVaultID
+                        let pageCount = vaultStore.documents(in: vault.id).count
+                        Button {
+                            withAnimation(DesignTokens.Motion.animationStandard) {
+                                vaultStore.switchVault(to: vault.id)
+                                workbench.applyVaultContext(vault.id)
+                            }
+                        } label: {
+                            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                                Text(isActive ? "●" : "○")
+                                    .font(OWTypography.caption)
+                                    .foregroundStyle(
+                                        isActive ? DesignTokens.Color.accent : DesignTokens.Color.textTertiary
+                                    )
+                                    .frame(width: 16)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(vault.name)
+                                        .font(OWTypography.sidebarItemEmphasis)
+                                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                                    Text("\(pageCount) pages · \(vault.subtitle)")
+                                        .font(OWTypography.caption)
+                                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+                            .padding(.vertical, DesignTokens.Spacing.spacing1)
+                            .background(
+                                isActive
+                                    ? DesignTokens.Color.selectionPill.opacity(0.65)
+                                    : Color.clear,
+                                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, DesignTokens.Spacing.spacing1)
+                .padding(.bottom, DesignTokens.Spacing.spacing1)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
 
     private var objectsSection: some View {
         OWSidebarSection(title: "Objects", isExpanded: $objectsSectionExpanded) {
-            VStack(spacing: 0) {
+            VStack(spacing: DesignTokens.Spacing.spacing2) {
                 ForEach(objectNavTypes, id: \.self) { type in
                     OWSidebarObjectTypeRow(
                         pageType: type,
                         documentCount: documentCount(for: type),
-                        isFilterActive: workbench.vaultTypeFilter == type
+                        isFilterActive: activeVaultTypeFilter == type
                     ) {
                         withAnimation(DesignTokens.Motion.animationStandard) {
-                            if workbench.vaultTypeFilter == type {
-                                workbench.vaultTypeFilter = nil
-                            } else {
-                                workbench.vaultTypeFilter = type
-                                workbench.showEditor()
-                            }
+                            workbench.toggleVaultTypeFilter(type, for: vaultStore.activeVaultID)
+                            workbench.showEditor()
                         }
                     }
                 }
@@ -231,7 +282,6 @@ struct OWNavigationRail: View {
                     title: SidebarSection.graph.title,
                     subtitle: "Vault topology",
                     showsGraphGlyph: true,
-                    dense: true,
                     isSelected: workbench.centerTab == .graph
                 ) {
                     withAnimation(DesignTokens.Motion.animationStandard) {
@@ -243,7 +293,7 @@ struct OWNavigationRail: View {
     }
 
     private func documentCount(for type: PageType) -> Int {
-        vaultStore.documents.filter { $0.pageType == type }.count
+        activeVaultDocuments.filter { $0.pageType == type }.count
     }
 
     private var objectNavTypes: [PageType] {
@@ -255,9 +305,9 @@ struct OWNavigationRail: View {
             HStack {
                 OWNavigationRailSectionLabel(title: "Vault")
                 Spacer()
-                if workbench.vaultTypeFilter != nil {
+                if activeVaultTypeFilter != nil {
                     Button("Clear filter") {
-                        workbench.vaultTypeFilter = nil
+                        workbench.clearVaultTypeFilter(for: vaultStore.activeVaultID)
                     }
                     .font(OWTypography.caption)
                     .buttonStyle(.plain)
@@ -268,18 +318,20 @@ struct OWNavigationRail: View {
             if filteredDocuments.isEmpty {
                 vaultEmptyCTA
             } else {
+                VStack(spacing: DesignTokens.Spacing.spacing2) {
                 ForEach(filteredDocuments) { doc in
                     OWSidebarRow(
                         title: doc.displayTitle,
                         pageType: doc.pageType,
                         pageIconCharacter: doc.resolvedPageIcon,
-                        dense: true,
                         isSelected: vaultStore.selectedDocumentID == doc.id
                     ) {
                         vaultStore.selectedDocumentID = doc.id
                         vaultStore.selectedDatabaseID = nil
+                        workbench.clearVaultTypeFilter(for: vaultStore.activeVaultID)
                         workbench.showEditor()
                     }
+                }
                 }
             }
         }
@@ -287,7 +339,7 @@ struct OWNavigationRail: View {
 
     @ViewBuilder
     private var vaultEmptyCTA: some View {
-        if let filter = workbench.vaultTypeFilter {
+        if let filter = activeVaultTypeFilter {
             let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             if q.isEmpty {
                 Text("No \(filter.displayName.lowercased()) pages yet.")
@@ -349,13 +401,12 @@ struct OWNavigationRail: View {
                     .foregroundStyle(DesignTokens.Color.textTertiary)
 
                 if let doc = vaultStore.selectedDocument {
-                        OWSidebarRow(
-                            title: doc.displayTitle,
-                            pageType: doc.pageType,
-                            pageIconCharacter: doc.resolvedPageIcon,
-                            dense: true,
-                            isSelected: true
-                        ) {
+                    OWSidebarRow(
+                        title: doc.displayTitle,
+                        pageType: doc.pageType,
+                        pageIconCharacter: doc.resolvedPageIcon,
+                        isSelected: false
+                    ) {
                         workbench.showEditor()
                     }
                 } else {
@@ -367,7 +418,6 @@ struct OWNavigationRail: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(DesignTokens.Spacing.spacing1)
         }
     }
 
@@ -537,5 +587,137 @@ struct OWNavigationRail: View {
         }
 
         return "Local AI · \(aiServices.lmStatus)"
+    }
+}
+
+// MARK: - Collapsed icon rail
+
+/// Narrow (~48pt) navigation rail when the full sidebar is collapsed.
+struct OWNavigationRailCollapsed: View {
+    @Environment(\.openWritePalette) private var palette
+    @EnvironmentObject private var vaultStore: VaultStore
+    @ObservedObject var workbench: WorkbenchState
+    @Binding var showNewPageSheet: Bool
+    @Binding var showAISettings: Bool
+    let onExpand: () -> Void
+
+    private let objectNavTypes: [PageType] = [.note, .task, .journal, .project, .reference, .collection]
+
+    private var activeVaultTypeFilter: PageType? {
+        workbench.vaultTypeFilter(for: vaultStore.activeVaultID)
+    }
+
+    var body: some View {
+        VStack(spacing: DesignTokens.Spacing.spacing2) {
+            OWShellColumnCollapseButton(
+                icon: .chevronRight,
+                help: "Expand sidebar",
+                action: onExpand
+            )
+
+            ForEach(objectNavTypes, id: \.self) { type in
+                collapsedTypeButton(type)
+            }
+
+            collapsedIconButton(
+                icon: .graph,
+                help: "Graph",
+                isActive: workbench.centerTab == .graph
+            ) {
+                withAnimation(DesignTokens.Motion.animationStandard) {
+                    workbench.showGraph()
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            collapsedIconButton(icon: .plus, help: "New page") {
+                showNewPageSheet = true
+            }
+
+            collapsedIconButton(icon: .settings, help: "Settings") {
+                showAISettings = true
+            }
+        }
+        .padding(.vertical, DesignTokens.Spacing.spacing3)
+        .padding(.horizontal, DesignTokens.Spacing.spacing1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(palette.sidebarBackground)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(DesignTokens.Color.borderSubtle)
+                .frame(width: DesignTokens.Layout.borderWidth)
+        }
+    }
+
+    private func collapsedTypeButton(_ type: PageType) -> some View {
+        let isFilterActive = activeVaultTypeFilter == type
+        return collapsedIconButton(
+            icon: type.owIcon,
+            help: type.displayName,
+            isActive: isFilterActive
+        ) {
+            withAnimation(DesignTokens.Motion.animationStandard) {
+                workbench.toggleVaultTypeFilter(type, for: vaultStore.activeVaultID)
+                workbench.showEditor()
+            }
+        }
+    }
+
+    private func collapsedIconButton(
+        icon: OWIcon,
+        help: String,
+        isActive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            OWUnicodeIconView(
+                icon: icon,
+                size: 16,
+                color: isActive ? DesignTokens.Color.accent : DesignTokens.Color.textSecondary
+            )
+            .frame(width: 36, height: 36)
+            .background(
+                isActive
+                    ? palette.selectionPill
+                    : palette.surface.opacity(0.55),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+            )
+            .overlay {
+                if isActive {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                        .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .help(help)
+    }
+}
+
+// MARK: - Column collapse control
+
+struct OWShellColumnCollapseButton: View {
+    let icon: OWUnicodeIcon
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            OWUnicodeIconView(icon, size: 12, color: DesignTokens.Color.textSecondary)
+                .frame(width: 28, height: 28)
+                .background(
+                    DesignTokens.Color.surface.opacity(0.85),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                        .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
+                }
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .help(help)
     }
 }

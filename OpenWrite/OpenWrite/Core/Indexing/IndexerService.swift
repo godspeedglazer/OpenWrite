@@ -2,9 +2,14 @@ import Foundation
 
 /// Indexes vault documents for lexical and semantic retrieval.
 protocol IndexerService: Sendable {
-    func index(documentID: UUID, title: String, blocks: [NoteBlock]) async throws
+    func index(
+        documentID: UUID,
+        title: String,
+        blocks: [NoteBlock],
+        sourceFilename: String?
+    ) async throws
     func remove(documentID: UUID) async throws
-    func rebuildAll(documents: [(id: UUID, title: String, blocks: [NoteBlock])]) async throws
+    func rebuildAll(entries: [VaultIndexEntry]) async throws
     func cancel() async
 }
 
@@ -12,11 +17,17 @@ protocol IndexerService: Sendable {
 struct PipelineIndexerService: IndexerService {
     let pipeline: IngestionPipeline
 
-    func index(documentID: UUID, title: String, blocks: [NoteBlock]) async throws {
+    func index(
+        documentID: UUID,
+        title: String,
+        blocks: [NoteBlock],
+        sourceFilename: String?
+    ) async throws {
         try await pipeline.ingest(
             documentID: documentID,
             title: title,
             blocks: blocks,
+            sourceFilename: sourceFilename,
             isRebuild: false
         )
     }
@@ -25,8 +36,8 @@ struct PipelineIndexerService: IndexerService {
         await pipeline.remove(documentID: documentID)
     }
 
-    func rebuildAll(documents: [(id: UUID, title: String, blocks: [NoteBlock])]) async throws {
-        try await pipeline.rebuildAll(documents: documents)
+    func rebuildAll(entries: [VaultIndexEntry]) async throws {
+        try await pipeline.rebuildAll(entries: entries)
     }
 
     func cancel() async {
@@ -39,9 +50,19 @@ struct InMemoryIndexerService: IndexerService {
     let vectorStore: InMemoryVectorStore
     let embeddings: EmbeddingService
 
-    func index(documentID: UUID, title: String, blocks: [NoteBlock]) async throws {
+    func index(
+        documentID: UUID,
+        title: String,
+        blocks: [NoteBlock],
+        sourceFilename: String?
+    ) async throws {
         await vectorStore.remove(documentID: documentID)
-        let chunks = TextChunker.chunks(documentID: documentID, title: title, blocks: blocks)
+        let chunks = TextChunker.chunks(
+            documentID: documentID,
+            title: title,
+            blocks: blocks,
+            sourceFilename: sourceFilename
+        )
         for chunk in chunks {
             let vector = try await embeddings.embed(text: chunk.text)
             await vectorStore.upsert(chunk: chunk, vector: vector)
@@ -52,10 +73,15 @@ struct InMemoryIndexerService: IndexerService {
         await vectorStore.remove(documentID: documentID)
     }
 
-    func rebuildAll(documents: [(id: UUID, title: String, blocks: [NoteBlock])]) async throws {
+    func rebuildAll(entries: [VaultIndexEntry]) async throws {
         await vectorStore.reset()
-        for doc in documents {
-            try await index(documentID: doc.id, title: doc.title, blocks: doc.blocks)
+        for entry in entries {
+            try await index(
+                documentID: entry.documentID,
+                title: entry.title,
+                blocks: entry.blocks,
+                sourceFilename: entry.sourceFilename
+            )
         }
     }
 
@@ -64,18 +90,24 @@ struct InMemoryIndexerService: IndexerService {
 
 /// No-op indexer for tests.
 struct NoOpIndexerService: IndexerService {
-    func index(documentID: UUID, title: String, blocks: [NoteBlock]) async throws {
+    func index(
+        documentID: UUID,
+        title: String,
+        blocks: [NoteBlock],
+        sourceFilename: String?
+    ) async throws {
         _ = documentID
         _ = title
         _ = blocks
+        _ = sourceFilename
     }
 
     func remove(documentID: UUID) async throws {
         _ = documentID
     }
 
-    func rebuildAll(documents: [(id: UUID, title: String, blocks: [NoteBlock])]) async throws {
-        _ = documents
+    func rebuildAll(entries: [VaultIndexEntry]) async throws {
+        _ = entries
     }
 
     func cancel() async {}

@@ -11,6 +11,8 @@ struct IndexChunk: Identifiable, Hashable, Sendable {
     let id: UUID
     let documentID: UUID
     let documentTitle: String
+    /// Reor-style citation label, e.g. `Welcome.md` for on-disk markdown vault files.
+    let sourceFilename: String?
     let blockID: UUID?
     let chunkIndex: Int
     let text: String
@@ -19,6 +21,7 @@ struct IndexChunk: Identifiable, Hashable, Sendable {
         id: UUID = UUID(),
         documentID: UUID,
         documentTitle: String,
+        sourceFilename: String? = nil,
         blockID: UUID?,
         chunkIndex: Int,
         text: String
@@ -26,6 +29,7 @@ struct IndexChunk: Identifiable, Hashable, Sendable {
         self.id = id
         self.documentID = documentID
         self.documentTitle = documentTitle
+        self.sourceFilename = sourceFilename
         self.blockID = blockID
         self.chunkIndex = chunkIndex
         self.text = text
@@ -43,7 +47,12 @@ enum TextChunker {
     ]
 
     /// Splits note blocks into retrieval chunks (heading-bounded, then recursive if oversized).
-    static func chunks(documentID: UUID, title: String, blocks: [NoteBlock]) -> [IndexChunk] {
+    static func chunks(
+        documentID: UUID,
+        title: String,
+        blocks: [NoteBlock],
+        sourceFilename: String? = nil
+    ) -> [IndexChunk] {
         var headingChunks: [(blockID: UUID?, text: String)] = []
         var buffer: [String] = []
         var bufferBlockID: UUID?
@@ -103,6 +112,7 @@ enum TextChunker {
                     IndexChunk(
                         documentID: documentID,
                         documentTitle: title,
+                        sourceFilename: sourceFilename,
                         blockID: group.blockID,
                         chunkIndex: chunkIndex,
                         text: trimmed

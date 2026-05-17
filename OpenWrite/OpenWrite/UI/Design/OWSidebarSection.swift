@@ -50,7 +50,7 @@ struct OWSidebarSectionHeader: View {
 struct OWSidebarSection<Content: View>: View {
     let title: String
     @Binding var isExpanded: Bool
-    var wrapsContentInCard: Bool = true
+    var wrapsContentInCard: Bool = false
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -82,6 +82,7 @@ struct OWSidebarObjectTypeRow: View {
     let isFilterActive: Bool
     let onSelect: () -> Void
 
+    @Environment(\.openWritePalette) private var palette
     @State private var isSubmenuExpanded = false
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -127,25 +128,20 @@ struct OWSidebarObjectTypeRow: View {
                                 .foregroundStyle(DesignTokens.Color.textTertiary)
                         }
                     }
-                    .padding(.trailing, DesignTokens.Spacing.spacing2)
-                    .padding(.vertical, 1)
-                    .frame(minHeight: 28)
-                    .background {
-                        if isFilterActive || isHovered {
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
-                                .fill(rowBackgroundColor)
-                                .padding(1)
-                        }
-                    }
+                    .padding(.horizontal, DesignTokens.Spacing.spacing3)
+                    .padding(.vertical, DesignTokens.Spacing.spacing1)
+                    .frame(minHeight: DesignTokens.Layout.sidebarRowMinHeight)
+                    .background(rowBackgroundColor, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
                     .overlay {
                         if isFilterActive {
                             RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                                 .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
-                                .padding(1)
                         }
                     }
+                    .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
                 .onHover { isHovered = $0 }
             }
 
@@ -155,19 +151,15 @@ struct OWSidebarObjectTypeRow: View {
                     .foregroundStyle(DesignTokens.Color.textSecondary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 24 + DesignTokens.Spacing.spacing2)
-                    .padding(.trailing, DesignTokens.Spacing.spacing2)
-                    .padding(.bottom, DesignTokens.Spacing.spacing1)
+                    .padding(.leading, 24 + DesignTokens.Spacing.spacing3)
+                    .padding(.trailing, DesignTokens.Spacing.spacing3)
+                    .padding(.top, DesignTokens.Spacing.spacing1)
+                    .padding(.bottom, DesignTokens.Spacing.spacing2)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .animation(rowAnimation, value: isSubmenuExpanded)
         .animation(rowAnimation, value: isFilterActive)
-        .onChange(of: isFilterActive) { _, active in
-            if active {
-                isSubmenuExpanded = true
-            }
-        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isFilterActive ? .isSelected : [])
@@ -186,9 +178,12 @@ struct OWSidebarObjectTypeRow: View {
 
     private var rowBackgroundColor: Color {
         if isFilterActive {
-            return DesignTokens.Color.selectionPill
+            return palette.selectionPill
         }
-        return DesignTokens.Color.textPrimary.opacity(DesignTokens.Opacity.overlayLight)
+        if isHovered {
+            return palette.textPrimary.opacity(DesignTokens.Opacity.overlayLight)
+        }
+        return palette.surface.opacity(0.62)
     }
 
     private var rowAnimation: Animation? {

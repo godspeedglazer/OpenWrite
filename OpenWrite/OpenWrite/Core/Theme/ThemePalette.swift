@@ -19,6 +19,9 @@ struct ThemePalette: Equatable, Sendable {
     let success: Color
     let warning: Color
 
+    /// Filled window title/toolbar strip — matches elevated surface per theme.
+    var shellChrome: Color { surface }
+
     var borderHairline: Color { borderSubtle.opacity(0.55) }
     var accentMuted: Color { accent.opacity(0.14) }
     var dangerMuted: Color { danger.opacity(0.12) }
@@ -27,6 +30,8 @@ struct ThemePalette: Equatable, Sendable {
     var graphNode: Color { surfaceElevated }
     var graphEdge: Color { textTertiary }
     var graphNodeFocused: Color { accent }
+    /// Text selection fill in block editors — visible on dark themes (e.g. Reor Slate).
+    var selectionHighlight: Color { accent.opacity(0.38) }
 
     static func palette(for id: ThemeID) -> ThemePalette {
         switch id {

@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var showAISettings = false
     @State private var showCreateDatabaseSheet = false
     @State private var backlinkIndex = BacklinkIndex()
+    @StateObject private var markdownVaultWatcher = VaultMarkdownWatcher()
 
     var body: some View {
         let _ = themeManager.selectedTheme
@@ -25,7 +26,7 @@ struct ContentView: View {
             minWidth: DesignTokens.Layout.windowMinWidth,
             minHeight: DesignTokens.Layout.windowMinHeight
         )
-        .navigationTitle("OpenWrite")
+        .openWriteWindowChrome()
         .sheet(isPresented: $showNewPageSheet) {
             newPageSheet
         }
@@ -34,14 +35,8 @@ struct ContentView: View {
                 .environmentObject(vaultStore)
         }
         .sheet(isPresented: $showAISettings) {
-            NavigationStack {
+            OWSettingsSheet(title: "Settings", onDone: { showAISettings = false }) {
                 OpenWriteSettingsView()
-                    .navigationTitle("Settings")
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { showAISettings = false }
-                        }
-                    }
             }
             .environment(themeManager)
             .environmentObject(vaultStore)
@@ -51,15 +46,33 @@ struct ContentView: View {
         }
         .background(DesignTokens.Color.background)
         .task {
+            _ = try? VaultLocationPreferences.ensureDefaultVaultLayout()
+            await aiServices.startFilesystemIngestionWatch()
+            markdownVaultWatcher.start {
+                Task { await aiServices.reindex(documents: vaultStore.documents) }
+            }
             await aiServices.reindex(documents: vaultStore.documents)
         }
-        .onChange(of: vaultStore.documents) { _, documents in
-            backlinkIndex = BacklinkIndex.build(from: documents)
-            Task { await aiServices.reindex(documents: documents) }
+        .onDisappear {
+            markdownVaultWatcher.stop()
+        }
+        .onChange(of: vaultStore.documents) { _, _ in
+            rebuildBacklinkIndex()
+        }
+        .onChange(of: vaultStore.activeVaultID) { _, newVaultID in
+            workbench.applyVaultContext(newVaultID)
+            rebuildBacklinkIndex()
         }
         .onAppear {
-            backlinkIndex = BacklinkIndex.build(from: vaultStore.documents)
+            workbench.applyVaultContext(vaultStore.activeVaultID)
+            rebuildBacklinkIndex()
         }
+    }
+
+    private func rebuildBacklinkIndex() {
+        let scoped = vaultStore.documentsInActiveVault
+        backlinkIndex = BacklinkIndex.build(from: scoped)
+        Task { await aiServices.reindex(documents: vaultStore.documents) }
     }
 
     private var newPageSheet: some View {

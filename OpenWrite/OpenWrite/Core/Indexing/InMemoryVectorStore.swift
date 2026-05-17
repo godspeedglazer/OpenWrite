@@ -19,6 +19,7 @@ private struct PersistedChunkRecord: Codable, Sendable {
     var id: UUID
     var documentID: UUID
     var documentTitle: String
+    var sourceFilename: String?
     var blockID: UUID?
     var chunkIndex: Int
     var text: String
@@ -30,7 +31,7 @@ enum VectorStorePersistence {
     static let filename = "index.json"
     static let legacySubdirectory = "OpenWrite"
     static let legacyFilename = "vector_index.json"
-    static let formatVersion = 1
+    static let formatVersion = 2
 
     private static var applicationSupportBase: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -136,7 +137,7 @@ actor InMemoryVectorStore {
         do {
             let data = try Data(contentsOf: url)
             let decoded = try JSONDecoder().decode(PersistedVectorIndex.self, from: data)
-            guard decoded.version == VectorStorePersistence.formatVersion else {
+            guard decoded.version == 1 || decoded.version == VectorStorePersistence.formatVersion else {
                 reportPersistenceFailure(
                     "Index format is unsupported. Use Rebuild index in Settings."
                 )
@@ -149,6 +150,7 @@ actor InMemoryVectorStore {
                     id: record.id,
                     documentID: record.documentID,
                     documentTitle: record.documentTitle,
+                    sourceFilename: record.sourceFilename,
                     blockID: record.blockID,
                     chunkIndex: record.chunkIndex,
                     text: record.text
@@ -172,6 +174,7 @@ actor InMemoryVectorStore {
                 id: chunk.id,
                 documentID: chunk.documentID,
                 documentTitle: chunk.documentTitle,
+                sourceFilename: chunk.sourceFilename,
                 blockID: chunk.blockID,
                 chunkIndex: chunk.chunkIndex,
                 text: chunk.text,

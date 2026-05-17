@@ -51,7 +51,6 @@ struct OWPageHeaderEditor<Metadata: View>: View {
 
                 metadata()
             }
-            .openWriteEditorContentWidth()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, bannerContentTopInset)
             .padding(.horizontal, DesignTokens.Spacing.spacing3)
@@ -116,10 +115,12 @@ struct OWPageHeaderEditor<Metadata: View>: View {
         .buttonStyle(.plain)
         .help("Change page icon")
         .popover(isPresented: $showEmojiPicker, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
-            OWEmojiPickerGrid { emoji in
-                pageIcon = emoji
-                showEmojiPicker = false
-                commitHeaderFields()
+            OWPageIconPicker { pick in
+                if let normalized = OWUnicodeSymbolCatalog.normalizedPick(pick) {
+                    pageIcon = normalized
+                    showEmojiPicker = false
+                    commitHeaderFields()
+                }
             }
             .padding(DesignTokens.Spacing.spacing2)
         }
@@ -399,17 +400,25 @@ struct OWCoverStylePickerSheet: View {
     }
 }
 
-// MARK: - Emoji grid
+// MARK: - Page icon picker
 
-struct OWEmojiPickerGrid: View {
+struct OWPageIconPicker: View {
     let onPick: (String) -> Void
 
-    private static let quickPick = [
-        "📝", "✅", "📁", "📚", "🔖", "💡", "🎯", "⭐",
-        "🌐", "📓", "🗂️", "📄", "🧠", "🔥", "❤️", "🎨"
-    ]
+    @State private var tab: OWUnicodeSymbolCatalog.PickerTab = .symbols
+    @State private var searchText = ""
 
-    private let columns = Array(repeating: GridItem(.fixed(40), spacing: 4), count: 8)
+    private let columns = Array(repeating: GridItem(.fixed(36), spacing: 4), count: 8)
+    private let popoverWidth: CGFloat = 360
+    private let scrollHeight: CGFloat = 300
+
+    private var filteredSections: [OWUnicodeSymbolCatalog.Section] {
+        OWUnicodeSymbolCatalog.filteredSections(matching: searchText)
+    }
+
+    private var filteredEmojis: [String] {
+        OWUnicodeSymbolCatalog.filteredEmojis(matching: searchText)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
@@ -417,23 +426,119 @@ struct OWEmojiPickerGrid: View {
                 .font(OWTypography.captionEmphasis)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
 
-            LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(Self.quickPick, id: \.self) { emoji in
-                    Button {
-                        onPick(emoji)
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 22))
-                            .frame(width: 36, height: 36)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(DesignTokens.Color.surface)
-                            )
-                    }
-                    .buttonStyle(.plain)
+            Picker("Kind", selection: $tab) {
+                ForEach(OWUnicodeSymbolCatalog.PickerTab.allCases) { pickerTab in
+                    Text(pickerTab.rawValue).tag(pickerTab)
                 }
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            searchField
+
+            ScrollView {
+                switch tab {
+                case .symbols:
+                    symbolsContent
+                case .emoji:
+                    emojiContent
+                }
+            }
+            .frame(height: scrollHeight)
         }
-        .frame(width: 340)
+        .frame(width: popoverWidth)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: DesignTokens.Spacing.spacing1) {
+            Text("⌕")
+                .font(.system(size: 14))
+                .foregroundStyle(DesignTokens.Color.textTertiary)
+            TextField("Search symbols…", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(OWTypography.caption)
+        }
+        .padding(.horizontal, DesignTokens.Spacing.spacing2)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                .fill(DesignTokens.Color.surface)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 0.5)
+        }
+    }
+
+    @ViewBuilder
+    private var symbolsContent: some View {
+        if filteredSections.isEmpty {
+            emptyState("No symbols match your search.")
+        } else {
+            LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                ForEach(filteredSections) { section in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(section.title)
+                            .font(OWTypography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+
+                        LazyVGrid(columns: columns, spacing: 4) {
+                            ForEach(section.symbols, id: \.self) { symbol in
+                                symbolCell(symbol, useSerif: section.id == "stars" || section.id == "punctuation")
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.bottom, DesignTokens.Spacing.spacing1)
+        }
+    }
+
+    @ViewBuilder
+    private var emojiContent: some View {
+        if filteredEmojis.isEmpty {
+            emptyState("No emoji match your search.")
+        } else {
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(filteredEmojis, id: \.self) { emoji in
+                    symbolCell(emoji, useSerif: false)
+                }
+            }
+            .padding(.bottom, DesignTokens.Spacing.spacing1)
+        }
+    }
+
+    private func symbolCell(_ symbol: String, useSerif: Bool) -> some View {
+        Button {
+            onPick(symbol)
+        } label: {
+            Text(symbol)
+                .font(cellFont(useSerif: useSerif))
+                .frame(width: 32, height: 32)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(DesignTokens.Color.surface)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Icon \(symbol)")
+    }
+
+    private func cellFont(useSerif: Bool) -> Font {
+        if useSerif, OWTypography.isBundledSerifAvailable {
+            return OWTypography.sized(weight: .regular, pointSize: 20, relativeTo: .title3)
+        }
+        return .system(size: 22)
+    }
+
+    private func emptyState(_ message: String) -> some View {
+        Text(message)
+            .font(OWTypography.caption)
+            .foregroundStyle(DesignTokens.Color.textTertiary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, DesignTokens.Spacing.spacing3)
     }
 }
+
+/// Legacy name — redirects to `OWPageIconPicker`.
+typealias OWEmojiPickerGrid = OWPageIconPicker

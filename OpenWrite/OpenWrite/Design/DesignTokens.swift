@@ -22,6 +22,9 @@ enum DesignTokens {
         /// Outer split padding behind the elevated editor card.
         static var workbenchChrome: SwiftUI.Color { palette.workbenchChrome }
 
+        /// Filled top title/toolbar region behind traffic lights.
+        static var shellChrome: SwiftUI.Color { palette.shellChrome }
+
         /// Main writing column.
         static var editorCanvas: SwiftUI.Color { palette.editorCanvas }
 
@@ -34,6 +37,7 @@ enum DesignTokens {
 
         /// Sidebar row pill when selected.
         static var selectionPill: SwiftUI.Color { palette.selectionPill }
+        static var selectionHighlight: SwiftUI.Color { palette.selectionHighlight }
 
         static var borderSubtle: SwiftUI.Color { palette.borderSubtle }
 
@@ -199,8 +203,9 @@ enum DesignTokens {
             top: spacing2, leading: spacing3, bottom: spacing1, trailing: spacing3
         )
         static let sidebarPadding = EdgeInsets(
-            top: spacing2, leading: spacing2, bottom: spacing2, trailing: spacing2
+            top: spacing3, leading: spacing3, bottom: spacing4, trailing: spacing3
         )
+        static let sidebarRowSubtitleSpacing: CGFloat = spacing1
         static let inspectorPadding = EdgeInsets(
             top: spacing4, leading: spacing4, bottom: spacing4, trailing: spacing4
         )
@@ -292,11 +297,15 @@ enum DesignTokens {
 
     enum Layout {
         static let sidebarMinWidth: CGFloat = 220
-        static let sidebarMaxWidth: CGFloat = 280
-        static let sidebarPreferredWidth: CGFloat = 248
-        /// Fixed navigation rail — not user-resizable (anti–NavigationSplitView sidebar).
-        static let navigationRailWidth: CGFloat = 248
-        static let sidebarRowHeight: CGFloat = 36
+        static let sidebarMaxWidth: CGFloat = 320
+        static let sidebarPreferredWidth: CGFloat = 260
+        /// Collapsed navigation rail — icon-only column.
+        static let navigationRailCollapsedWidth: CGFloat = 48
+        /// Legacy fixed width — prefer persisted `ShellChromePreferences.navigationRailWidth`.
+        static let navigationRailWidth: CGFloat = sidebarPreferredWidth
+        static let sidebarRowHeight: CGFloat = 40
+        static let sidebarRowMinHeight: CGFloat = 40
+        static let sidebarRowTallMinHeight: CGFloat = 52
         static let sidebarRowIconSize: CGFloat = 18
         static let objectIconWellSize: CGFloat = 28
         static let sidebarBottomButtonSize: CGFloat = 32
@@ -308,21 +317,38 @@ enum DesignTokens {
         static let editorMinWidthFraction: CGFloat = 0.55
         /// Slim Reor-style assist strip — secondary to the editor column.
         static let assistStripMinWidth: CGFloat = 240
-        static let assistStripMaxWidth: CGFloat = 320
+        static let assistStripMaxWidth: CGFloat = 360
+        static let assistStripDefaultWidth: CGFloat = 280
         static let assistStripCollapsedWidth: CGFloat = 44
         static let inspectorMinWidth: CGFloat = assistStripMinWidth
         static let inspectorIdealWidth: CGFloat = 280
         static let inspectorMaxWidth: CGFloat = assistStripMaxWidth
         static let assistBottomBarHeight: CGFloat = 32
-        static let centerCardOuterPadding: CGFloat = 2
+        static let assistStripComposerBottomInset: CGFloat = Spacing.spacing4
+        static let centerCardOuterPadding: CGFloat = Spacing.spacing2
+        static let shellColumnGutter: CGFloat = Spacing.spacing2
         /// Below this width, collapse assist before shrinking editor (see LayoutAndResize.md).
         static let mainMinWidth: CGFloat = editorMinWidth + assistStripMinWidth
         static let windowMinWidth: CGFloat = 900
         static let windowMinHeight: CGFloat = 600
         static let windowDefaultWidth: CGFloat = 1200
         static let windowDefaultHeight: CGFloat = 800
-        /// Readable measure — Anytype-inspired ~704px reference, tuned for OpenWrite.
-        static let editorMaxContentWidth: CGFloat = 720
+        /// Shell chrome switches to compact title + tighter graph hero below this width.
+        static let shellCompactBreakpoint: CGFloat = 1100
+        /// Auto-collapse assist when the center workbench cannot satisfy editor + assist mins.
+        static let shellTightBreakpoint: CGFloat = 980
+        static let graphEmptyStateCompactWidth: CGFloat = 520
+        static let graphEmptyStateMaxReadableWidth: CGFloat = 420
+        /// Reserve above bottom graph chrome so empty-state hero does not overlap controls.
+        static let graphChromeBottomReserve: CGFloat = 88
+        static let graphChromeTopReserve: CGFloat = 24
+        /// Optional readable measure cap (settings / empty states). Editor body fills the column by default.
+        static let editorMaxContentWidth: CGFloat = 880
+        /// Vertical gap between page header stack and block list.
+        static let editorHeaderToBodySpacing: CGFloat = Spacing.spacing4
+        /// Vertical gap between block rows in the WYSIWYG editor.
+        static let editorBlockStackSpacing: CGFloat = Spacing.spacing4
+        static let editorMetadataToToolbarSpacing: CGFloat = Spacing.spacing3
         static let captureSheetWidth: CGFloat = 520
         static let captureSheetMinHeight: CGFloat = 200
         static let graphNodeMinSize: CGFloat = 44
@@ -331,6 +357,15 @@ enum DesignTokens {
         static let graphNodeCardHeight: CGFloat = 56
         static let graphNodeMinSpacing: CGFloat = 20
         static let toolbarHeight: CGFloat = 52
+        /// Inset below traffic lights for custom title bar content.
+        static let shellChromeSafeAreaTop: CGFloat = 28
+        /// Title + tabs row inside the filled chrome strip.
+        static let shellChromeBarHeight: CGFloat = 44
+        /// Leading inset clearing traffic-light cluster (inset from window edge).
+        static let shellChromeContentLeadingInset: CGFloat = 78
+        /// Slightly tighter inset when the window is below `shellCompactBreakpoint`.
+        static let shellChromeCompactLeadingInset: CGFloat = 72
+        static let splitDividerHitWidth: CGFloat = 6
         static let focusRingWidth: CGFloat = 2
         static let quoteBarWidth: CGFloat = 3
         static let borderWidth: CGFloat = 1
@@ -345,24 +380,29 @@ extension View {
         return shadow(color: spec.color, radius: spec.radius, x: spec.x, y: spec.y)
     }
 
-    /// Constrains copy to a readable measure while the column background can span full width.
-    func openWriteEditorContentWidth(alignment: Alignment = .leading) -> some View {
-        frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth, alignment: alignment)
-            .frame(maxWidth: .infinity, alignment: alignment)
+    /// Fills the editor column. Pass `readableMaxWidth` to cap line length (empty states, optional setting).
+    func openWriteEditorContentWidth(
+        alignment: Alignment = .leading,
+        readableMaxWidth: CGFloat? = nil
+    ) -> some View {
+        Group {
+            if let readableMaxWidth {
+                frame(maxWidth: readableMaxWidth, alignment: alignment)
+            } else {
+                self
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: alignment)
     }
 
-    /// Full-width editor canvas with an inner readable column (fills vertical space).
+    /// Full-width editor canvas; content is responsible for its own vertical scroll when needed.
     func openWriteEditorColumn<Content: View>(
         canvasColor: Color,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            content()
-                .openWriteEditorContentWidth()
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(canvasColor)
+        content()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(canvasColor)
     }
 
     func owRect(

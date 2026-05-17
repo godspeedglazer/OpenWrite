@@ -4,6 +4,7 @@ struct RetrievalHit: Identifiable, Hashable, Sendable {
     let id: UUID
     let documentID: UUID
     let documentTitle: String
+    let sourceFilename: String?
     let blockID: UUID?
     let chunkIndex: Int
     let score: Double
@@ -13,6 +14,7 @@ struct RetrievalHit: Identifiable, Hashable, Sendable {
         self.id = chunk.id
         self.documentID = chunk.documentID
         self.documentTitle = chunk.documentTitle
+        self.sourceFilename = chunk.sourceFilename
         self.blockID = chunk.blockID
         self.chunkIndex = chunk.chunkIndex
         self.score = score

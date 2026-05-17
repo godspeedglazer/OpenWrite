@@ -80,16 +80,20 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
     /// Stable id for previews, Past Writes, and graph fixtures.
     static let welcomeDocumentID = UUID(uuidString: "E1C00001-7B2A-4E8F-9D01-000000000001")!
 
-    static let welcomeSample = VaultDocument(
-        id: welcomeDocumentID,
-        title: "Welcome to OpenWrite",
-        pageType: .note,
-        properties: PageProperties.defaults(for: .note, title: "Welcome to OpenWrite"),
-        rootBlocks: welcomeRootBlocks,
-        metadata: [MetadataKey.prefersBlockEditor: "true"],
-        pageIcon: "◎",
-        coverStyle: .anytypeCalm
-    )
+    static let welcomeSample: VaultDocument = {
+        var doc = VaultDocument(
+            id: welcomeDocumentID,
+            title: "Welcome to OpenWrite",
+            pageType: .note,
+            properties: PageProperties.defaults(for: .note, title: "Welcome to OpenWrite"),
+            rootBlocks: welcomeRootBlocks,
+            metadata: [MetadataKey.prefersBlockEditor: "true"],
+            pageIcon: "◎",
+            coverStyle: .anytypeCalm
+        )
+        doc.assignVault(OpenWriteVault.primaryID)
+        return doc
+    }()
 
     private static let welcomeRootBlocks: [NoteBlock] = [
         NoteBlock(

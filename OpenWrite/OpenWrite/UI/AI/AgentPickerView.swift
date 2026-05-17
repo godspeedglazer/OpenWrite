@@ -8,31 +8,15 @@ struct AgentPickerView: View {
     }
 
     var body: some View {
-        Menu {
-            ForEach(AgentRegistry.pickerAgents) { agent in
-                Button {
-                    selectedAgentID = agent.id
-                } label: {
-                    HStack {
-                        Text(agent.name)
-                        if agent.id == selectedAgentID {
-                            Spacer()
-                            OWUnicodeIconView(icon: .checkmark, size: 12)
-                        }
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                OWUnicodeIconView(icon: .agent, size: 14)
-                Text(selection.name)
-                    .lineLimit(1)
-                OWUnicodeIconView(icon: .chevronDown, size: 10)
-                    .foregroundStyle(.secondary)
-            }
-            .font(OWTypography.subheadlineEmphasis)
-        }
-        .menuStyle(.borderlessButton)
+        OWThemedDropdown(
+            accessibilityLabel: "Agent",
+            selection: $selectedAgentID,
+            options: AgentRegistry.pickerAgents.map(\.id),
+            optionTitle: { id in AgentRegistry.agent(id: id).name },
+            minWidth: 120,
+            compact: true,
+            leadingIcon: .agent
+        )
         .help(agentHelp(selection))
     }
 

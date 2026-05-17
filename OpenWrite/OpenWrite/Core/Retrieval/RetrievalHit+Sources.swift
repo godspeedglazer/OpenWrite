@@ -16,8 +16,11 @@ extension Array where Element == RetrievalHit {
 }
 
 extension RetrievalHit {
-    /// Display label for source pills (note title + optional .md hint).
+    /// Display label for source pills — prefers on-disk markdown filename (`Welcome.md`).
     var sourcePillTitle: String {
+        if let name = sourceFilename?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            return name
+        }
         let trimmed = documentTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return "Untitled" }
         return trimmed

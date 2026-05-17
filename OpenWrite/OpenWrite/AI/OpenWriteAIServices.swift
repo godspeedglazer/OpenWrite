@@ -162,6 +162,32 @@ final class OpenWriteAIServices: ObservableObject {
         }
     }
 
+    /// In-app pages plus all on-disk `.md` files under the vault root (Reor-style).
+    static func indexEntries(including documents: [VaultDocument]) -> [VaultIndexEntry] {
+        var entries: [VaultIndexEntry] = documents.map { doc in
+            VaultIndexEntry(
+                documentID: doc.id,
+                title: doc.title,
+                blocks: doc.rootBlocks,
+                sourceFilename: nil
+            )
+        }
+
+        let vaultRoot = VaultLocationPreferences.resolvedVaultRootURL()
+        for file in VaultMarkdownCatalog.scan(vaultRoot: vaultRoot) {
+            guard let blocks = try? VaultMarkdownCatalog.loadBlocks(from: file) else { continue }
+            entries.append(
+                VaultIndexEntry(
+                    documentID: file.documentID,
+                    title: file.title,
+                    blocks: blocks,
+                    sourceFilename: file.sourceFilename
+                )
+            )
+        }
+        return entries
+    }
+
     func reindex(documents: [VaultDocument]) async {
         indexingTask?.cancel()
         await indexer.cancel()
@@ -169,7 +195,7 @@ final class OpenWriteAIServices: ObservableObject {
         setActivity(.indexing)
         ingestionHealth.clearError()
 
-        let payload = documents.map { (id: $0.id, title: $0.title, blocks: $0.rootBlocks) }
+        let payload = Self.indexEntries(including: documents)
 
         indexingTask = Task {
             defer {
@@ -182,7 +208,7 @@ final class OpenWriteAIServices: ObservableObject {
             }
             do {
                 try Task.checkCancellation()
-                try await indexer.rebuildAll(documents: payload)
+                try await indexer.rebuildAll(entries: payload)
                 let count = await vectorStore.chunkCount
                 await MainActor.run {
                     indexedChunkCount = count
@@ -209,7 +235,8 @@ final class OpenWriteAIServices: ObservableObject {
             try await indexer.index(
                 documentID: document.id,
                 title: document.title,
-                blocks: document.rootBlocks
+                blocks: document.rootBlocks,
+                sourceFilename: nil
             )
             indexedChunkCount = await vectorStore.chunkCount
             ingestionHealth.updateIndexedChunkCount(indexedChunkCount)
@@ -219,8 +246,12 @@ final class OpenWriteAIServices: ObservableObject {
         }
     }
 
-    func startFilesystemIngestionWatch() async {
-        await ingestionPipeline?.startFilesystemWatch()
+    func startFilesystemIngestionWatch(roots: [URL] = []) async {
+        var watchRoots = roots
+        if watchRoots.isEmpty {
+            watchRoots = [VaultLocationPreferences.resolvedVaultRootURL()]
+        }
+        await ingestionPipeline?.startFilesystemWatch(roots: watchRoots)
     }
 
     static func actionableChatError(_ error: Error, config: LMStudioConfig) -> String {

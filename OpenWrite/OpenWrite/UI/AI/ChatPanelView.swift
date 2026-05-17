@@ -141,7 +141,7 @@ struct AIActivityIndicator: View {
                     if let retrievalSummary, state == .retrieving || state == .streaming {
                         Text(retrievalSummary)
                             .font(OWTypography.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
                     }
                     if state == .streaming {
                         StreamingDots()
@@ -161,13 +161,13 @@ struct AIActivityIndicator: View {
     }
 
     private var stateLabelColor: Color {
-        if case .error = state { return .primary }
-        return .secondary
+        if case .error = state { return DesignTokens.Color.textPrimary }
+        return DesignTokens.Color.textSecondary
     }
 
     private var activityBackground: Color {
-        if case .error = state { return Color.orange.opacity(0.12) }
-        return Color.secondary.opacity(0.08)
+        if case .error = state { return DesignTokens.Color.warning.opacity(0.14) }
+        return DesignTokens.Color.surface.opacity(0.85)
     }
 }
 
@@ -178,12 +178,12 @@ private struct StreamingDots: View {
         HStack(spacing: 4) {
             ForEach(0 ..< 3, id: \.self) { index in
                 Circle()
-                    .fill(Color.accentColor.opacity(index == phase ? 1 : 0.35))
+                    .fill(DesignTokens.Color.accent.opacity(index == phase ? 1 : 0.35))
                     .frame(width: 5, height: 5)
             }
             Text("Receiving tokens")
                 .font(OWTypography.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(DesignTokens.Color.textTertiary)
         }
         .onAppear { startCycle() }
         .onDisappear { phase = 0 }
@@ -205,9 +205,14 @@ struct ChatPanelView: View {
     @EnvironmentObject private var aiServices: OpenWriteAIServices
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var workbench: WorkbenchState
+    @Environment(\.aiAssistStripWidth) private var assistStripWidth
     @StateObject private var model = ChatPanelModel()
 
     private var navigation: AIAssistNavigationState { workbench.aiAssistNavigation }
+
+    private var stripIsCompact: Bool {
+        assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
+    }
 
     var body: some View {
         Group {
@@ -407,7 +412,7 @@ struct ChatPanelView: View {
                             .controlSize(.small)
                         Text(aiServices.activityState.statusMessage ?? "Waiting for model…")
                             .font(OWTypography.callout)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
                     }
                 } else {
                     Text(message.text)
@@ -425,7 +430,7 @@ struct ChatPanelView: View {
                     OWUnicodeIconView(icon: .waveform, size: 12, color: DesignTokens.Color.textTertiary)
                     Text("Streaming")
                         .font(OWTypography.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
                 }
             }
         }
@@ -434,11 +439,11 @@ struct ChatPanelView: View {
     private func bubbleColor(for role: ChatMessage.Role) -> Color {
         switch role {
         case .user:
-            return Color.accentColor.opacity(0.18)
+            return DesignTokens.Color.accentMuted
         case .assistant:
-            return Color.secondary.opacity(0.12)
+            return DesignTokens.Color.surfaceElevated.opacity(0.9)
         case .system:
-            return Color.orange.opacity(0.12)
+            return DesignTokens.Color.warning.opacity(0.14)
         }
     }
 
@@ -451,23 +456,35 @@ struct ChatPanelView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack(spacing: 8) {
-                Toggle("Search notes", isOn: $model.searchVaultEnabled)
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .font(OWTypography.caption)
-                Spacer(minLength: 0)
-                Text(aiServices.lmConfig.embeddingModelDisplay)
-                    .font(OWTypography.caption2)
-                    .foregroundStyle(DesignTokens.Color.textTertiary)
-                    .lineLimit(1)
+            if stripIsCompact {
+                OWThemedToggle(label: "Search notes", isOn: $model.searchVaultEnabled)
+            } else {
+                HStack(spacing: 8) {
+                    OWThemedToggle(label: "Search notes", isOn: $model.searchVaultEnabled)
+                    Spacer(minLength: 0)
+                    Text(aiServices.lmConfig.embeddingModelDisplay)
+                        .font(OWTypography.caption2)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                        .lineLimit(1)
+                }
             }
 
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("Ask about your notes…", text: $model.draft, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
+                TextField(stripIsCompact ? "Ask…" : "Ask about your notes…", text: $model.draft, axis: .vertical)
+                    .textFieldStyle(.plain)
                     .font(OWTypography.body)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1 ... 4)
+                    .padding(.horizontal, DesignTokens.Spacing.spacing2)
+                    .padding(.vertical, DesignTokens.Spacing.spacing2)
+                    .background(
+                        DesignTokens.Color.surfaceElevated,
+                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                            .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+                    }
                     .onSubmit { model.send(services: aiServices, agent: aiServices.selectedAgent) }
 
                 Button {
@@ -476,7 +493,9 @@ struct ChatPanelView: View {
                     OWUnicodeIconView(
                         icon: aiServices.voiceInput.isListening ? .micActive : .mic,
                         size: 20,
-                        color: aiServices.voiceInput.isListening ? Color.accentColor : .secondary
+                        color: aiServices.voiceInput.isListening
+                            ? DesignTokens.Color.accent
+                            : DesignTokens.Color.textSecondary
                     )
                 }
                 .help(aiServices.voiceInput.statusMessage ?? "Dictate into the message field")
@@ -491,6 +510,9 @@ struct ChatPanelView: View {
             }
         }
         .padding(DesignTokens.Spacing.spacing3)
+        .padding(.bottom, DesignTokens.Layout.assistStripComposerBottomInset)
+        .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing2)
+        .background(DesignTokens.Color.editorCanvas.opacity(0.5))
     }
 
     private func agentHelp(_ agent: AgentConfig) -> String {

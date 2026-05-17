@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - OWSidebarRow
 
-/// Custom sidebar list row with pill selection — see docs/design/OWComponents.md.
+/// Custom sidebar list row — individual OW Rect pill per row (Anytype-style).
 struct OWSidebarRow: View {
     let title: String
     var subtitle: String?
@@ -11,11 +11,10 @@ struct OWSidebarRow: View {
     var pageIconCharacter: String?
     var iconTint: Color?
     var showsGraphGlyph: Bool = false
-    /// Tighter vault/object list density.
-    var dense: Bool = false
     let isSelected: Bool
     let action: () -> Void
 
+    @Environment(\.openWritePalette) private var palette
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -47,41 +46,44 @@ struct OWSidebarRow: View {
                     )
                 }
 
-                VStack(alignment: .leading, spacing: dense ? 0 : 2) {
+                VStack(alignment: .leading, spacing: subtitle == nil ? 0 : DesignTokens.Spacing.sidebarRowSubtitleSpacing) {
                     Text(title)
                         .font(OWTypography.sidebarItemEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                         .lineLimit(1)
 
-                    if let subtitle, !dense {
+                    if let subtitle {
                         Text(subtitle)
                             .font(OWTypography.caption)
                             .foregroundStyle(DesignTokens.Color.textSecondary)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.trailing, DesignTokens.Spacing.spacing1)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, DesignTokens.Spacing.spacing2)
-            .padding(.vertical, dense ? 1 : (subtitle == nil ? 2 : DesignTokens.Spacing.spacing1))
-            .frame(minHeight: dense ? 28 : DesignTokens.Layout.sidebarRowHeight)
-            .background {
-                if isSelected || isHovered {
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
-                        .fill(rowBackgroundColor)
-                        .padding(1)
-                }
-            }
+            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.vertical, DesignTokens.Spacing.spacing1)
+            .frame(
+                minHeight: subtitle == nil
+                    ? DesignTokens.Layout.sidebarRowMinHeight
+                    : DesignTokens.Layout.sidebarRowTallMinHeight,
+                alignment: .center
+            )
+            .background(rowBackground, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
             .overlay {
                 if isSelected {
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                         .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
-                        .padding(1)
                 }
             }
+            .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .onHover { isHovered = $0 }
         .animation(selectionAnimation, value: isSelected)
         .animation(selectionAnimation, value: isHovered)
@@ -93,11 +95,14 @@ struct OWSidebarRow: View {
         showsGraphGlyph ? nil : pageType
     }
 
-    private var rowBackgroundColor: Color {
+    private var rowBackground: Color {
         if isSelected {
-            return DesignTokens.Color.selectionPill
+            return palette.selectionPill
         }
-        return DesignTokens.Color.textPrimary.opacity(DesignTokens.Opacity.overlayLight)
+        if isHovered {
+            return palette.textPrimary.opacity(DesignTokens.Opacity.overlayLight)
+        }
+        return palette.surface.opacity(0.62)
     }
 
     private var selectionAnimation: Animation? {

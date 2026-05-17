@@ -16,11 +16,13 @@ struct OWPageHero: View {
     var style: Style = .emptyState
     /// Tighter insets for graph / secondary empty states.
     var compact: Bool = false
+    /// Smaller type and icon when the host column is narrow (graph empty states).
+    var narrow: Bool = false
 
     var body: some View {
         VStack(spacing: verticalSpacing) {
             if style == .emptyState {
-                OWUnicodeIconView(icon: icon, size: 40, color: heroIconColor)
+                OWUnicodeIconView(icon: icon, size: narrow ? 32 : 40, color: heroIconColor)
             }
 
             if style == .documentHeader, let pageType {
@@ -28,22 +30,23 @@ struct OWPageHero: View {
                     OWObjectTypeChip(pageType: pageType)
                     Spacer()
                 }
-                .frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Text(title)
-                .font(OWTypography.documentTitle)
-                .lineSpacing(OWTypography.documentTitleLineSpacing)
+                .font(narrow ? OWTypography.heading2 : OWTypography.documentTitle)
+                .lineSpacing(narrow ? OWTypography.heading2LineSpacing : OWTypography.documentTitleLineSpacing)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .multilineTextAlignment(style == .emptyState ? .center : .leading)
-                .frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth, alignment: alignment)
+                .frame(maxWidth: .infinity, alignment: alignment)
 
             if let subtitle {
                 Text(subtitle)
-                    .font(OWTypography.callout)
+                    .font(narrow ? OWTypography.caption : OWTypography.callout)
                     .foregroundStyle(DesignTokens.Color.textSecondary)
                     .multilineTextAlignment(style == .emptyState ? .center : .leading)
-                    .frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth, alignment: alignment)
+                    .frame(maxWidth: .infinity, alignment: alignment)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(compact ? DesignTokens.Spacing.editorHeroPadding : DesignTokens.Spacing.editorPadding)

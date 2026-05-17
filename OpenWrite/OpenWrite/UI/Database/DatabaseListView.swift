@@ -49,11 +49,9 @@ struct DatabaseListView: View {
                     }
                 }
             } else {
-                OWRoundedRect(style: .sidebarCard, padding: DesignTokens.Spacing.spacing2) {
-                    VStack(spacing: DesignTokens.Spacing.spacing1) {
-                        ForEach(vaultStore.databases) { database in
-                            databaseRow(database)
-                        }
+                VStack(spacing: DesignTokens.Spacing.spacing1) {
+                    ForEach(vaultStore.databases) { database in
+                        databaseRow(database)
                     }
                 }
             }

@@ -9,15 +9,34 @@ final class VaultStore: ObservableObject {
     @Published var databaseEntries: [OWDatabaseEntry] = []
     @Published var selectedDatabaseID: UUID?
     @Published var typeRegistry: PageTypeRegistry = .default
+    @Published var vaults: [OpenWriteVault] = OpenWriteVault.builtIn
+    @Published var activeVaultID: UUID = OpenWriteVault.primaryID
 
     private let encryption: EncryptionService
 
     init(encryption: EncryptionService = NoOpEncryptionService()) {
         self.encryption = encryption
         documents = [.welcomeSample]
-        selectedDocumentID = documents.first?.id
+        selectedDocumentID = nil
         databases = []
         databaseEntries = []
+        bootstrapOnLaunch()
+    }
+
+    var activeVault: OpenWriteVault {
+        vaults.first { $0.id == activeVaultID } ?? .primary
+    }
+
+    var isDemoVaultInstalled: Bool {
+        DemoVaultSeeder.isDemoInstalled(in: documents)
+    }
+
+    var documentsInActiveVault: [VaultDocument] {
+        documents(in: activeVaultID)
+    }
+
+    func documents(in vaultID: UUID) -> [VaultDocument] {
+        documents.filter { $0.belongsToVault(vaultID) }
     }
 
     var selectedDocument: VaultDocument? {
@@ -41,12 +60,14 @@ final class VaultStore: ObservableObject {
     func createDocument(
         pageType: PageType,
         title: String? = nil,
-        fromTemplate: Bool = true
+        fromTemplate: Bool = true,
+        vaultID: UUID? = nil
     ) -> VaultDocument {
         let template = TypeTemplate.template(for: pageType, title: title)
-        let doc: VaultDocument = fromTemplate
+        var doc: VaultDocument = fromTemplate
             ? .fromTemplate(template)
             : VaultDocument(title: title ?? pageType.displayName, pageType: pageType)
+        doc.assignVault(vaultID ?? activeVaultID)
         documents.append(doc)
         selectedDocumentID = doc.id
         return doc
@@ -61,6 +82,7 @@ final class VaultStore: ObservableObject {
         let rootTitle = title ?? structure.displayName
         let template = TypeTemplate.template(for: structure, title: rootTitle)
         var root = VaultDocument.fromTemplate(template)
+        root.assignVault(activeVaultID)
         root.metadata[StructureTemplate.MetadataKey.structureTemplate] = structure.rawValue
 
         let childSpecs = structure.childPageSpecs(rootTitle: rootTitle)
@@ -81,6 +103,7 @@ final class VaultStore: ObservableObject {
                 properties: PageProperties.defaults(for: spec.pageType, title: spec.title),
                 rootBlocks: childBlocks
             )
+            child.assignVault(activeVaultID)
             child.metadata[StructureTemplate.MetadataKey.parentDocumentID] = root.id.uuidString
             child.metadata[StructureTemplate.MetadataKey.structureTemplate] = structure.rawValue
             childIDs.append(child.id)
@@ -251,11 +274,62 @@ final class VaultStore: ObservableObject {
         reconcileSelections()
     }
 
+    // MARK: - Vault switching & demo seed
+
+    /// First launch: install demo once. Safe to call on every launch — skips when already seeded.
+    func bootstrapOnLaunch() {
+        let shouldOfferFirstLaunchDemo = !VaultLaunchPreferences.didSeedDemoOnFirstLaunch
+        if shouldOfferFirstLaunchDemo {
+            VaultLaunchPreferences.didSeedDemoOnFirstLaunch = true
+            _ = installDemoVault(selectHub: false)
+        }
+    }
+
+    /// Idempotent demo install. Returns `true` when new pages were added.
+    @discardableResult
+    func installDemoVault(selectHub: Bool = true) -> Bool {
+        guard !isDemoVaultInstalled else { return false }
+
+        let existingIDs = Set(documents.map(\.id))
+        let toAdd = DemoVaultSeeder.documents().filter { !existingIDs.contains($0.id) }
+        guard !toAdd.isEmpty else { return false }
+
+        documents.append(contentsOf: toAdd)
+        if !vaults.contains(where: { $0.id == OpenWriteVault.demoID }) {
+            vaults.append(.demo)
+        }
+        if selectHub {
+            activeVaultID = OpenWriteVault.demoID
+            selectedDocumentID = DemoVaultSeeder.hubDocumentID
+            selectedDatabaseID = nil
+        }
+        reconcileSelections()
+        return true
+    }
+
+    func switchVault(to vaultID: UUID) {
+        guard vaults.contains(where: { $0.id == vaultID }) else { return }
+        activeVaultID = vaultID
+        if let selected = selectedDocumentID,
+           !documents.contains(where: { $0.id == selected && $0.belongsToVault(vaultID) }) {
+            selectedDocumentID = documents(in: vaultID).first?.id
+        }
+        if selectedDocumentID == nil {
+            selectedDocumentID = documents(in: vaultID).first?.id
+        }
+        selectedDatabaseID = nil
+        reconcileSelections()
+    }
+
     /// Clears stale document/database selection after deletes, snapshot import, or empty vault.
     func reconcileSelections() {
         if let id = selectedDocumentID,
+           !documents.contains(where: { $0.id == id && $0.belongsToVault(activeVaultID) }) {
+            selectedDocumentID = documents(in: activeVaultID).first?.id
+        }
+        if let id = selectedDocumentID,
            !documents.contains(where: { $0.id == id }) {
-            selectedDocumentID = documents.first?.id
+            selectedDocumentID = documents(in: activeVaultID).first?.id
         }
         if let id = selectedDatabaseID,
            !databases.contains(where: { $0.id == id }) {

@@ -183,6 +183,8 @@ final class InlineAssistController: ObservableObject {
 
 struct SelectablePlainTextEditor: NSViewRepresentable {
     @Binding var text: String
+    var selectionHighlight: Color = DesignTokens.Color.selectionHighlight
+    var selectionForeground: Color = DesignTokens.Color.textPrimary
     var onSelectionChange: (NSRange?) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -211,6 +213,10 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
         textView.typingAttributes = DesignTokens.Typography.editorTypingAttributes
         textView.textContainerInset = NSSize(width: 4, height: 8)
         textView.backgroundColor = .clear
+        textView.selectedTextAttributes = [
+            .backgroundColor: NSColor(selectionHighlight),
+            .foregroundColor: NSColor(selectionForeground)
+        ]
         textView.delegate = context.coordinator
         textView.string = text
         textView.textContainer?.widthTracksTextView = true
@@ -231,6 +237,10 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
             textView.font = font
         }
         textView.defaultParagraphStyle = DesignTokens.Typography.editorParagraphStyle
+        textView.selectedTextAttributes = [
+            .backgroundColor: NSColor(selectionHighlight),
+            .foregroundColor: NSColor(selectionForeground)
+        ]
         if textView.string != text {
             context.coordinator.isProgrammaticUpdate = true
             textView.string = text
@@ -298,7 +308,7 @@ final class PasteAwareTextView: NSTextView {
 
 /// Wraps a SwiftUI host and intercepts image paste for the block editor.
 final class BlockEditorPasteCaptureView: NSControl {
-    var onPasteImageBlock: ((NoteBlock) -> Void)?
+    var onPasteImage: (() -> Void)?
     let hostedView: NSView
 
     init(hostedView: NSView) {
@@ -314,46 +324,50 @@ final class BlockEditorPasteCaptureView: NSControl {
 
     override var acceptsFirstResponder: Bool { true }
 
-    /// Lays out the SwiftUI host at `width` so TextFields wrap instead of collapsing to one column.
-    func layoutDocument(width: CGFloat) {
+    /// Read-only measure for SwiftUI `sizeThatFits` — must not force AppKit layout (re-enters AttributeGraph).
+    func measureDocumentSize(width: CGFloat) -> CGSize {
         let safeWidth = max(width, 320)
-        if bounds.width != safeWidth || bounds.height < 1 {
-            frame.size.width = safeWidth
+        if hostedView.frame.width != safeWidth {
+            hostedView.frame.size.width = safeWidth
         }
-        hostedView.frame = CGRect(origin: .zero, size: CGSize(width: safeWidth, height: bounds.height))
+        let contentHeight = max(hostedView.fittingSize.height, 1)
+        return CGSize(width: safeWidth, height: contentHeight)
+    }
+
+    /// Applies width + height after sizing is known (AppKit layout or deferred from `updateNSView`).
+    func applyDocumentLayout(width: CGFloat) {
+        let safeWidth = max(width, 320)
+        hostedView.frame.size.width = safeWidth
         hostedView.needsLayout = true
         hostedView.layoutSubtreeIfNeeded()
+        let contentHeight = max(hostedView.fittingSize.height, 1)
+        hostedView.frame = CGRect(origin: .zero, size: CGSize(width: safeWidth, height: contentHeight))
+        frame.size = NSSize(width: safeWidth, height: contentHeight)
         invalidateIntrinsicContentSize()
     }
 
     override var intrinsicContentSize: NSSize {
-        let layoutWidth = max(bounds.width, 320)
-        if hostedView.frame.width != layoutWidth {
-            hostedView.frame.size.width = layoutWidth
-            hostedView.needsLayout = true
-            hostedView.layoutSubtreeIfNeeded()
-        }
-        let fitting = hostedView.fittingSize
-        return NSSize(width: layoutWidth, height: max(fitting.height, 1))
+        let size = measureDocumentSize(width: max(bounds.width, 320))
+        return NSSize(width: size.width, height: size.height)
     }
 
     override func layout() {
         super.layout()
-        let layoutWidth = max(bounds.width, 320)
-        hostedView.frame = CGRect(origin: .zero, size: CGSize(width: layoutWidth, height: bounds.height))
-        invalidateIntrinsicContentSize()
+        if bounds.width > 1 {
+            applyDocumentLayout(width: bounds.width)
+        }
     }
 
     override func resize(withOldSuperviewSize oldSize: NSSize) {
         super.resize(withOldSuperviewSize: oldSize)
         if bounds.width > 1 {
-            layoutDocument(width: bounds.width)
+            applyDocumentLayout(width: bounds.width)
         }
     }
 
     @objc func paste(_ sender: Any?) {
-        if let block = ImagePasteSupport.ingestPastedImage() {
-            onPasteImageBlock?(block)
+        if ImagePasteSupport.imageFromPasteboard() != nil {
+            onPasteImage?()
             return
         }
         NSApp.sendAction(#selector(NSTextView.paste(_:)), to: nil, from: sender)

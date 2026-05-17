@@ -85,8 +85,72 @@ actor IngestionPipeline {
         for path in paths {
             try Task.checkCancellation()
             try throwIfCancelled()
-            _ = try await ingestNDLFile(at: path, defaultPageType: defaultPageType)
+            if path.pathExtension.lowercased() == "md" {
+                _ = try await ingestMarkdownFile(at: path)
+            } else {
+                _ = try await ingestNDLFile(at: path, defaultPageType: defaultPageType)
+            }
         }
+    }
+
+    /// Parses markdown from disk and indexes with a stable document id and filename citation.
+    @discardableResult
+    func ingestMarkdownFile(
+        at url: URL,
+        vaultRoot: URL? = nil
+    ) async throws -> UUID {
+        try throwIfCancelled()
+        await withHealth { $0.setPhase(.parsing) }
+
+        let source: String
+        do {
+            source = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            throw IngestionPipelineError.fileReadFailed(url)
+        }
+
+        let root = vaultRoot ?? VaultLocationPreferences.resolvedVaultRootURL()
+        let relative = relativeMarkdownPath(for: url, vaultRoot: root) ?? url.lastPathComponent
+        let title = url.deletingPathExtension().lastPathComponent
+        let documentID = VaultMarkdownCatalog.stableDocumentID(relativePath: relative)
+        let blocks = MarkdownImporter().importString(source)
+
+        try await ingest(
+            documentID: documentID,
+            title: title,
+            blocks: blocks,
+            sourceFilename: relative,
+            isRebuild: false
+        )
+        return documentID
+    }
+
+    /// Full scan of vault markdown files (Reor-style `.md` discovery).
+    func ingestAllMarkdownFiles(vaultRoot: URL) async throws -> Int {
+        let files = VaultMarkdownCatalog.scan(vaultRoot: vaultRoot)
+        var ingested = 0
+        for file in files {
+            try Task.checkCancellation()
+            try throwIfCancelled()
+            let blocks = try VaultMarkdownCatalog.loadBlocks(from: file)
+            try await ingest(
+                documentID: file.documentID,
+                title: file.title,
+                blocks: blocks,
+                sourceFilename: file.sourceFilename,
+                isRebuild: false
+            )
+            ingested += 1
+        }
+        return ingested
+    }
+
+    private func relativeMarkdownPath(for fileURL: URL, vaultRoot: URL) -> String? {
+        let root = vaultRoot.standardizedFileURL
+        let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
+        let path = fileURL.standardizedFileURL.path
+        guard path.hasPrefix(rootPath) else { return nil }
+        return String(path.dropFirst(rootPath.count))
     }
 
     /// Reads NDL from disk, parses, and indexes as a standalone document (import folder MVP).
@@ -118,6 +182,7 @@ actor IngestionPipeline {
             documentID: documentID,
             title: resolvedTitle,
             blocks: parsed.bodyBlocks,
+            sourceFilename: nil,
             isRebuild: false
         )
         return documentID
@@ -129,6 +194,7 @@ actor IngestionPipeline {
         documentID: UUID,
         title: String,
         blocks: [NoteBlock],
+        sourceFilename: String? = nil,
         isRebuild: Bool
     ) async throws {
         do {
@@ -136,7 +202,12 @@ actor IngestionPipeline {
             await vectorStore.remove(documentID: documentID)
 
             await withHealth { $0.setPhase(.chunking) }
-            let chunks = TextChunker.chunks(documentID: documentID, title: title, blocks: blocks)
+            let chunks = TextChunker.chunks(
+                documentID: documentID,
+                title: title,
+                blocks: blocks,
+                sourceFilename: sourceFilename
+            )
             guard !chunks.isEmpty else { return }
 
             await withHealth { $0.beginDocumentIngest(chunkCount: chunks.count, isRebuild: isRebuild) }
@@ -172,22 +243,21 @@ actor IngestionPipeline {
         await withHealth { $0.updateIndexedChunkCount(count) }
     }
 
-    func rebuildAll(
-        documents: [(id: UUID, title: String, blocks: [NoteBlock])]
-    ) async throws {
+    func rebuildAll(entries: [VaultIndexEntry]) async throws {
         resetCancel()
-        await withHealth { $0.beginRebuild(documentCount: documents.count) }
+        await withHealth { $0.beginRebuild(documentCount: entries.count) }
 
         await vectorStore.reset()
 
-        for doc in documents {
+        for entry in entries {
             try Task.checkCancellation()
             try throwIfCancelled()
 
             try await ingest(
-                documentID: doc.id,
-                title: doc.title,
-                blocks: doc.blocks,
+                documentID: entry.documentID,
+                title: entry.title,
+                blocks: entry.blocks,
+                sourceFilename: entry.sourceFilename,
                 isRebuild: true
             )
 

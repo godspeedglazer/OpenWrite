@@ -17,6 +17,7 @@ struct EditorView: View {
     @State private var headerIconOffsetY: CGFloat = 0
     @State private var appliedEditorPresentation = false
     @StateObject private var inlineAssist = InlineAssistController()
+    @StateObject private var blockFormatting = BlockFormattingState()
 
     init(document: VaultDocument) {
         self.documentID = document.id
@@ -39,6 +40,7 @@ struct EditorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .environment(\.blockFormatting, blockFormatting)
         .sheet(isPresented: $inlineAssist.showRefineResult) {
             refineResultSheet
         }
@@ -65,15 +67,11 @@ struct EditorView: View {
     @ViewBuilder
     private func editorBody(_ document: VaultDocument) -> some View {
         VStack(spacing: 0) {
-            pageBanner(document)
-
             if showTypePicker {
                 editorTypePickerStrip(document)
             }
 
-            editorActionBar(document)
-
-            editorMain(document)
+            editorScrollSurface(document)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .layoutPriority(1)
         }
@@ -140,6 +138,7 @@ struct EditorView: View {
                 .buttonStyle(.plain)
             }
         }
+        .padding(.bottom, DesignTokens.Layout.editorMetadataToToolbarSpacing)
     }
 
     private func editorTypePickerStrip(_ document: VaultDocument) -> some View {
@@ -176,6 +175,32 @@ struct EditorView: View {
         .openWriteEditorContentWidth()
     }
 
+    private var blockFormattingBar: some View {
+        OWBlockFormattingToolbar(
+            formatting: blockFormatting,
+            blockAttributes: focusedBlockAttributesBinding
+        )
+        .openWriteEditorContentWidth()
+        .padding(.horizontal, DesignTokens.Spacing.spacing3)
+        .padding(.top, DesignTokens.Spacing.spacing1)
+        .padding(.bottom, DesignTokens.Spacing.spacing2)
+    }
+
+    private var focusedBlockAttributesBinding: Binding<[String: String]> {
+        Binding(
+            get: {
+                guard let id = blockFormatting.focusedBlockID,
+                      let block = editingBlocks.first(where: { $0.id == id }) else { return [:] }
+                return block.attributes
+            },
+            set: { newValue in
+                guard let id = blockFormatting.focusedBlockID,
+                      let index = editingBlocks.firstIndex(where: { $0.id == id }) else { return }
+                editingBlocks[index].attributes = newValue
+            }
+        )
+    }
+
     private func editorActionBar(_: VaultDocument) -> some View {
         HStack(spacing: DesignTokens.Spacing.spacing3) {
             Spacer()
@@ -194,23 +219,36 @@ struct EditorView: View {
             .disabled(!inlineAssist.canRefineSelection)
             .help("Improve selected text with local AI (select text in a future block selection pass)")
         }
-        .openWriteEditorContentWidth()
         .frame(maxWidth: .infinity)
         .padding(.horizontal, DesignTokens.Spacing.spacing3)
         .padding(.vertical, DesignTokens.Spacing.spacing1)
     }
 
     @ViewBuilder
-    private func editorMain(_ document: VaultDocument) -> some View {
-        openWriteEditorColumn(canvasColor: palette.editorCanvas) {
-            OWBlockEditorView(blocks: $editingBlocks)
-                .padding(.horizontal, DesignTokens.Spacing.spacing3)
-                .padding(.top, DesignTokens.Spacing.spacing1)
-                .padding(.bottom, DesignTokens.Spacing.spacing3)
-                .onChange(of: editingBlocks) { _, newBlocks in
-                    commitBlocks(document: document, blocks: newBlocks)
-                }
+    private func editorScrollSurface(_ document: VaultDocument) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                pageBanner(document)
+
+                blockFormattingBar
+                    .padding(.top, DesignTokens.Spacing.spacing2)
+
+                editorActionBar(document)
+                    .padding(.top, DesignTokens.Spacing.spacing2)
+
+                OWBlockEditorView(blocks: $editingBlocks)
+                    .padding(.top, DesignTokens.Layout.editorHeaderToBodySpacing)
+                    .onChange(of: editingBlocks) { _, newBlocks in
+                        commitBlocks(document: document, blocks: newBlocks)
+                    }
+            }
+            .openWriteEditorContentWidth()
+            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.bottom, DesignTokens.Spacing.spacing6)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(palette.editorCanvas)
     }
 
     private func nonEmptyProperty(_ document: VaultDocument, key: PagePropertyKey) -> String? {

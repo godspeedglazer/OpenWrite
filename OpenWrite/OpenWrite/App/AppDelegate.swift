@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let window = NSApp.mainWindow ?? NSApp.keyWindow ?? preferredMainWindow() {
             applyWindowSizingPolicy(to: window)
+            OWWindowChrome.apply(to: window)
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
             return

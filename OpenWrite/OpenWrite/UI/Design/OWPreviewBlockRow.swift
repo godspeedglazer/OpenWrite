@@ -7,9 +7,13 @@ import SwiftUI
 struct OWPreviewBlockRow: View {
     let block: NoteBlock
     var text: Binding<String>? = nil
+    var blockAttributes: Binding<[String: String]>? = nil
     var checked: Binding<Bool>? = nil
     var language: Binding<String>? = nil
     var calloutType: Binding<String>? = nil
+
+    @Environment(\.openWritePalette) private var palette
+    @Environment(\.blockFormatting) private var blockFormatting
 
     private var isEditing: Bool { text != nil }
 
@@ -249,15 +253,25 @@ struct OWPreviewBlockRow: View {
         .background(DesignTokens.Color.wikilink.opacity(0.08), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
+    private var isImagePending: Bool {
+        block.attributes[ImagePasteSupport.pendingAttributeKey] == "true"
+    }
+
     private var imageRow: some View {
         Group {
-            if let url = VaultAttachmentStore.resolveFileURL(for: block),
-               let nsImage = NSImage(contentsOf: url) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .scaledToFit()
+            if isImagePending {
+                HStack(spacing: DesignTokens.Spacing.spacing2) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Saving image…")
+                        .font(DesignTokens.Typography.caption)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else if let url = VaultAttachmentStore.resolveFileURL(for: block),
+                      let nsImage = NSImage(contentsOf: url) {
+                ImageBlockCopyView(block: block, image: nsImage)
                     .frame(maxWidth: .infinity, maxHeight: 360, alignment: .leading)
-                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
             } else {
                 HStack(spacing: DesignTokens.Spacing.spacing2) {
                     OWUnicodeIconView(icon: .missingNote, size: 16, color: DesignTokens.Color.textTertiary)
@@ -289,21 +303,38 @@ struct OWPreviewBlockRow: View {
 
     @ViewBuilder
     private func inlineText(font: Font, lineSpacing: CGFloat = 0, foreground: Color) -> some View {
-        if let text {
-            TextField("", text: text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(font)
-                .lineSpacing(lineSpacing)
-                .foregroundStyle(foreground)
-                .fixedSize(horizontal: false, vertical: true)
+        if let text, let blockAttributes {
+            OWBlockTextEditor(
+                markdown: text,
+                blockAttributes: blockAttributes,
+                blockID: block.id,
+                baseSwiftUIFont: font,
+                textColor: foreground,
+                selectionHighlight: palette.selectionHighlight,
+                selectionForeground: palette.textPrimary,
+                formatting: blockFormatting
+            )
+            .fixedSize(horizontal: false, vertical: true)
         } else {
-            Text(block.text)
+            Text(formattedPreview)
                 .font(font)
                 .lineSpacing(lineSpacing)
                 .foregroundStyle(foreground)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private var formattedPreview: AttributedString {
+        let family = InlineMarkdown.FontFamily(attribute: block.attributes["fontFamily"])
+        let size = block.attributes["fontSize"].flatMap { Int($0) }.flatMap { $0 > 0 ? CGFloat($0) : nil }
+        let ns = InlineMarkdown.attributedString(
+            from: block.text,
+            family: family,
+            pointSize: size,
+            textColor: NSColor(palette.textPrimary)
+        )
+        return AttributedString(ns)
     }
 
     private var blockFill: Color {
@@ -358,6 +389,55 @@ struct OWPreviewBlockRow: View {
         case .heading2: return DesignTokens.Typography.heading2LineSpacing
         case .heading3: return DesignTokens.Typography.heading3LineSpacing
         default: return 0
+        }
+    }
+}
+
+// MARK: - Image copy to pasteboard
+
+private struct ImageBlockCopyView: NSViewRepresentable {
+    let block: NoteBlock
+    let image: NSImage
+
+    func makeNSView(context: Context) -> ImageCopyContainerView {
+        let view = ImageCopyContainerView()
+        view.configure(block: block, image: image)
+        return view
+    }
+
+    func updateNSView(_ nsView: ImageCopyContainerView, context: Context) {
+        nsView.configure(block: block, image: image)
+    }
+}
+
+private final class ImageCopyContainerView: NSView {
+    private let imageView = NSImageView()
+    var block: NoteBlock?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    func configure(block: NoteBlock, image: NSImage) {
+        self.block = block
+        imageView.image = image
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        imageView.frame = bounds
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if imageView.superview == nil {
+            addSubview(imageView)
+        }
+    }
+
+    @objc func copy(_ sender: Any?) {
+        if let block, ImagePasteSupport.copyImageToPasteboard(for: block) {
+            return
         }
     }
 }

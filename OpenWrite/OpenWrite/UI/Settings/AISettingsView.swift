@@ -9,72 +9,84 @@ struct AISettingsView: View {
     @State private var useCustomEmbeddingID = false
 
     var body: some View {
-        Form {
-            Section {
-                TextField("Server URL", text: $baseURLString)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { commitBaseURL() }
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing5) {
+            OWSettingsSection(title: "LM Studio", footer: lmStudioFooter) {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
+                    VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                        Text("Server URL")
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                        OWThemedTextField(placeholder: "http://127.0.0.1:1234", text: $baseURLString) {
+                            commitBaseURL()
+                        }
+                    }
 
-                modelRoleRow(
-                    title: "Chat model",
-                    selection: chatModelBinding,
-                    placeholder: "local-model"
-                )
+                    modelRoleRow(
+                        title: "Chat model",
+                        selection: chatModelBinding,
+                        placeholder: "local-model"
+                    )
 
-                embeddingModelSection
-            } header: {
-                Text("LM Studio")
-            } footer: {
-                Text(lmStudioFooter)
+                    embeddingModelSection
+                }
             }
 
-            Section("Status") {
-                LabeledContent("Connection", value: aiServices.lmStatus)
-                LabeledContent("Activity", value: aiServices.activityState.shortLabel)
-                LabeledContent("Ingestion", value: aiServices.ingestionHealth.health.statusLabel)
-                LabeledContent("Indexed chunks", value: "\(aiServices.indexedChunkCount)")
-                LabeledContent("Embedding", value: aiServices.lmConfig.embeddingModelDisplay)
+            OWSettingsSection(title: "Status") {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                    OWSettingsLabeledRow(label: "Connection", value: aiServices.lmStatus)
+                    OWSettingsLabeledRow(label: "Activity", value: aiServices.activityState.shortLabel)
+                    OWSettingsLabeledRow(label: "Ingestion", value: aiServices.ingestionHealth.health.statusLabel)
+                    OWSettingsLabeledRow(label: "Indexed chunks", value: "\(aiServices.indexedChunkCount)")
+                    OWSettingsLabeledRow(label: "Embedding", value: aiServices.lmConfig.embeddingModelDisplay)
 
-                if let progress = aiServices.ingestionHealth.health.progressSummary {
-                    LabeledContent("Progress", value: progress)
-                }
-
-                if aiServices.isIndexing || aiServices.activityState == .indexing {
-                    HStack(spacing: 8) {
-                        ProgressView(value: aiServices.ingestionHealth.health.progressFraction)
-                            .controlSize(.small)
-                        Text("Indexing vault…")
-                            .foregroundStyle(.secondary)
+                    if let progress = aiServices.ingestionHealth.health.progressSummary {
+                        OWSettingsLabeledRow(label: "Progress", value: progress)
                     }
-                }
 
-                if let error = aiServices.ingestionHealth.health.lastError, !error.isEmpty {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
+                    if aiServices.isIndexing || aiServices.activityState == .indexing {
+                        HStack(spacing: DesignTokens.Spacing.spacing2) {
+                            ProgressView(value: aiServices.ingestionHealth.health.progressFraction)
+                                .controlSize(.small)
+                                .tint(DesignTokens.Color.accent)
+                            Text("Indexing vault…")
+                                .font(DesignTokens.Typography.caption)
+                                .foregroundStyle(DesignTokens.Color.textSecondary)
+                        }
+                    }
 
-                Button("Check connection") {
-                    commitBaseURL()
-                    Task { await aiServices.checkConnection() }
-                }
-                .disabled(aiServices.activityState == .connecting)
+                    if let error = aiServices.ingestionHealth.health.lastError, !error.isEmpty {
+                        Text(error)
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.warning)
+                    }
 
-                Button("Rebuild index") {
-                    commitBaseURL()
-                    Task { await aiServices.reindex(documents: vaultStore.documents) }
-                }
-                .disabled(aiServices.isIndexing || vaultStore.documents.isEmpty)
+                    HStack(spacing: DesignTokens.Spacing.spacing2) {
+                        Button("Check connection") {
+                            commitBaseURL()
+                            Task { await aiServices.checkConnection() }
+                        }
+                        .buttonStyle(OWSecondaryRectButtonStyle())
+                        .disabled(aiServices.activityState == .connecting)
 
-                if aiServices.isIndexing {
-                    Button("Cancel indexing", role: .destructive) {
-                        aiServices.cancelIndexing()
+                        Button("Rebuild index") {
+                            commitBaseURL()
+                            Task { await aiServices.reindex(documents: vaultStore.documents) }
+                        }
+                        .buttonStyle(OWSecondaryRectButtonStyle())
+                        .disabled(aiServices.isIndexing || vaultStore.documents.isEmpty)
+
+                        if aiServices.isIndexing {
+                            Button("Cancel indexing") {
+                                aiServices.cancelIndexing()
+                            }
+                            .font(DesignTokens.Typography.captionEmphasis)
+                            .foregroundStyle(DesignTokens.Color.danger)
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
             }
         }
-        .formStyle(.grouped)
-        .padding()
         .onAppear {
             baseURLString = aiServices.lmConfig.baseURL.absoluteString
             let id = aiServices.lmConfig.embeddingModel
@@ -92,50 +104,65 @@ struct AISettingsView: View {
 
     @ViewBuilder
     private var embeddingModelSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
             Text("Embedding model")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(DesignTokens.Typography.caption)
+                .foregroundStyle(DesignTokens.Color.textTertiary)
 
             if aiServices.availableModels.isEmpty {
                 if useCustomEmbeddingID {
-                    TextField("Model id", text: embeddingModelBinding)
-                        .textFieldStyle(.roundedBorder)
+                    OWThemedTextField(placeholder: "Model id", text: embeddingModelBinding)
                     Button("Use recommended presets") {
                         useCustomEmbeddingID = false
                         aiServices.updateEmbeddingModel(EmbeddingModelPreset.defaultPreset.rawValue)
                     }
-                    .font(.caption)
+                    .font(DesignTokens.Typography.caption)
+                    .foregroundStyle(DesignTokens.Color.accent)
+                    .buttonStyle(.plain)
                 } else {
-                    Picker("Preset", selection: offlineEmbeddingPresetBinding) {
-                        ForEach(EmbeddingModelPreset.allCases) { preset in
-                            Text(preset.menuTitle).tag(preset)
-                        }
-                    }
-                    .labelsHidden()
+                    OWThemedDropdown(
+                        accessibilityLabel: "Embedding preset",
+                        selection: offlineEmbeddingPresetBinding,
+                        options: Array(EmbeddingModelPreset.allCases),
+                        optionTitle: \.menuTitle,
+                        minWidth: 200
+                    )
                     Button("Custom model id…") { useCustomEmbeddingID = true }
-                        .font(.caption)
+                        .font(DesignTokens.Typography.caption)
+                        .foregroundStyle(DesignTokens.Color.accent)
+                        .buttonStyle(.plain)
                 }
             } else {
-                Picker("Embedding model", selection: embeddingModelBinding) {
-                    Text("Same as chat model").tag("")
-                    ForEach(EmbeddingModelPreset.allCases, id: \.rawValue) { preset in
-                        Text(preset.menuTitle).tag(preset.rawValue)
-                    }
-                    ForEach(aiServices.availableModels) { model in
-                        if !EmbeddingModelPreset.allCases.map(\.rawValue).contains(model.id) {
-                            Text(model.id).tag(model.id)
-                        }
-                    }
-                }
-                .labelsHidden()
+                embeddingModelDropdown
             }
 
             Text(embeddingHelp)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(DesignTokens.Typography.caption)
+                .foregroundStyle(DesignTokens.Color.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private var embeddingModelDropdown: some View {
+        let options = embeddingModelOptions
+        return OWThemedDropdown(
+            accessibilityLabel: "Embedding model",
+            selection: embeddingModelBinding,
+            options: options,
+            optionTitle: { $0.isEmpty ? "Same as chat model" : $0 },
+            minWidth: 220
+        )
+    }
+
+    private var embeddingModelOptions: [String] {
+        var ids: [String] = [""]
+        ids.append(contentsOf: EmbeddingModelPreset.allCases.map(\.rawValue))
+        for model in aiServices.availableModels where !ids.contains(model.id) {
+            if !EmbeddingModelPreset.allCases.map(\.rawValue).contains(model.id) {
+                ids.append(model.id)
+            }
+        }
+        return ids
     }
 
     private var embeddingHelp: String {
@@ -176,20 +203,20 @@ struct AISettingsView: View {
 
     @ViewBuilder
     private func modelRoleRow(title: String, selection: Binding<String>, placeholder: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
             Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(DesignTokens.Typography.caption)
+                .foregroundStyle(DesignTokens.Color.textTertiary)
             if aiServices.availableModels.isEmpty {
-                TextField(placeholder, text: selection)
-                    .textFieldStyle(.roundedBorder)
+                OWThemedTextField(placeholder: placeholder, text: selection)
             } else {
-                Picker(title, selection: selection) {
-                    ForEach(aiServices.availableModels) { model in
-                        Text(model.id).tag(model.id)
-                    }
-                }
-                .labelsHidden()
+                OWThemedDropdown(
+                    accessibilityLabel: title,
+                    selection: selection,
+                    options: aiServices.availableModels.map(\.id),
+                    optionTitle: { $0 },
+                    minWidth: 220
+                )
             }
         }
     }
@@ -199,5 +226,7 @@ struct AISettingsView: View {
     AISettingsView()
         .environmentObject(OpenWriteAIServices())
         .environmentObject(VaultStore.preview)
+        .padding()
         .frame(width: 440, height: 520)
+        .background(DesignTokens.Color.background)
 }

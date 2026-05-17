@@ -36,11 +36,11 @@ struct GraphView: View {
                 DesignTokens.Color.editorCanvas
 
                 if documents.isEmpty {
-                    emptyVaultState
+                    emptyVaultState(in: size)
                 } else {
                     graphCanvas(snapshot: snapshot)
                     if snapshot.edges.isEmpty {
-                        emptyGraphOverlay
+                        emptyGraphOverlay(in: size)
                     } else {
                         graphNodeCards(snapshot: snapshot)
                     }
@@ -261,25 +261,53 @@ struct GraphView: View {
 
     // MARK: - Empty states
 
-    private var emptyVaultState: some View {
-        OWPageHero(
+    private func emptyVaultState(in size: CGSize) -> some View {
+        centeredGraphHero(
+            size: size,
             title: "No notes in vault",
             subtitle: "Create a page to see it on the graph.",
-            icon: .graph,
-            style: .emptyState,
-            compact: true
+            icon: .graph
         )
     }
 
-    private var emptyGraphOverlay: some View {
-        OWPageHero(
+    private func emptyGraphOverlay(in size: CGSize) -> some View {
+        centeredGraphHero(
+            size: size,
             title: "No links yet",
             subtitle: "Connect notes with [[wikilinks]] in the editor. Unresolved titles appear once a matching page exists.",
-            icon: .link,
-            style: .emptyState,
-            compact: true
+            icon: .link
         )
-        .padding(DesignTokens.Spacing.spacing6)
+    }
+
+    private func centeredGraphHero(
+        size: CGSize,
+        title: String,
+        subtitle: String,
+        icon: OWIcon
+    ) -> some View {
+        let narrow = size.width < DesignTokens.Layout.graphEmptyStateCompactWidth
+        let readableWidth = min(
+            size.width - DesignTokens.Spacing.spacing6 * 2,
+            DesignTokens.Layout.graphEmptyStateMaxReadableWidth
+        )
+
+        return VStack(spacing: 0) {
+            Spacer(minLength: DesignTokens.Layout.graphChromeTopReserve)
+
+            OWPageHero(
+                title: title,
+                subtitle: subtitle,
+                icon: icon,
+                style: .emptyState,
+                compact: true,
+                narrow: narrow
+            )
+            .frame(maxWidth: max(readableWidth, 220))
+            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: DesignTokens.Layout.graphChromeBottomReserve)
+        }
+        .frame(width: size.width, height: size.height, alignment: .center)
         .allowsHitTesting(false)
     }
 }

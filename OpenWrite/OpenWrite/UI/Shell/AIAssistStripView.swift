@@ -3,6 +3,17 @@
 
 import SwiftUI
 
+private struct AIAssistStripWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = DesignTokens.Layout.assistStripDefaultWidth
+}
+
+extension EnvironmentValues {
+    var aiAssistStripWidth: CGFloat {
+        get { self[AIAssistStripWidthKey.self] }
+        set { self[AIAssistStripWidthKey.self] = newValue }
+    }
+}
+
 struct AIAssistStripView: View {
     @EnvironmentObject private var vaultStore: VaultStore
     @ObservedObject var workbench: WorkbenchState
@@ -10,6 +21,11 @@ struct AIAssistStripView: View {
     let onCollapse: () -> Void
 
     private var navigation: AIAssistNavigationState { workbench.aiAssistNavigation }
+    @State private var measuredWidth: CGFloat = ShellChromePreferences.assistStripWidth
+
+    private var stripIsCompact: Bool {
+        measuredWidth < DesignTokens.Layout.assistStripDefaultWidth
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,12 +35,23 @@ struct AIAssistStripView: View {
 
             stripContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(DesignTokens.Color.editorCanvas)
         }
         .frame(
             minWidth: DesignTokens.Layout.inspectorMinWidth,
             maxWidth: DesignTokens.Layout.assistStripMaxWidth
         )
-        .background(DesignTokens.Color.surfaceElevated)
+        .background {
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear { measuredWidth = geometry.size.width }
+                    .onChange(of: geometry.size.width) { _, newWidth in
+                        measuredWidth = newWidth
+                    }
+            }
+        }
+        .environment(\.aiAssistStripWidth, measuredWidth)
+        .background(DesignTokens.Color.surface)
         .aiAssistKeyboardBack(navigation)
     }
 
@@ -62,14 +89,13 @@ struct AIAssistStripView: View {
                     title: "AI assist",
                     showsSeparator: false
                 ) {
-                    Picker("Assist", selection: $workbench.inspectorTab) {
-                        ForEach(InspectorTab.allCases) { tab in
-                            Text(tab.title).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .controlSize(.small)
+                    OWThemedSegmentedControl(
+                        selection: $workbench.inspectorTab,
+                        options: Array(InspectorTab.allCases),
+                        title: \.title,
+                        icon: \.owIcon,
+                        iconsOnly: stripIsCompact
+                    )
                 } trailing: {
                     assistToolbarTrailing
                 }
@@ -105,9 +131,10 @@ struct AIAssistStripView: View {
                 .help("Forward")
             }
             Button(action: onCollapse) {
-                OWUnicodeIconView(icon: .chevronRight, size: 12)
+                OWUnicodeIconView(icon: .collapseTrailing, size: 12)
             }
             .buttonStyle(.plain)
+            .focusable(false)
             .foregroundStyle(DesignTokens.Color.textSecondary)
             .help("Collapse AI assist")
         }
@@ -203,8 +230,7 @@ struct RelatedNoteDetailView: View {
                 Button("Open in editor") {
                     vaultStore.selectedDocumentID = hit.documentID
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(OWAccentCapsuleButtonStyle())
             }
             .padding(DesignTokens.Spacing.spacing3)
             .frame(maxWidth: .infinity, alignment: .leading)

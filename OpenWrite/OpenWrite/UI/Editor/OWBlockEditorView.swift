@@ -9,17 +9,15 @@ struct OWBlockEditorView: View {
 
     var body: some View {
         BlockEditorPasteHost(blocks: $blocks) {
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            VStack(alignment: .leading, spacing: DesignTokens.Layout.editorBlockStackSpacing) {
                 ForEach($blocks) { $block in
                     blockRow(for: $block)
                 }
             }
-            .openWriteEditorContentWidth()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, DesignTokens.Spacing.spacing3)
-            .padding(.bottom, DesignTokens.Spacing.spacing3)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -30,6 +28,7 @@ struct OWBlockEditorView: View {
             OWPreviewBlockRow(
                 block: block.wrappedValue,
                 text: editableText,
+                blockAttributes: attributesBinding(block),
                 checked: Binding(
                     get: { block.wrappedValue.isChecked },
                     set: { block.wrappedValue.isChecked = $0 }
@@ -39,19 +38,38 @@ struct OWBlockEditorView: View {
             OWPreviewBlockRow(
                 block: block.wrappedValue,
                 text: editableText,
+                blockAttributes: attributesBinding(block),
                 calloutType: attributeBinding(block, key: "callout")
             )
         case .code:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
                 text: editableText,
+                blockAttributes: attributesBinding(block),
                 language: attributeBinding(block, key: "language")
             )
         case .heading1, .heading2, .heading3, .paragraph, .bullet, .quote, .wikilink:
-            OWPreviewBlockRow(block: block.wrappedValue, text: editableText)
+            OWPreviewBlockRow(
+                block: block.wrappedValue,
+                text: editableText,
+                blockAttributes: attributesBinding(block)
+            )
+        case .image:
+            OWPreviewBlockRow(
+                block: block.wrappedValue,
+                text: editableText,
+                blockAttributes: attributesBinding(block)
+            )
         default:
             OWPreviewBlockRow(block: block.wrappedValue)
         }
+    }
+
+    private func attributesBinding(_ block: Binding<NoteBlock>) -> Binding<[String: String]> {
+        Binding(
+            get: { block.wrappedValue.attributes },
+            set: { block.wrappedValue.attributes = $0 }
+        )
     }
 
     private func attributeBinding(_ block: Binding<NoteBlock>, key: String) -> Binding<String> {
@@ -83,46 +101,36 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
         Coordinator(blocks: $blocks)
     }
 
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        scrollView.autoresizingMask = [.width, .height]
-
+    func makeNSView(context: Context) -> BlockEditorPasteCaptureView {
         let hosting = NSHostingView(rootView: content)
         hosting.sizingOptions = [.intrinsicContentSize]
         let host = BlockEditorPasteCaptureView(hostedView: hosting)
-        host.onPasteImageBlock = { block in
-            context.coordinator.append(block)
+        host.onPasteImage = {
+            context.coordinator.ingestPastedImage()
         }
-        scrollView.documentView = host
-        layoutBlockEditorDocument(scrollView)
-        return scrollView
+        return host
     }
 
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let host = scrollView.documentView as? BlockEditorPasteCaptureView,
-              let hosting = host.hostedView as? NSHostingView<Content> else { return }
-        host.onPasteImageBlock = { block in
-            context.coordinator.append(block)
+    func updateNSView(_ host: BlockEditorPasteCaptureView, context: Context) {
+        guard let hosting = host.hostedView as? NSHostingView<Content> else { return }
+        host.onPasteImage = {
+            context.coordinator.ingestPastedImage()
         }
         hosting.rootView = content
-        layoutBlockEditorDocument(scrollView)
+        let layoutWidth = max(context.coordinator.lastProposedWidth ?? host.bounds.width, 320)
+        context.coordinator.scheduleLayout(on: host, width: layoutWidth)
     }
 
-    private func layoutBlockEditorDocument(_ scrollView: NSScrollView) {
-        guard let host = scrollView.documentView as? BlockEditorPasteCaptureView else { return }
-        let width = max(scrollView.contentView.bounds.width, scrollView.bounds.width, 320)
-        host.layoutDocument(width: width)
-        let height = max(host.intrinsicContentSize.height, scrollView.bounds.height)
-        host.frame = NSRect(x: 0, y: 0, width: width, height: height)
-        scrollView.documentView = host
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: BlockEditorPasteCaptureView, context: Context) -> CGSize? {
+        let width = max(proposal.width ?? 640, 320)
+        context.coordinator.lastProposedWidth = width
+        return nsView.measureDocumentSize(width: width)
     }
 
     final class Coordinator {
         var blocks: Binding<[NoteBlock]>
+        var lastProposedWidth: CGFloat?
+        private var layoutGeneration = 0
 
         init(blocks: Binding<[NoteBlock]>) {
             self.blocks = blocks
@@ -130,6 +138,41 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
 
         func append(_ block: NoteBlock) {
             blocks.wrappedValue.append(block)
+        }
+
+        func replaceBlock(id: UUID, with block: NoteBlock) {
+            guard let index = blocks.wrappedValue.firstIndex(where: { $0.id == id }) else { return }
+            blocks.wrappedValue[index] = block
+        }
+
+        func removeBlock(id: UUID) {
+            blocks.wrappedValue.removeAll { $0.id == id }
+        }
+
+        func ingestPastedImage() {
+            guard ImagePasteSupport.imageFromPasteboard() != nil else { return }
+            let placeholder = ImagePasteSupport.placeholderBlock()
+            let blockID = placeholder.id
+            append(placeholder)
+            Task {
+                let finalized = await ImagePasteSupport.finalizePastedImage()
+                await MainActor.run {
+                    if let finalized {
+                        replaceBlock(id: blockID, with: finalized)
+                    } else {
+                        removeBlock(id: blockID)
+                    }
+                }
+            }
+        }
+
+        func scheduleLayout(on host: BlockEditorPasteCaptureView, width: CGFloat) {
+            layoutGeneration += 1
+            let generation = layoutGeneration
+            DispatchQueue.main.async { [weak host] in
+                guard let host, generation == self.layoutGeneration else { return }
+                host.applyDocumentLayout(width: width)
+            }
         }
     }
 }
