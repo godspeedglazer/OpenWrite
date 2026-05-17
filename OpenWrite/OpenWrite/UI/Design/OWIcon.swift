@@ -2,8 +2,9 @@ import SwiftUI
 
 // MARK: - OWIcon
 
-/// OpenWrite icon vocabulary — Lucide-inspired strokes (MIT), no SF Symbols.
-/// See `docs/design/OWIcons.md` for license and glyph mapping.
+/// Legacy path-drawn icon vocabulary — **deprecated** in product UI.
+/// Use `OWUnicodeIcon` / `OWUnicodeIconView` instead. See `docs/design/OWIcons.md`.
+/// Stable raw-value IDs for persistence; render with `OWUnicodeIconView`, not `OWIconView`.
 enum OWIcon: String, CaseIterable, Sendable {
   case note
   case task
@@ -72,6 +73,7 @@ enum OWIcon: String, CaseIterable, Sendable {
 
 // MARK: - View
 
+@available(*, deprecated, message: "Use OWUnicodeIconView instead.")
 struct OWIconView: View {
   let icon: OWIcon
   var size: CGFloat = 16
@@ -110,7 +112,7 @@ struct OWLabel: View {
 
   var body: some View {
     HStack(spacing: DesignTokens.Spacing.spacing1) {
-      OWIconView(icon: icon, size: iconSize)
+      OWUnicodeIconView(icon: icon, size: iconSize)
       Text(title)
         .font(OWTypography.captionEmphasis)
     }
@@ -124,7 +126,7 @@ struct OWEmptyState: View {
 
   var body: some View {
     VStack(spacing: DesignTokens.Spacing.spacing3) {
-      OWIconView(icon: icon, size: 40, color: DesignTokens.Color.textTertiary)
+      OWUnicodeIconView(icon: icon, size: 40, color: DesignTokens.Color.textTertiary)
       Text(title)
         .font(OWTypography.captionEmphasis)
         .foregroundStyle(DesignTokens.Color.textPrimary)
@@ -142,6 +144,7 @@ struct OWEmptyState: View {
 
 // MARK: - Shape
 
+@available(*, deprecated, message: "Use OWUnicodeIconView instead.")
 struct OWIconShape: Shape {
   let icon: OWIcon
 
@@ -702,43 +705,4 @@ private extension OWIcon {
     p.addLine(to: CGPoint(x: 13, y: 16))
     return p
   }
-}
-
-// MARK: - Icon well (sidebar / hero)
-
-/// Colored 20pt well with a custom OW icon — Anytype vault row density.
-struct OWPageTypeIconWell: View {
-    let icon: OWIcon
-    var pageType: PageType?
-    var size: CGFloat = DesignTokens.Layout.objectIconWellSize
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: wellCornerRadius, style: .continuous)
-                .fill(wellBackground)
-            OWIconView(icon: icon, size: glyphSize, color: glyphColor)
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
-
-    private var wellCornerRadius: CGFloat {
-        size > DesignTokens.Layout.objectIconWellSize ? DesignTokens.Radius.medium : DesignTokens.Radius.small
-    }
-
-    private var glyphSize: CGFloat { size * 0.55 }
-
-    private var glyphColor: Color {
-        if let pageType {
-            return DesignTokens.ObjectType.accent(for: pageType)
-        }
-        return DesignTokens.Color.accent
-    }
-
-    private var wellBackground: Color {
-        if let pageType {
-            return DesignTokens.ObjectType.wellBackground(for: pageType)
-        }
-        return DesignTokens.Color.accent.opacity(0.22)
-    }
 }

@@ -93,7 +93,7 @@ struct TypePickerView: View {
             }
         } label: {
             VStack(spacing: compact ? 2 : 4) {
-                OWIconView(icon: pageType.owIcon, size: iconSize, color: DesignTokens.ObjectType.accent(for: pageType))
+                OWUnicodeIconView(pageType: pageType, size: iconSize, color: DesignTokens.ObjectType.accent(for: pageType))
                 Text(pageType.displayName)
                     .font(OWTypography.caption)
                     .lineLimit(1)

@@ -13,6 +13,12 @@ struct EditorView: View {
     @State private var showRenderedPreview: Bool = false
     @State private var showProperties: Bool = false
     @State private var showTypePicker: Bool = false
+    @State private var headerTitle: String = ""
+    @State private var headerPageIcon: String = ""
+    @State private var headerCoverStyle: CoverStyle?
+    @State private var headerIconOffsetX: CGFloat = 0
+    @State private var headerIconOffsetY: CGFloat = 0
+    @State private var appliedEditorPresentation = false
     @StateObject private var inlineAssist = InlineAssistController()
 
     init(document: VaultDocument) {
@@ -39,9 +45,16 @@ struct EditorView: View {
         .sheet(isPresented: $inlineAssist.showRefineResult) {
             refineResultSheet
         }
-        .onAppear { syncFromDocument(document) }
+        .onAppear {
+            syncFromDocument(document)
+            syncHeaderFromDocument(document)
+        }
         .onChange(of: documentID) { _, _ in
-            if let doc = self.document { syncFromDocument(doc) }
+            appliedEditorPresentation = false
+            if let doc = self.document {
+                syncFromDocument(doc)
+                syncHeaderFromDocument(doc)
+            }
         }
         .onChange(of: document?.updatedAt) { _, _ in
             guard !showRenderedPreview, let doc = self.document else { return }
@@ -88,11 +101,13 @@ struct EditorView: View {
 
     private func pageBanner(_ document: VaultDocument) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            OWPageBanner(
-                title: document.displayTitle,
-                icon: document.pageType.owIcon,
-                pageType: document.pageType,
-                showsGradient: true
+            OWPageHeaderEditor(
+                documentID: document.id,
+                title: $headerTitle,
+                pageIcon: $headerPageIcon,
+                coverStyle: $headerCoverStyle,
+                pageIconOffsetX: $headerIconOffsetX,
+                pageIconOffsetY: $headerIconOffsetY
             ) {
                 metadataRow(document)
             }
@@ -210,6 +225,7 @@ struct EditorView: View {
                     )
                 }
                 .font(OWTypography.body)
+                .lineSpacing(OWTypography.bodyLineSpacing)
                 .frame(maxWidth: .infinity, minHeight: 240, alignment: .topLeading)
                 .padding(.horizontal, DesignTokens.Spacing.spacing3)
                 .padding(.top, DesignTokens.Spacing.spacing1)
@@ -230,6 +246,22 @@ struct EditorView: View {
         guard let document else { return }
         editingText = document.plainText
         editingBlocks = document.rootBlocks.filter { $0.kind != .property }
+        if !appliedEditorPresentation {
+            if document.prefersBlockEditor {
+                useBlockEditor = true
+                showRenderedPreview = false
+            }
+            appliedEditorPresentation = true
+        }
+    }
+
+    private func syncHeaderFromDocument(_ document: VaultDocument?) {
+        guard let document else { return }
+        headerTitle = document.displayTitle
+        headerPageIcon = document.pageIcon
+        headerCoverStyle = document.coverStyle
+        headerIconOffsetX = document.pageIconOffsetX
+        headerIconOffsetY = document.pageIconOffsetY
     }
 
     @ViewBuilder
@@ -249,6 +281,7 @@ struct EditorView: View {
                     ScrollView {
                         Text(text)
                             .font(OWTypography.body)
+                            .lineSpacing(OWTypography.bodyLineSpacing)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding()

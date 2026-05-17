@@ -137,11 +137,18 @@ enum DesignTokens {
     // Bundled Source Serif 4 — see docs/design/Typography.md and OWTypography.swift
 
     enum Typography {
+        typealias Scale = OWTypography.Scale
+
         static let documentTitle = OWTypography.documentTitle
+        static let documentTitleLineSpacing = OWTypography.documentTitleLineSpacing
         static let heading1 = OWTypography.heading1
+        static let heading1LineSpacing = OWTypography.heading1LineSpacing
         static let heading2 = OWTypography.heading2
+        static let heading2LineSpacing = OWTypography.heading2LineSpacing
         static let heading3 = OWTypography.heading3
+        static let heading3LineSpacing = OWTypography.heading3LineSpacing
         static let body = OWTypography.body
+        static let bodyLineSpacing = OWTypography.bodyLineSpacing
         static let bodyEmphasis = OWTypography.bodyEmphasis
         static let panelTitle = OWTypography.panelTitle
         static let subheadlineEmphasis = OWTypography.subheadlineEmphasis
@@ -163,6 +170,10 @@ enum DesignTokens {
         static let sidebarWellIcon = OWTypography.sidebarWellIcon
         static let heroSymbol = OWTypography.heroSymbol
         static var editorNSFont: NSFont { OWTypography.editorNSFont }
+        static var editorParagraphStyle: NSParagraphStyle { OWTypography.editorParagraphStyle }
+        static var editorTypingAttributes: [NSAttributedString.Key: Any] { OWTypography.editorTypingAttributes }
+        static var isBundledSerifAvailable: Bool { OWTypography.isBundledSerifAvailable }
+        static let bundledSerifMissingMessage = OWTypography.bundledSerifMissingMessage
     }
 
     // MARK: Spacing (4pt grid)
@@ -310,6 +321,10 @@ enum DesignTokens {
         static let captureSheetWidth: CGFloat = 520
         static let captureSheetMinHeight: CGFloat = 200
         static let graphNodeMinSize: CGFloat = 44
+        /// Anytype-style graph node card (icon + label).
+        static let graphNodeCardWidth: CGFloat = 120
+        static let graphNodeCardHeight: CGFloat = 56
+        static let graphNodeMinSpacing: CGFloat = 20
         static let toolbarHeight: CGFloat = 52
         static let focusRingWidth: CGFloat = 2
         static let quoteBarWidth: CGFloat = 3

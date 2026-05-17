@@ -12,6 +12,7 @@
 		AA0001010000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000002 /* ContentView.swift */; };
 		AA0001010000000000000003 /* EditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000003 /* EditorView.swift */; };
 		AA0001010000000000000004 /* VaultDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000004 /* VaultDocument.swift */; };
+		AA00010100000000000000B6 /* CoverStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B6 /* CoverStyle.swift */; };
 		AA0001010000000000000005 /* NoteBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000005 /* NoteBlock.swift */; };
 		AA0001010000000000000006 /* EncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000006 /* EncryptionService.swift */; };
 		AA0001010000000000000007 /* VaultStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000007 /* VaultStore.swift */; };
@@ -56,17 +57,19 @@
 		AA0001010000000000000030 /* StructureTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000030 /* StructureTemplate.swift */; };
 		AA0001010000000000000031 /* StructureTemplatePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000031 /* StructureTemplatePicker.swift */; };
 		AA0001010000000000000034 /* OWSidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000034 /* OWSidebarRow.swift */; };
+		AA00010100000000000000B5 /* OWSidebarSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B5 /* OWSidebarSection.swift */; };
 		AA0001010000000000000035 /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000035 /* AISettingsView.swift */; };
 		AA0001010000000000000036 /* OWRoundedRect.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000036 /* OWRoundedRect.swift */; };
 		AA0001010000000000000038 /* OWPageHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000038 /* OWPageHero.swift */; };
 		AA00010100000000000000B4 /* OWAIPanelHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B4 /* OWAIPanelHeader.swift */; };
-		AA0001010000000000000046 /* OWPageBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000046 /* OWPageBanner.swift */; };
+		AA00010100000000000000D2 /* OWPageHeaderEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000D2 /* OWPageHeaderEditor.swift */; };
 		AA0001010000000000000047 /* OWPreviewBlockRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000047 /* OWPreviewBlockRow.swift */; };
 		AA0001010000000000000048 /* OWBlockEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000048 /* OWBlockEditorView.swift */; };
 		AA0001010000000000000039 /* OWObjectTypeChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000039 /* OWObjectTypeChip.swift */; };
 		AA000101000000000000003A /* AgentRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000003A /* AgentRegistry.swift */; };
 		AA000101000000000000003E /* OWMetadataChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000003E /* OWMetadataChip.swift */; };
 		AA00010100000000000000B1 /* OWIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B1 /* OWIcon.swift */; };
+		AA00010100000000000000D3 /* OWUnicodeIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000D3 /* OWUnicodeIcon.swift */; };
 		AA0001010000000000000040 /* AnytypeShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000040 /* AnytypeShellView.swift */; };
 		AA00010100000000000000B3 /* OWNavigationRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B3 /* OWNavigationRail.swift */; };
 		AA00010100000000000000D0 /* LaunchIntroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000D0 /* LaunchIntroView.swift */; };
@@ -95,6 +98,7 @@
 		AA00010100000000000000C3 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000C3 /* ThemeManager.swift */; };
 		AA00010100000000000000C4 /* ThemePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000C4 /* ThemePickerView.swift */; };
 		AA00010100000000000000C5 /* OpenWriteSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000C5 /* OpenWriteSettingsView.swift */; };
+		AA00010100000000000000D5 /* VaultAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000D5 /* VaultAttachmentStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -103,6 +107,7 @@
 		BB0001010000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000003 /* EditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000004 /* VaultDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultDocument.swift; sourceTree = "<group>"; };
+		BB00010100000000000000B6 /* CoverStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverStyle.swift; sourceTree = "<group>"; };
 		BB0001010000000000000005 /* NoteBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteBlock.swift; sourceTree = "<group>"; };
 		BB0001010000000000000006 /* EncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionService.swift; sourceTree = "<group>"; };
 		BB0001010000000000000007 /* VaultStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultStore.swift; sourceTree = "<group>"; };
@@ -147,11 +152,12 @@
 		BB0001010000000000000030 /* StructureTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StructureTemplate.swift; sourceTree = "<group>"; };
 		BB0001010000000000000031 /* StructureTemplatePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StructureTemplatePicker.swift; sourceTree = "<group>"; };
 		BB0001010000000000000034 /* OWSidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWSidebarRow.swift; sourceTree = "<group>"; };
+		BB00010100000000000000B5 /* OWSidebarSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWSidebarSection.swift; sourceTree = "<group>"; };
 		BB0001010000000000000035 /* AISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000036 /* OWRoundedRect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWRoundedRect.swift; sourceTree = "<group>"; };
 		BB0001010000000000000038 /* OWPageHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWPageHero.swift; sourceTree = "<group>"; };
 		BB00010100000000000000B4 /* OWAIPanelHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWAIPanelHeader.swift; sourceTree = "<group>"; };
-		BB0001010000000000000046 /* OWPageBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWPageBanner.swift; sourceTree = "<group>"; };
+		BB00010100000000000000D2 /* OWPageHeaderEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWPageHeaderEditor.swift; sourceTree = "<group>"; };
 		BB0001010000000000000047 /* OWPreviewBlockRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWPreviewBlockRow.swift; sourceTree = "<group>"; };
 		BB0001010000000000000048 /* OWBlockEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWBlockEditorView.swift; sourceTree = "<group>"; };
 		BB0001010000000000000039 /* OWObjectTypeChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWObjectTypeChip.swift; sourceTree = "<group>"; };
@@ -175,6 +181,7 @@
 		BB0001010000000000000055 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BB00010100000000000000D1 /* OWTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWTypography.swift; sourceTree = "<group>"; };
 		BB00010100000000000000B1 /* OWIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWIcon.swift; sourceTree = "<group>"; };
+		BB00010100000000000000D3 /* OWUnicodeIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWUnicodeIcon.swift; sourceTree = "<group>"; };
 		BB00010100000000000000B2 /* AIAssistNavigationState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIAssistNavigationState.swift; sourceTree = "<group>"; };
 		BB0001010000000000000056 /* OWDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWDatabase.swift; sourceTree = "<group>"; };
 		BB0001010000000000000057 /* OWDatabaseEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWDatabaseEntry.swift; sourceTree = "<group>"; };
@@ -187,6 +194,7 @@
 		BB00010100000000000000C3 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		BB00010100000000000000C4 /* ThemePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemePickerView.swift; sourceTree = "<group>"; };
 		BB00010100000000000000C5 /* OpenWriteSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWriteSettingsView.swift; sourceTree = "<group>"; };
+		BB00010100000000000000D5 /* VaultAttachmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultAttachmentStore.swift; sourceTree = "<group>"; };
 		CC0001010000000000000001 /* OpenWrite.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenWrite.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -271,6 +279,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0001010000000000000004 /* VaultDocument.swift */,
+				BB00010100000000000000B6 /* CoverStyle.swift */,
 				BB0001010000000000000015 /* PageType.swift */,
 				BB0001010000000000000016 /* PageProperties.swift */,
 				BB0001010000000000000017 /* TypeTemplate.swift */,
@@ -363,6 +372,7 @@
 			children = (
 				BB0001010000000000000007 /* VaultStore.swift */,
 				BB0001010000000000000058 /* VaultSnapshot.swift */,
+				BB00010100000000000000D5 /* VaultAttachmentStore.swift */,
 			);
 			path = Vault;
 			sourceTree = "<group>";
@@ -467,13 +477,15 @@
 			children = (
 				BB0001010000000000000036 /* OWRoundedRect.swift */,
 				BB0001010000000000000034 /* OWSidebarRow.swift */,
+				BB00010100000000000000B5 /* OWSidebarSection.swift */,
 				BB0001010000000000000038 /* OWPageHero.swift */,
 				BB00010100000000000000B4 /* OWAIPanelHeader.swift */,
-				BB0001010000000000000046 /* OWPageBanner.swift */,
+				BB00010100000000000000D2 /* OWPageHeaderEditor.swift */,
 				BB0001010000000000000047 /* OWPreviewBlockRow.swift */,
 				BB0001010000000000000039 /* OWObjectTypeChip.swift */,
 				BB000101000000000000003E /* OWMetadataChip.swift */,
 				BB00010100000000000000B1 /* OWIcon.swift */,
+				BB00010100000000000000D3 /* OWUnicodeIcon.swift */,
 			);
 			path = Design;
 			sourceTree = "<group>";
@@ -615,6 +627,7 @@
 				AA0001010000000000000002 /* ContentView.swift in Sources */,
 				AA0001010000000000000003 /* EditorView.swift in Sources */,
 				AA0001010000000000000004 /* VaultDocument.swift in Sources */,
+				AA00010100000000000000B6 /* CoverStyle.swift in Sources */,
 				AA0001010000000000000005 /* NoteBlock.swift in Sources */,
 				AA0001010000000000000006 /* EncryptionService.swift in Sources */,
 				AA0001010000000000000007 /* VaultStore.swift in Sources */,
@@ -661,11 +674,12 @@
 				AA0001010000000000000030 /* StructureTemplate.swift in Sources */,
 				AA0001010000000000000031 /* StructureTemplatePicker.swift in Sources */,
 				AA0001010000000000000034 /* OWSidebarRow.swift in Sources */,
+				AA00010100000000000000B5 /* OWSidebarSection.swift in Sources */,
 				AA0001010000000000000035 /* AISettingsView.swift in Sources */,
 				AA0001010000000000000036 /* OWRoundedRect.swift in Sources */,
 				AA0001010000000000000038 /* OWPageHero.swift in Sources */,
 				AA00010100000000000000B4 /* OWAIPanelHeader.swift in Sources */,
-				AA0001010000000000000046 /* OWPageBanner.swift in Sources */,
+				AA00010100000000000000D2 /* OWPageHeaderEditor.swift in Sources */,
 				AA0001010000000000000047 /* OWPreviewBlockRow.swift in Sources */,
 				AA0001010000000000000039 /* OWObjectTypeChip.swift in Sources */,
 				AA000101000000000000003E /* OWMetadataChip.swift in Sources */,
@@ -679,6 +693,7 @@
 				AA0001010000000000000044 /* GraphViewModel.swift in Sources */,
 				AA0001010000000000000045 /* GraphView.swift in Sources */,
 				AA00010100000000000000B1 /* OWIcon.swift in Sources */,
+				AA00010100000000000000D3 /* OWUnicodeIcon.swift in Sources */,
 				AA000101000000000000004C /* IngestionPipeline.swift in Sources */,
 				AA000101000000000000004D /* IngestionHealth.swift in Sources */,
 				AA000101000000000000004E /* VaultFSEventsStub.swift in Sources */,
@@ -693,6 +708,7 @@
 				AA00010100000000000000C3 /* ThemeManager.swift in Sources */,
 				AA00010100000000000000C4 /* ThemePickerView.swift in Sources */,
 				AA00010100000000000000C5 /* OpenWriteSettingsView.swift in Sources */,
+				AA00010100000000000000D5 /* VaultAttachmentStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -117,7 +117,7 @@ struct AIActivityIndicator: View {
                         .controlSize(.small)
                         .scaleEffect(pulse ? 1.05 : 0.95)
                 } else if case .error = state {
-                    OWIconView(icon: .warningFill, size: 16, color: .orange)
+                    OWUnicodeIconView(icon: .warningFill, size: 16, color: .orange)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -242,7 +242,7 @@ struct ChatPanelView: View {
             navigation.openChatThread()
         } label: {
             HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
-                OWIconView(icon: .agent, size: 18)
+                OWUnicodeIconView(icon: .agent, size: 18)
                     .foregroundStyle(DesignTokens.Color.accent)
                     .frame(width: 24)
 
@@ -257,7 +257,7 @@ struct ChatPanelView: View {
                 }
                 Spacer(minLength: 0)
                 if isSelected {
-                    OWIconView(icon: .checkmarkCircle, size: 18, color: DesignTokens.Color.accent)
+                    OWUnicodeIconView(icon: .checkmarkCircle, size: 18, color: DesignTokens.Color.accent)
                 }
             }
             .padding(DesignTokens.Spacing.spacing2)
@@ -339,7 +339,7 @@ struct ChatPanelView: View {
                 LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                     if model.messages.isEmpty {
                         VStack(spacing: DesignTokens.Spacing.spacing2) {
-                            OWIconView(icon: .sparkles, size: 22)
+                            OWUnicodeIconView(icon: .sparkles, size: 22)
                                 .foregroundStyle(DesignTokens.Color.textTertiary)
                             Text("Ask about your notes")
                                 .font(OWTypography.calloutEmphasis)
@@ -404,7 +404,7 @@ struct ChatPanelView: View {
 
             if message.isStreaming, !message.text.isEmpty {
                 HStack(spacing: 4) {
-                    OWIconView(icon: .waveform, size: 12, color: DesignTokens.Color.textTertiary)
+                    OWUnicodeIconView(icon: .waveform, size: 12, color: DesignTokens.Color.textTertiary)
                     Text("Streaming")
                         .font(OWTypography.caption2)
                         .foregroundStyle(.tertiary)
@@ -471,7 +471,7 @@ struct ChatPanelView: View {
                 Button {
                     aiServices.voiceInput.toggleListening(appendTo: &model.draft)
                 } label: {
-                    OWIconView(
+                    OWUnicodeIconView(
                         icon: aiServices.voiceInput.isListening ? .micActive : .mic,
                         size: 20,
                         color: aiServices.voiceInput.isListening ? Color.accentColor : .secondary
@@ -482,7 +482,7 @@ struct ChatPanelView: View {
                 Button {
                     model.send(services: aiServices, agent: aiServices.selectedAgent)
                 } label: {
-                    OWIconView(icon: .send, size: 24, color: DesignTokens.Color.accent)
+                    OWUnicodeIconView(icon: .send, size: 24, color: DesignTokens.Color.accent)
                 }
                 .disabled(model.isBusy || AIInput.sanitizeQuery(model.draft) == nil)
                 .keyboardShortcut(.return, modifiers: [.command])

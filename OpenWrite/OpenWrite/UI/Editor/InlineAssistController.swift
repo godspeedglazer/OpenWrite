@@ -186,7 +186,8 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
         scrollView.borderType = .noBorder
         scrollView.autoresizingMask = [.width, .height]
 
-        let textView = NSTextView()
+        let textView = PasteAwareTextView()
+        textView.pasteCoordinator = context.coordinator
         textView.isRichText = false
         textView.isEditable = true
         textView.isSelectable = true
@@ -195,6 +196,8 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.font = DesignTokens.Typography.editorNSFont
+        textView.defaultParagraphStyle = DesignTokens.Typography.editorParagraphStyle
+        textView.typingAttributes = DesignTokens.Typography.editorTypingAttributes
         textView.textContainerInset = NSSize(width: 4, height: 8)
         textView.backgroundColor = .clear
         textView.delegate = context.coordinator
@@ -212,6 +215,11 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
+        let font = DesignTokens.Typography.editorNSFont
+        if textView.font != font {
+            textView.font = font
+        }
+        textView.defaultParagraphStyle = DesignTokens.Typography.editorParagraphStyle
         if textView.string != text {
             context.coordinator.isProgrammaticUpdate = true
             textView.string = text
@@ -238,5 +246,75 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
             let range = textView.selectedRange()
             parent.onSelectionChange(range.length > 0 ? range : nil)
         }
+
+        @discardableResult
+        func insertPastedImageLine() -> Bool {
+            guard let block = ImagePasteSupport.ingestPastedImage(),
+                  let textView else { return false }
+            insertLine(NDLSerializer.serializeBlock(block), in: textView)
+            return true
+        }
+
+        private func insertLine(_ line: String, in textView: NSTextView) {
+            let range = textView.selectedRange()
+            let ns = textView.string as NSString
+            let needsLeadingNewline = range.location > 0
+                && ns.substring(with: NSRange(location: range.location - 1, length: 1)) != "\n"
+            let insertion = (needsLeadingNewline ? "\n" : "") + line + "\n"
+            let newText = ns.replacingCharacters(in: range, with: insertion)
+            isProgrammaticUpdate = true
+            textView.string = newText
+            isProgrammaticUpdate = false
+            parent.text = newText
+            let newLocation = range.location + (insertion as NSString).length
+            textView.setSelectedRange(NSRange(location: newLocation, length: 0))
+        }
+    }
+}
+
+// MARK: - Paste-aware AppKit surfaces
+
+final class PasteAwareTextView: NSTextView {
+    weak var pasteCoordinator: SelectablePlainTextEditor.Coordinator?
+
+    override func paste(_ sender: Any?) {
+        if pasteCoordinator?.insertPastedImageLine() == true {
+            return
+        }
+        super.paste(sender)
+    }
+}
+
+/// Wraps a SwiftUI host and intercepts image paste for the block editor.
+final class BlockEditorPasteCaptureView: NSControl {
+    var onPasteImageBlock: ((NoteBlock) -> Void)?
+    private let hostedView: NSView
+
+    init(hostedView: NSView) {
+        self.hostedView = hostedView
+        super.init(frame: .zero)
+        hostedView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(hostedView)
+        NSLayoutConstraint.activate([
+            hostedView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hostedView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            hostedView.topAnchor.constraint(equalTo: topAnchor),
+            hostedView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    @objc func paste(_ sender: Any?) {
+        if let block = ImagePasteSupport.ingestPastedImage() {
+            onPasteImageBlock?(block)
+            return
+        }
+        NSApp.sendAction(#selector(NSTextView.paste(_:)), to: nil, from: sender)
     }
 }

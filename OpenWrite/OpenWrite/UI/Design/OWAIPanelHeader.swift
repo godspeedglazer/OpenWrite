@@ -61,7 +61,7 @@ struct OWAIPanelHeader<Center: View, Trailing: View>: View {
             HStack(spacing: DesignTokens.Spacing.spacing2) {
                 if canGoBack, let onBack {
                     Button(action: onBack) {
-                        OWIconView(icon: .back, size: 14)
+                        OWUnicodeIconView(icon: .back, size: 14)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(DesignTokens.Color.textSecondary)

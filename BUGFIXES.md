@@ -39,6 +39,10 @@ Brief log from the Debug build / UI edge-case sweep.
 
 - “No links yet” is a non-blocking overlay when notes exist but edges do not (was unreachable when `nodes` was non-empty).
 - Resets pan/zoom when the vault document count changes.
+- Replaced oversized circle nodes with **rounded-rect cards** (~120×56pt, icon + title) using `DesignTokens.Color.graphNode` / `graphNodeFocused`.
+- **Force-directed lite** refinement after circle seed: repulsion, edge attraction, center gravity; adaptive ring radius from card size + min spacing.
+- Edges draw between card borders with optional arrowheads at targets; all vault notes appear on the graph (removed >12-doc linked-only filter).
+- Floating bar: note count + isolated count from per-node link degree; node tap still opens editor via `AnytypeShellView`.
 
 ## Typography / anti-patterns
 

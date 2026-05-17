@@ -25,6 +25,12 @@ final class OpenWriteAIServices: ObservableObject {
 
     private var ingestionPipeline: IngestionPipeline?
     private var indexingTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
+
+    /// True after a successful connection check (`lmStatus` begins with "Connected").
+    var isLMStudioConnected: Bool {
+        lmStatus.hasPrefix("Connected")
+    }
 
     init() {
         lmClient = LMStudioClient(config: .default)
@@ -33,6 +39,10 @@ final class OpenWriteAIServices: ObservableObject {
         retrieval = NoOpRetrievalService()
         rag = PlaceholderRAGService(retrieval: NoOpRetrievalService())
         vectorStore.attachHealth(ingestionHealth)
+        ingestionHealth.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
         rebuildPipeline()
         Task {
             await vectorStore.loadFromDiskIfPresent()

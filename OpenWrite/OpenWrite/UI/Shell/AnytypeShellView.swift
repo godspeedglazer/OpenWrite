@@ -231,7 +231,7 @@ struct AnytypeShellView: View {
                 showNewPageSheet = true
             } label: {
                 HStack(spacing: DesignTokens.Spacing.spacing2) {
-                    OWIconView(icon: .plus, size: 16, color: DesignTokens.Color.accent)
+                    OWUnicodeIconView(icon: .plus, size: 16, color: DesignTokens.Color.accent)
                     Text("+ New object")
                         .font(OWTypography.bodyEmphasis)
                 }

@@ -20,7 +20,7 @@ struct OWPageHero: View {
     var body: some View {
         VStack(spacing: verticalSpacing) {
             if style == .emptyState {
-                OWIconView(icon: icon, size: 40, color: heroIconColor)
+                OWUnicodeIconView(icon: icon, size: 40, color: heroIconColor)
             }
 
             if style == .documentHeader, let pageType {
@@ -33,6 +33,7 @@ struct OWPageHero: View {
 
             Text(title)
                 .font(OWTypography.documentTitle)
+                .lineSpacing(OWTypography.documentTitleLineSpacing)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
                 .multilineTextAlignment(style == .emptyState ? .center : .leading)
                 .frame(maxWidth: DesignTokens.Layout.editorMaxContentWidth, alignment: alignment)

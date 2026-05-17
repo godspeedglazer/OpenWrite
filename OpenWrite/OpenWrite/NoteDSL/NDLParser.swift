@@ -59,6 +59,9 @@ enum NDLParser {
         if line.hasPrefix("# ") {
             return NoteBlock(kind: .heading1, text: String(line.dropFirst(2)))
         }
+        if let todo = parseTodoLine(line) {
+            return todo
+        }
         if line.hasPrefix("- ") {
             return NoteBlock(kind: .bullet, text: String(line.dropFirst(2)))
         }
@@ -72,7 +75,58 @@ enum NDLParser {
             let inner = line.dropFirst(2).dropLast(2)
             return NoteBlock(kind: .wikilink, text: String(inner))
         }
+        if let image = parseImageLine(line) {
+            return image
+        }
         return nil
+    }
+
+    private static func parseImageLine(_ line: String) -> NoteBlock? {
+        guard line.hasPrefix("!["),
+              let bracketEnd = line.firstIndex(of: "]"),
+              bracketEnd < line.endIndex else { return nil }
+        let afterBracket = line.index(after: bracketEnd)
+        guard afterBracket < line.endIndex, line[afterBracket] == "(",
+              line.hasSuffix(")") else { return nil }
+
+        let altStart = line.index(line.startIndex, offsetBy: 2)
+        let alt = String(line[altStart..<bracketEnd])
+            .replacingOccurrences(of: "\\]", with: "]")
+        let openParen = line.index(after: afterBracket)
+        let closeParen = line.index(before: line.endIndex)
+        guard openParen <= closeParen else { return nil }
+        let target = String(line[openParen...closeParen])
+
+        if target.hasPrefix("asset:") {
+            let assetId = String(target.dropFirst("asset:".count))
+            guard !assetId.isEmpty else { return nil }
+            return NoteBlock(kind: .image, text: alt, attributes: [NoteBlock.assetIdAttributeKey: assetId])
+        }
+        if target.hasPrefix("path:") {
+            let path = String(target.dropFirst("path:".count))
+            return NoteBlock(kind: .image, text: alt, attributes: [NoteBlock.pathAttributeKey: path])
+        }
+        if !target.isEmpty {
+            return NoteBlock(kind: .image, text: alt, attributes: [NoteBlock.pathAttributeKey: target])
+        }
+        return nil
+    }
+
+    private static func parseTodoLine(_ line: String) -> NoteBlock? {
+        guard line.hasPrefix("- ["), let close = line.firstIndex(of: "]") else { return nil }
+        let stateStart = line.index(line.startIndex, offsetBy: 3)
+        guard stateStart < close else { return nil }
+        let state = line[stateStart..<close]
+        guard state.count == 1 else { return nil }
+        let checked = state == "x" || state == "X"
+        let afterClose = line.index(after: close)
+        let text: String
+        if afterClose < line.endIndex {
+            text = String(line[afterClose...]).trimmingCharacters(in: .whitespaces)
+        } else {
+            text = ""
+        }
+        return NoteBlock.todoBlock(text: text, checked: checked)
     }
 
     private static func parseCalloutLine(_ line: String) -> NoteBlock? {

@@ -17,17 +17,17 @@ struct AgentPickerView: View {
                         Text(agent.name)
                         if agent.id == selectedAgentID {
                             Spacer()
-                            OWIconView(icon: .checkmark, size: 12)
+                            OWUnicodeIconView(icon: .checkmark, size: 12)
                         }
                     }
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                OWIconView(icon: .agent, size: 14)
+                OWUnicodeIconView(icon: .agent, size: 14)
                 Text(selection.name)
                     .lineLimit(1)
-                OWIconView(icon: .chevronDown, size: 10)
+                OWUnicodeIconView(icon: .chevronDown, size: 10)
                     .foregroundStyle(.secondary)
             }
             .font(OWTypography.subheadlineEmphasis)

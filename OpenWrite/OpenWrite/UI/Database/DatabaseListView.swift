@@ -14,7 +14,7 @@ struct DatabaseListView: View {
                 Button {
                     showCreateDatabaseSheet = true
                 } label: {
-                    OWIconView(icon: .plus, size: 14, color: DesignTokens.Color.accent)
+                    OWUnicodeIconView(icon: .plus, size: 14, color: DesignTokens.Color.accent)
                 }
                 .buttonStyle(.plain)
                 .help("New database")
@@ -32,7 +32,7 @@ struct DatabaseListView: View {
                             showCreateDatabaseSheet = true
                         } label: {
                             HStack(spacing: DesignTokens.Spacing.spacing2) {
-                                OWIconView(icon: .plus, size: 14, color: DesignTokens.Color.accent)
+                                OWUnicodeIconView(icon: .plus, size: 14, color: DesignTokens.Color.accent)
                                 Text("+ New database")
                                     .font(DesignTokens.Typography.sidebarItem.weight(.medium))
                                     .foregroundStyle(DesignTokens.Color.accent)

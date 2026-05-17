@@ -92,20 +92,20 @@ struct AIAssistStripView: View {
     private var assistToolbarTrailing: some View {
         HStack(spacing: DesignTokens.Spacing.spacing1) {
             if navigation.isAtRoot, !navigation.stripCanGoBack {
-                OWIconView(icon: .sparkles, size: 14, color: DesignTokens.Color.accent)
+                OWUnicodeIconView(icon: .sparkles, size: 14, color: DesignTokens.Color.accent)
             }
             if navigation.canGoForward {
                 Button {
                     navigation.goForward()
                 } label: {
-                    OWIconView(icon: .forward, size: 14)
+                    OWUnicodeIconView(icon: .forward, size: 14)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
                 .help("Forward")
             }
             Button(action: onCollapse) {
-                OWIconView(icon: .chevronRight, size: 12)
+                OWUnicodeIconView(icon: .chevronRight, size: 12)
             }
             .buttonStyle(.plain)
             .foregroundStyle(DesignTokens.Color.textSecondary)
@@ -123,7 +123,7 @@ struct AIAssistBottomBar: View {
         HStack(spacing: DesignTokens.Spacing.spacing2) {
             Button(action: onExpand) {
                 HStack(spacing: DesignTokens.Spacing.spacing1) {
-                    OWIconView(icon: .sparkles, size: 12, color: DesignTokens.Color.accent)
+                    OWUnicodeIconView(icon: .sparkles, size: 12, color: DesignTokens.Color.accent)
                     Text("AI assist")
                         .font(OWTypography.captionEmphasis)
                         .foregroundStyle(DesignTokens.Color.accent)
@@ -142,7 +142,7 @@ struct AIAssistBottomBar: View {
                     workbench.inspectorTab = tab
                     onExpand()
                 } label: {
-                    OWIconView(icon: tab.owIcon, size: 12)
+                    OWUnicodeIconView(icon: tab.owIcon, size: 12)
                         .foregroundStyle(
                             workbench.inspectorTab == tab
                                 ? DesignTokens.Color.accent

@@ -35,13 +35,13 @@ struct ThemeQuickToggle: View {
                             Text(theme.displayName)
                             if themeManager.selectedTheme == theme {
                                 Spacer(minLength: 8)
-                                OWIconView(icon: .checkmark, size: 12, color: DesignTokens.Color.accent)
+                                OWUnicodeIconView(icon: .checkmark, size: 12, color: DesignTokens.Color.accent)
                             }
                         }
                     }
                 }
             } label: {
-                OWIconView(icon: .sliders, size: 16, color: DesignTokens.Color.textSecondary)
+                OWUnicodeIconView(icon: .sliders, size: 16, color: DesignTokens.Color.textSecondary)
                     .frame(width: 32, height: 32)
                     .background(DesignTokens.Color.selectionPill.opacity(0.9), in: Circle())
             }

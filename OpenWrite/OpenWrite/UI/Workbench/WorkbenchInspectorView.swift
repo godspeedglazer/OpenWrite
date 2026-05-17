@@ -13,7 +13,7 @@ struct WorkbenchInspectorView: View {
                     Label {
                         Text(tab.title)
                     } icon: {
-                        OWIconView(icon: tab.owIcon, size: 12)
+                        OWUnicodeIconView(icon: tab.owIcon, size: 12)
                     }
                     .tag(tab)
                 }

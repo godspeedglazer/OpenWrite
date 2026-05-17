@@ -33,7 +33,7 @@ struct StructureTemplatePicker: View {
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    OWIconView(icon: structure.owIcon, size: 24, color: DesignTokens.ObjectType.accent(for: structure.pageType))
+                    OWUnicodeIconView(pageType: structure.pageType, size: 24, color: DesignTokens.ObjectType.accent(for: structure.pageType))
                     Text(structure.displayName)
                         .font(.subheadline.weight(.semibold))
                 }

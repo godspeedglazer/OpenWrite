@@ -8,6 +8,7 @@ struct OWSidebarRow: View {
     var subtitle: String?
     var pageType: PageType?
     var customIcon: OWIcon?
+    var pageIconCharacter: String?
     var iconTint: Color?
     var showsGraphGlyph: Bool = false
     /// Tighter vault/object list density.
@@ -28,12 +29,18 @@ struct OWSidebarRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: DesignTokens.Spacing.spacing2) {
-                if let iconTint {
-                    OWIconView(icon: rowIcon, size: 18, color: iconTint)
+                if let pageIconCharacter, !pageIconCharacter.isEmpty, !showsGraphGlyph {
+                    OWUnicodePageTypeIconWell(
+                        character: pageIconCharacter,
+                        pageType: pageTypeForWell,
+                        size: DesignTokens.Layout.objectIconWellSize
+                    )
+                } else if let iconTint {
+                    OWUnicodeIconView(icon: rowIcon, size: 18, color: iconTint)
                         .frame(width: 28, height: 28)
                         .background(iconTint.opacity(0.14), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous))
                 } else {
-                    OWPageTypeIconWell(
+                    OWUnicodePageTypeIconWell(
                         icon: rowIcon,
                         pageType: pageTypeForWell,
                         size: DesignTokens.Layout.objectIconWellSize

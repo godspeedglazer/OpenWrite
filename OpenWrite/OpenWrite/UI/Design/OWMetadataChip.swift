@@ -13,7 +13,7 @@ struct OWMetadataChip: View {
     var body: some View {
         HStack(spacing: DesignTokens.Spacing.spacing1) {
             if let icon {
-                OWIconView(icon: icon, size: 12, color: DesignTokens.Color.textTertiary)
+                OWUnicodeIconView(icon: icon, size: 12, color: DesignTokens.Color.textTertiary)
             }
             if value != nil {
                 Text(label)

@@ -29,7 +29,7 @@ struct OWRailSearchField: View {
 
     var body: some View {
         HStack(spacing: DesignTokens.Spacing.spacing2) {
-            OWIconView(
+            OWUnicodeIconView(
                 icon: .search,
                 size: 14,
                 color: isFocused ? DesignTokens.Color.textSecondary : DesignTokens.Color.textTertiary
@@ -45,7 +45,7 @@ struct OWRailSearchField: View {
                 Button {
                     text = ""
                 } label: {
-                    OWIconView(icon: .plus, size: 12, color: DesignTokens.Color.textTertiary)
+                    OWUnicodeIconView(icon: .plus, size: 12, color: DesignTokens.Color.textTertiary)
                         .rotationEffect(.degrees(45))
                 }
                 .buttonStyle(.plain)
@@ -83,6 +83,10 @@ struct OWNavigationRail: View {
     @Binding var showAISettings: Bool
     @Binding var showCreateDatabaseSheet: Bool
 
+    @State private var objectsSectionExpanded = true
+    @State private var pinnedSectionExpanded = true
+    @State private var spaceSwitcherExpanded = false
+
     private var filteredDocuments: [VaultDocument] {
         var docs = vaultStore.documents
         if let filter = workbench.vaultTypeFilter {
@@ -101,7 +105,7 @@ struct OWNavigationRail: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
-                    spaceHeader
+                    spaceSwitcherStub
                     OWRailSearchField(text: $searchQuery)
                     objectsSection
                     DatabaseListView(
@@ -109,7 +113,7 @@ struct OWNavigationRail: View {
                         showCreateDatabaseSheet: $showCreateDatabaseSheet
                     )
                     vaultSection
-                    pinnedStub
+                    pinnedSection
                 }
                 .padding(DesignTokens.Spacing.sidebarPadding)
             }
@@ -139,71 +143,107 @@ struct OWNavigationRail: View {
         }
     }
 
-    private var spaceHeader: some View {
-        HStack(spacing: DesignTokens.Spacing.spacing2) {
-            OWPageTypeIconWell(icon: .notes, size: 22)
+    /// Optional space switcher stub (Anytype-style space row at rail top).
+    private var spaceSwitcherStub: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                Button {
+                    withAnimation(DesignTokens.Motion.animationStandard) {
+                        spaceSwitcherExpanded.toggle()
+                    }
+                } label: {
+                    Text(spaceSwitcherExpanded ? "▾" : "▸")
+                        .font(OWTypography.caption.weight(.semibold))
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                        .frame(width: 20, alignment: .center)
+                }
+                .buttonStyle(.plain)
+                .help(spaceSwitcherExpanded ? "Collapse space menu" : "Expand space menu")
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("OpenWrite")
-                    .font(OWTypography.bodyEmphasis)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                Text("Local vault")
+                OWUnicodePageTypeIconWell(icon: .notes, size: 22)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("OpenWrite")
+                        .font(OWTypography.bodyEmphasis)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    Text("Local vault")
+                        .font(OWTypography.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    showNewPageSheet = true
+                } label: {
+                    OWUnicodeIconView(icon: .plus, size: 16, color: DesignTokens.Color.accent)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(DesignTokens.Color.accent)
+                .help("New page")
+            }
+            .padding(.horizontal, DesignTokens.Spacing.spacing1)
+            .padding(.vertical, DesignTokens.Spacing.spacing1)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .fill(DesignTokens.Color.surface.opacity(spaceSwitcherExpanded ? 0.85 : 0.55))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("OpenWrite, local vault")
+            .accessibilityHint("Space switcher coming soon")
+
+            if spaceSwitcherExpanded {
+                Text("Additional spaces will appear here. For now, everything lives in your local vault.")
                     .font(OWTypography.caption)
                     .foregroundStyle(DesignTokens.Color.textTertiary)
+                    .padding(.horizontal, DesignTokens.Spacing.spacing2)
+                    .padding(.bottom, DesignTokens.Spacing.spacing1)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
-
-            Spacer()
-
-            Button {
-                showNewPageSheet = true
-            } label: {
-                OWIconView(icon: .plus, size: 16, color: DesignTokens.Color.accent)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(DesignTokens.Color.accent)
-            .help("New page")
         }
-        .padding(.horizontal, DesignTokens.Spacing.spacing1)
     }
 
     private var objectsSection: some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-            OWNavigationRailSectionLabel(title: "Objects")
-
-            OWRoundedRect(style: .sidebarCard, padding: DesignTokens.Spacing.spacing1) {
-                VStack(spacing: 0) {
-                    ForEach(objectNavTypes, id: \.self) { type in
-                        OWSidebarRow(
-                            title: type.displayName,
-                            pageType: type,
-                            dense: true,
-                            isSelected: workbench.vaultTypeFilter == type
-                        ) {
-                            withAnimation(DesignTokens.Motion.animationStandard) {
-                                if workbench.vaultTypeFilter == type {
-                                    workbench.vaultTypeFilter = nil
-                                } else {
-                                    workbench.vaultTypeFilter = type
-                                    workbench.showEditor()
-                                }
+        OWSidebarSection(title: "Objects", isExpanded: $objectsSectionExpanded) {
+            VStack(spacing: 0) {
+                ForEach(objectNavTypes, id: \.self) { type in
+                    OWSidebarObjectTypeRow(
+                        pageType: type,
+                        documentCount: documentCount(for: type),
+                        isFilterActive: workbench.vaultTypeFilter == type
+                    ) {
+                        withAnimation(DesignTokens.Motion.animationStandard) {
+                            if workbench.vaultTypeFilter == type {
+                                workbench.vaultTypeFilter = nil
+                            } else {
+                                workbench.vaultTypeFilter = type
+                                workbench.showEditor()
                             }
                         }
                     }
+                }
 
-                    OWSidebarRow(
-                        title: SidebarSection.graph.title,
-                        subtitle: "Vault topology",
-                        showsGraphGlyph: true,
-                        dense: true,
-                        isSelected: workbench.centerTab == .graph
-                    ) {
-                        withAnimation(DesignTokens.Motion.animationStandard) {
-                            workbench.showGraph()
-                        }
+                OWSidebarRow(
+                    title: SidebarSection.graph.title,
+                    subtitle: "Vault topology",
+                    showsGraphGlyph: true,
+                    dense: true,
+                    isSelected: workbench.centerTab == .graph
+                ) {
+                    withAnimation(DesignTokens.Motion.animationStandard) {
+                        workbench.showGraph()
                     }
                 }
             }
         }
+    }
+
+    private func documentCount(for type: PageType) -> Int {
+        vaultStore.documents.filter { $0.pageType == type }.count
     }
 
     private var objectNavTypes: [PageType] {
@@ -232,6 +272,7 @@ struct OWNavigationRail: View {
                     OWSidebarRow(
                         title: doc.displayTitle,
                         pageType: doc.pageType,
+                        pageIconCharacter: doc.resolvedPageIcon,
                         dense: true,
                         isSelected: vaultStore.selectedDocumentID == doc.id
                     ) {
@@ -286,7 +327,7 @@ struct OWNavigationRail: View {
 
     private func vaultCTALabel(_ title: String) -> some View {
         HStack(spacing: DesignTokens.Spacing.spacing2) {
-            OWIconView(icon: .plus, size: 14, color: palette.accent)
+            OWUnicodeIconView(icon: .plus, size: 14, color: palette.accent)
             Text(title)
                 .font(OWTypography.sidebarItemEmphasis)
                 .foregroundStyle(palette.accent)
@@ -300,34 +341,33 @@ struct OWNavigationRail: View {
         )
     }
 
-    private var pinnedStub: some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-            OWNavigationRailSectionLabel(title: "Pinned")
-            OWRoundedRect(style: .sidebarCard, padding: DesignTokens.Spacing.spacing2) {
-                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-                    Text("Keep important pages at the top of your vault.")
-                        .font(OWTypography.caption)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
+    private var pinnedSection: some View {
+        OWSidebarSection(title: "Pinned", isExpanded: $pinnedSectionExpanded) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                Text("Keep important pages at the top of your vault.")
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
 
-                    if let doc = vaultStore.selectedDocument {
+                if let doc = vaultStore.selectedDocument {
                         OWSidebarRow(
                             title: doc.displayTitle,
                             pageType: doc.pageType,
+                            pageIconCharacter: doc.resolvedPageIcon,
                             dense: true,
                             isSelected: true
                         ) {
-                            workbench.showEditor()
-                        }
-                    } else {
-                        Button {
-                            showNewPageSheet = true
-                        } label: {
-                            vaultCTALabel("Open a page to pin")
-                        }
-                        .buttonStyle(.plain)
+                        workbench.showEditor()
                     }
+                } else {
+                    Button {
+                        showNewPageSheet = true
+                    } label: {
+                        vaultCTALabel("Open a page to pin")
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(DesignTokens.Spacing.spacing1)
         }
     }
 
@@ -353,7 +393,8 @@ struct OWNavigationRail: View {
                     .fill(aiStatusColor)
                     .frame(width: 8, height: 8)
                     .padding(DesignTokens.Spacing.spacing3)
-                    .help(aiServices.activityState.shortLabel)
+                    .help(aiStatusHelp)
+                    .accessibilityLabel(aiStatusHelp)
             }
         }
         .padding(DesignTokens.Spacing.sidebarPadding)
@@ -428,7 +469,7 @@ struct OWNavigationRail: View {
 
     private func railBottomButton(icon: OWIcon, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            OWIconView(icon: icon, size: 16, color: DesignTokens.Color.textSecondary)
+            OWUnicodeIconView(icon: icon, size: 16, color: DesignTokens.Color.textSecondary)
                 .frame(
                     width: DesignTokens.Layout.sidebarBottomButtonSize,
                     height: DesignTokens.Layout.sidebarBottomButtonSize
@@ -444,13 +485,49 @@ struct OWNavigationRail: View {
     }
 
     private var aiStatusColor: Color {
-        switch aiServices.activityState {
-        case .idle:
-            return DesignTokens.Color.success
-        case .error:
+        let health = aiServices.ingestionHealth.health
+
+        if health.status == .failed {
             return DesignTokens.Color.danger
-        default:
-            return DesignTokens.Color.accent
         }
+
+        if aiServices.isIndexing
+            || health.isActive
+            || aiServices.activityState == .indexing {
+            return DesignTokens.Color.warning
+        }
+
+        if aiServices.isLMStudioConnected {
+            return DesignTokens.Color.success
+        }
+
+        return DesignTokens.Color.textTertiary
+    }
+
+    private var aiStatusHelp: String {
+        let health = aiServices.ingestionHealth.health
+
+        if health.status == .failed {
+            if let error = health.lastError, !error.isEmpty {
+                return "Ingestion failed: \(error)"
+            }
+            return "Ingestion failed"
+        }
+
+        if aiServices.isIndexing
+            || health.isActive
+            || aiServices.activityState == .indexing {
+            return aiServices.activityState.statusMessage ?? health.progressSummary ?? health.statusLabel
+        }
+
+        if aiServices.isLMStudioConnected {
+            return "LM Studio connected · \(health.statusLabel.lowercased())"
+        }
+
+        if aiServices.lmStatus == "Not checked" {
+            return "LM Studio not checked — open Settings to connect"
+        }
+
+        return aiServices.lmStatus
     }
 }

@@ -135,7 +135,7 @@ struct PropertyInspectorView: View {
             Stepper(value: ratingBinding, in: 1 ... 5) {
                 HStack(spacing: 2) {
                     ForEach(1 ... 5, id: \.self) { star in
-                        OWIconView(
+                        OWUnicodeIconView(
                             icon: star <= ratingBinding.wrappedValue ? .starFilled : .star,
                             size: 12,
                             color: star <= ratingBinding.wrappedValue ? .yellow : .secondary

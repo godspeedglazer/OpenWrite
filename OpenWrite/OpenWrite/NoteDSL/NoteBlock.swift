@@ -28,6 +28,8 @@ struct NoteBlock: Identifiable, Codable, Hashable, Sendable {
         case heading2
         case heading3
         case bullet
+        /// Checkbox row — `- [ ]` / `- [x]` in NDL v0; `attributes["checked"]`.
+        case todo
         case quote
         /// Admonition / callout — `> [!type]` in NDL v0; tint via `attributes["callout"]`.
         case callout
@@ -36,6 +38,41 @@ struct NoteBlock: Identifiable, Codable, Hashable, Sendable {
         case wikilink
         /// Typed page property line — serialized as `@key value` in NDL v0.
         case property
+        /// Raster embed — `attributes["assetId"]` and/or `attributes["path"]`; alt in `text`.
+        case image
+    }
+
+    static let assetIdAttributeKey = "assetId"
+    static let pathAttributeKey = "path"
+    static let checkedAttributeKey = "checked"
+
+    var isChecked: Bool {
+        get { attributes[Self.checkedAttributeKey] == "true" }
+        set { attributes[Self.checkedAttributeKey] = newValue ? "true" : "false" }
+    }
+
+    static func todoBlock(text: String, checked: Bool = false) -> NoteBlock {
+        NoteBlock(
+            kind: .todo,
+            text: text,
+            attributes: [checkedAttributeKey: checked ? "true" : "false"]
+        )
+    }
+
+    var imageAssetId: String? {
+        attributes[Self.assetIdAttributeKey]
+    }
+
+    var imagePath: String? {
+        attributes[Self.pathAttributeKey]
+    }
+
+    static func imageBlock(alt: String, assetId: UUID, relativePath: String? = nil) -> NoteBlock {
+        var attrs = [assetIdAttributeKey: assetId.uuidString.lowercased()]
+        if let relativePath {
+            attrs[pathAttributeKey] = relativePath
+        }
+        return NoteBlock(kind: .image, text: alt, attributes: attrs)
     }
 
     /// Property field key when `kind == .property` (stored in `text` as fallback).
@@ -73,12 +110,14 @@ extension NoteBlock.Kind {
         case .heading2: return "## "
         case .heading3: return "### "
         case .bullet: return "- "
+        case .todo: return "- [ ] "
         case .quote: return "> "
         case .callout: return "> [!note] "
         case .code: return "```"
         case .divider: return "---"
         case .wikilink: return "[["
         case .property: return "@"
+        case .image: return "!["
         }
     }
 }
@@ -105,6 +144,19 @@ enum NDLSerializer {
             let key = block.propertyKey?.rawValue ?? block.text
             let value = block.propertyValuePayload
             return "@\(key) \(escapePropertyValue(value))"
+        case .todo:
+            let mark = block.isChecked ? "x" : " "
+            return "- [\(mark)] \(block.text)"
+        case .image:
+            let alt = escapeImageAlt(block.text)
+            if let assetId = block.imageAssetId {
+                return "![\(alt)](asset:\(assetId))"
+            }
+            if let path = block.imagePath {
+                let payload = path.contains(" ") ? path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path : path
+                return "![\(alt)](path:\(payload))"
+            }
+            return "![\(alt)]()"
         default:
             return block.kind.ndlLinePrefix + block.text
         }
@@ -112,6 +164,10 @@ enum NDLSerializer {
 
     private static func escapePropertyValue(_ value: String) -> String {
         value.contains("\n") ? value.replacingOccurrences(of: "\n", with: "\\n") : value
+    }
+
+    private static func escapeImageAlt(_ alt: String) -> String {
+        alt.replacingOccurrences(of: "]", with: "\\]")
     }
 
     /// Front-matter style property section followed by body blocks.

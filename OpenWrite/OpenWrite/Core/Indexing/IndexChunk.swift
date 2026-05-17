@@ -219,11 +219,16 @@ enum TextChunker {
             return "[[\(block.text)]]"
         case .bullet:
             return "- \(block.text)"
+        case .todo:
+            let mark = block.isChecked ? "x" : " "
+            return "- [\(mark)] \(block.text)"
         case .quote:
             return "> \(block.text)"
         case .callout:
             let type = block.attributes["callout"] ?? "note"
             return "> [!\(type)] \(block.text)"
+        case .image:
+            return NDLSerializer.serializeBlock(block)
         default:
             return block.text
         }

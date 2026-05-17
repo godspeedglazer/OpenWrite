@@ -10,7 +10,7 @@ struct OWObjectTypeChip: View {
     var body: some View {
         HStack(spacing: DesignTokens.Spacing.spacing1) {
             if showsIcon {
-                OWIconView(icon: pageType.owIcon, size: 12, color: DesignTokens.ObjectType.accent(for: pageType))
+                OWUnicodeIconView(pageType: pageType, size: 12, color: DesignTokens.ObjectType.accent(for: pageType))
             }
             Text(pageType.displayName)
                 .font(DesignTokens.Typography.captionEmphasis)

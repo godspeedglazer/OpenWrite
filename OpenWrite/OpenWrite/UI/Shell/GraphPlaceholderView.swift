@@ -6,7 +6,7 @@ import SwiftUI
 struct GraphPlaceholderView: View {
     var body: some View {
         VStack(spacing: DesignTokens.Spacing.spacing6) {
-            OWIconView(icon: .graph, size: 56, color: DesignTokens.Color.accent.opacity(0.35))
+            OWUnicodeIconView(icon: .graph, size: 56, color: DesignTokens.Color.accent.opacity(0.35))
 
             Text("Vault graph")
                 .font(OWTypography.heading2)

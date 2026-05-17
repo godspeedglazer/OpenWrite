@@ -2,30 +2,35 @@ import SwiftUI
 
 // MARK: - OWPageBanner
 
-/// Playground-style page header: optional type-tinted gradient band with icon anchored on the strip.
+/// Playground-style page header: optional cover gradient with emoji icon anchored on the strip.
 struct OWPageBanner<Metadata: View>: View {
     @Environment(\.openWritePalette) private var palette
 
     let title: String
     let icon: OWIcon
     var pageType: PageType?
+    var pageIconCharacter: String?
+    var coverStyle: CoverStyle?
     var showsGradient: Bool = true
     @ViewBuilder var metadata: () -> Metadata
 
-    private let stripHeight: CGFloat = 88
-    private let iconSize: CGFloat = 44
-    private let iconOverlap: CGFloat = 22
+    private var stripHeight: CGFloat { OWPageBannerMetrics.stripHeight }
+    private var iconSize: CGFloat { OWPageBannerMetrics.iconSize }
+    private var iconOverlap: CGFloat { OWPageBannerMetrics.iconOverlap }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {
                 if showsGradient {
-                    gradientStrip
-                        .frame(height: stripHeight)
-                        .frame(maxWidth: .infinity)
+                    OWPageBannerGradient(
+                        coverStyle: coverStyle,
+                        pageType: pageType,
+                        stripHeight: stripHeight
+                    )
+                    .frame(maxWidth: .infinity)
                 }
 
-                OWPageTypeIconWell(icon: icon, pageType: pageType, size: iconSize)
+                pageIconWell
                     .overlay {
                         RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
                             .strokeBorder(palette.editorCanvas, lineWidth: 2)
@@ -37,11 +42,7 @@ struct OWPageBanner<Metadata: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-                Text(title)
-                    .font(OWTypography.documentTitle)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .lineLimit(4)
-                    .fixedSize(horizontal: false, vertical: true)
+                OWPageTitleBand(title: title)
 
                 metadata()
             }
@@ -54,31 +55,36 @@ struct OWPageBanner<Metadata: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var gradientStrip: some View {
-        LinearGradient(
-            colors: gradientColors,
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .overlay(alignment: .bottom) {
-            LinearGradient(
-                colors: [
-                    palette.editorCanvas.opacity(0),
-                    palette.editorCanvas
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 28)
+    @ViewBuilder
+    private var pageIconWell: some View {
+        if let pageIconCharacter, !pageIconCharacter.isEmpty {
+            OWUnicodePageTypeIconWell(character: pageIconCharacter, pageType: pageType, size: iconSize)
+        } else {
+            OWUnicodePageTypeIconWell(icon: icon, pageType: pageType, size: iconSize)
         }
     }
 
-    private var gradientColors: [Color] {
-        let accent = pageType.map { DesignTokens.ObjectType.accent(for: $0) } ?? DesignTokens.Color.accent
-        return [
-            accent.opacity(0.42),
-            accent.opacity(0.18),
-            palette.editorCanvas.opacity(0.05)
-        ]
+}
+
+// MARK: - Static title band (non-editor surfaces)
+
+/// Read-only document title typography for banners and secondary views.
+struct OWPageTitleBand: View {
+    let title: String
+    var showsFontWarning: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            if showsFontWarning, !OWTypography.isBundledSerifAvailable {
+                OWTypographyFontWarningBanner()
+            }
+
+            Text(title)
+                .font(OWTypography.documentTitle)
+                .lineSpacing(OWTypography.documentTitleLineSpacing)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

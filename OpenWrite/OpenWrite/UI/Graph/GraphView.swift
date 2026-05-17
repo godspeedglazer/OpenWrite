@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Anytype-inspired global graph shell — read-only placeholder canvas (local-only).
+/// Anytype-inspired global graph — read-only wikilink canvas (local-only).
 struct GraphView: View {
     let documents: [VaultDocument]
     let backlinkIndex: BacklinkIndex
@@ -39,6 +39,7 @@ struct GraphView: View {
                     emptyVaultState
                 } else {
                     graphCanvas(snapshot: snapshot)
+                    graphNodeCards(snapshot: snapshot)
                     if snapshot.edges.isEmpty {
                         emptyGraphOverlay
                     }
@@ -72,30 +73,20 @@ struct GraphView: View {
                     let target = snapshot.nodes.first(where: { $0.id == edge.targetID })
                 else { continue }
 
+                let segment = GraphViewModel.edgeSegment(from: source, to: target)
                 var path = Path()
-                path.move(to: source.position.applying(transform))
-                path.addLine(to: target.position.applying(transform))
+                path.move(to: segment.start.applying(transform))
+                path.addLine(to: segment.end.applying(transform))
                 context.stroke(
                     path,
-                    with: .color(DesignTokens.Color.borderSubtle),
-                    lineWidth: 1.2 / zoom
+                    with: .color(DesignTokens.Color.graphEdge),
+                    lineWidth: 1.25 / zoom
                 )
-            }
-
-            for node in snapshot.nodes {
-                let point = node.position.applying(transform)
-                let radius: CGFloat = node.isSelected ? 22 : 18
-                let circle = Path(ellipseIn: CGRect(
-                    x: point.x - radius,
-                    y: point.y - radius,
-                    width: radius * 2,
-                    height: radius * 2
-                ))
-                context.fill(circle, with: .color(nodeFill(node)))
-                context.stroke(
-                    circle,
-                    with: .color(node.isSelected ? DesignTokens.Color.accent : DesignTokens.Color.borderSubtle),
-                    lineWidth: node.isSelected ? 2.5 : 1
+                drawArrowhead(
+                    context: &context,
+                    from: segment.start.applying(transform),
+                    to: segment.end.applying(transform),
+                    zoom: zoom
                 )
             }
         }
@@ -111,38 +102,90 @@ struct GraphView: View {
                     )
                 }
         )
-        .overlay {
-            nodeLabels(snapshot: snapshot)
-        }
         .contentShape(Rectangle())
     }
 
-    private func nodeLabels(snapshot: GraphSnapshot) -> some View {
+    private func drawArrowhead(
+        context: inout GraphicsContext,
+        from start: CGPoint,
+        to end: CGPoint,
+        zoom: CGFloat
+    ) {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = hypot(dx, dy)
+        guard length > 8 else { return }
+
+        let ux = dx / length
+        let uy = dy / length
+        let size: CGFloat = 6 / zoom
+        let tip = end
+        let left = CGPoint(x: tip.x - ux * size - uy * size * 0.5, y: tip.y - uy * size + ux * size * 0.5)
+        let right = CGPoint(x: tip.x - ux * size + uy * size * 0.5, y: tip.y - uy * size - ux * size * 0.5)
+
+        var arrow = Path()
+        arrow.move(to: tip)
+        arrow.addLine(to: left)
+        arrow.addLine(to: right)
+        arrow.closeSubpath()
+        context.fill(arrow, with: .color(DesignTokens.Color.graphEdge))
+    }
+
+    // MARK: - Nodes
+
+    private func graphNodeCards(snapshot: GraphSnapshot) -> some View {
         ZStack {
             ForEach(snapshot.nodes) { node in
-                let point = node.position
-                VStack(spacing: 4) {
-                    OWIconView(icon: node.pageType.owIcon, size: 12, color: DesignTokens.Color.textSecondary)
-                    Text(node.title)
-                        .font(DesignTokens.Typography.caption)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 96)
-                }
-                .position(
-                    x: point.x + effectivePan.width,
-                    y: point.y + effectivePan.height + 36 * zoom
-                )
-                .scaleEffect(zoom)
-                .onTapGesture { onSelectDocument(node.id) }
+                graphNodeCard(node: node)
+                    .position(transformed(node.position))
+                    .scaleEffect(zoom)
+                    .onTapGesture { onSelectDocument(node.id) }
             }
         }
         .allowsHitTesting(true)
     }
 
-    private func nodeFill(_ node: GraphSnapshot.Node) -> Color {
-        node.isSelected ? DesignTokens.Color.accentMuted : DesignTokens.Color.surfaceElevated
+    private func graphNodeCard(node: GraphSnapshot.Node) -> some View {
+        HStack(spacing: DesignTokens.Spacing.spacing2) {
+            OWUnicodeIconView(
+                pageType: node.pageType,
+                size: 14,
+                color: DesignTokens.Color.textSecondary
+            )
+            Text(node.title)
+                .font(DesignTokens.Typography.caption)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, DesignTokens.Spacing.spacing2)
+        .padding(.vertical, DesignTokens.Spacing.spacing1 + 2)
+        .frame(width: node.size.width, height: node.size.height)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                .fill(node.isSelected ? DesignTokens.Color.accentMuted : DesignTokens.Color.graphNode)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                .strokeBorder(
+                    node.isSelected ? DesignTokens.Color.graphNodeFocused : DesignTokens.Color.borderSubtle,
+                    lineWidth: node.isSelected ? 2 : DesignTokens.Layout.borderWidth
+                )
+        }
+        .shadow(
+            color: DesignTokens.Shadow.subtle.color.opacity(0.35),
+            radius: DesignTokens.Shadow.subtle.radius,
+            x: 0,
+            y: 1
+        )
+    }
+
+    private func transformed(_ point: CGPoint) -> CGPoint {
+        CGPoint(
+            x: point.x * zoom + effectivePan.width,
+            y: point.y * zoom + effectivePan.height
+        )
     }
 
     // MARK: - Chrome
@@ -191,7 +234,7 @@ struct GraphView: View {
             Button {
                 withAnimation(DesignTokens.Motion.animationStandard) { zoom = max(0.5, zoom - 0.15) }
             } label: {
-                OWIconView(icon: .zoomOut, size: 14, color: DesignTokens.Color.accent)
+                OWUnicodeIconView(icon: .zoomOut, size: 14, color: DesignTokens.Color.accent)
             }
             .buttonStyle(.plain)
 
@@ -208,7 +251,7 @@ struct GraphView: View {
             Button {
                 withAnimation(DesignTokens.Motion.animationStandard) { zoom = min(2.0, zoom + 0.15) }
             } label: {
-                OWIconView(icon: .zoomIn, size: 14, color: DesignTokens.Color.accent)
+                OWUnicodeIconView(icon: .zoomIn, size: 14, color: DesignTokens.Color.accent)
             }
             .buttonStyle(.plain)
         }

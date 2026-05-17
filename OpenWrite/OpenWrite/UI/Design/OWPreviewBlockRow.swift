@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - OWPreviewBlockRow
@@ -6,6 +7,7 @@ import SwiftUI
 struct OWPreviewBlockRow: View {
     let block: NoteBlock
     var text: Binding<String>? = nil
+    var checked: Binding<Bool>? = nil
 
     private var isEditing: Bool { text != nil }
 
@@ -25,24 +27,36 @@ struct OWPreviewBlockRow: View {
                 codeRow
             case .bullet:
                 bulletRow
+            case .todo:
+                todoRow
             case .wikilink:
                 linkRow
             case .property:
                 propertyRow
             case .paragraph:
                 paragraphRow
+            case .image:
+                imageRow
             }
         }
     }
 
     private var headingRow: some View {
-        inlineText(font: headingFont, foreground: DesignTokens.Color.textPrimary)
+        inlineText(
+            font: headingFont,
+            lineSpacing: headingLineSpacing,
+            foreground: DesignTokens.Color.textPrimary
+        )
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, DesignTokens.Spacing.spacing1)
     }
 
     private var paragraphRow: some View {
-        inlineText(font: DesignTokens.Typography.body, foreground: DesignTokens.Color.textPrimary)
+        inlineText(
+            font: DesignTokens.Typography.body,
+            lineSpacing: DesignTokens.Typography.bodyLineSpacing,
+            foreground: DesignTokens.Color.textPrimary
+        )
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(DesignTokens.Spacing.spacing3)
             .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
@@ -53,18 +67,74 @@ struct OWPreviewBlockRow: View {
             Text("•")
                 .font(DesignTokens.Typography.bodyEmphasis)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
-            inlineText(font: DesignTokens.Typography.body, foreground: DesignTokens.Color.textPrimary)
+            inlineText(
+                font: DesignTokens.Typography.body,
+                lineSpacing: DesignTokens.Typography.bodyLineSpacing,
+                foreground: DesignTokens.Color.textPrimary
+            )
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(DesignTokens.Spacing.spacing3)
         .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
+    private var todoRow: some View {
+        HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
+            todoCheckbox
+            inlineText(
+                font: DesignTokens.Typography.body,
+                lineSpacing: DesignTokens.Typography.bodyLineSpacing,
+                foreground: isTodoChecked ? DesignTokens.Color.textSecondary : DesignTokens.Color.textPrimary
+            )
+            .strikethrough(isTodoChecked && !isEditing)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(DesignTokens.Spacing.spacing3)
+        .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var todoCheckbox: some View {
+        let filled = isTodoChecked
+        if let checked {
+            Button {
+                checked.wrappedValue.toggle()
+            } label: {
+                todoCheckboxGlyph(filled: checked.wrappedValue)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 2)
+        } else {
+            todoCheckboxGlyph(filled: filled)
+                .padding(.top, 2)
+        }
+    }
+
+    private func todoCheckboxGlyph(filled: Bool) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .strokeBorder(DesignTokens.Color.textTertiary.opacity(0.55), lineWidth: 1.5)
+                .frame(width: 18, height: 18)
+            if filled {
+                OWUnicodeIconView(icon: .checkmark, size: 12, color: DesignTokens.Color.accent)
+            }
+        }
+    }
+
+    private var isTodoChecked: Bool {
+        if let checked { return checked.wrappedValue }
+        return block.isChecked
+    }
+
     private var calloutRow: some View {
         HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
-            OWIconView(icon: calloutIcon, size: 16, color: calloutAccent)
+            OWUnicodeIconView(icon: calloutIcon, size: 16, color: calloutAccent)
                 .padding(.top, 2)
-            inlineText(font: DesignTokens.Typography.body, foreground: DesignTokens.Color.textPrimary)
+            inlineText(
+                font: DesignTokens.Typography.body,
+                lineSpacing: DesignTokens.Typography.bodyLineSpacing,
+                foreground: DesignTokens.Color.textPrimary
+            )
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(DesignTokens.Spacing.spacing3)
@@ -108,7 +178,7 @@ struct OWPreviewBlockRow: View {
 
     private var linkRow: some View {
         HStack(spacing: DesignTokens.Spacing.spacing2) {
-            OWIconView(icon: .link, size: 14, color: DesignTokens.Color.wikilink)
+            OWUnicodeIconView(icon: .link, size: 14, color: DesignTokens.Color.wikilink)
             if isEditing, let text {
                 TextField("Link title", text: text)
                     .textFieldStyle(.plain)
@@ -122,6 +192,30 @@ struct OWPreviewBlockRow: View {
         }
         .padding(DesignTokens.Spacing.spacing3)
         .background(DesignTokens.Color.wikilink.opacity(0.08), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+    }
+
+    private var imageRow: some View {
+        Group {
+            if let url = VaultAttachmentStore.resolveFileURL(for: block),
+               let nsImage = NSImage(contentsOf: url) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 360, alignment: .leading)
+                    .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+            } else {
+                HStack(spacing: DesignTokens.Spacing.spacing2) {
+                    OWUnicodeIconView(icon: .missingNote, size: 16, color: DesignTokens.Color.textTertiary)
+                    Text(block.text.isEmpty ? "Missing image" : block.text)
+                        .font(DesignTokens.Typography.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(DesignTokens.Spacing.spacing3)
+        .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .accessibilityLabel(block.text.isEmpty ? "Image" : block.text)
     }
 
     private var propertyRow: some View {
@@ -139,16 +233,18 @@ struct OWPreviewBlockRow: View {
     }
 
     @ViewBuilder
-    private func inlineText(font: Font, foreground: Color) -> some View {
+    private func inlineText(font: Font, lineSpacing: CGFloat = 0, foreground: Color) -> some View {
         if let text {
             TextField("", text: text, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(font)
+                .lineSpacing(lineSpacing)
                 .foregroundStyle(foreground)
                 .lineLimit(1...8)
         } else {
             Text(block.text)
                 .font(font)
+                .lineSpacing(lineSpacing)
                 .foregroundStyle(foreground)
         }
     }
@@ -195,6 +291,15 @@ struct OWPreviewBlockRow: View {
         case .heading2: return DesignTokens.Typography.heading2
         case .heading3: return DesignTokens.Typography.heading3
         default: return DesignTokens.Typography.body
+        }
+    }
+
+    private var headingLineSpacing: CGFloat {
+        switch block.kind {
+        case .heading1: return DesignTokens.Typography.heading1LineSpacing
+        case .heading2: return DesignTokens.Typography.heading2LineSpacing
+        case .heading3: return DesignTokens.Typography.heading3LineSpacing
+        default: return 0
         }
     }
 }

@@ -58,7 +58,7 @@ struct CreateDatabaseSheet: View {
         } label: {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
                 HStack(spacing: DesignTokens.Spacing.spacing2) {
-                    OWIconView(icon: preset.icon, size: 22, color: preset.themeTint.color)
+                    OWUnicodeIconView(icon: preset.icon, size: 22, color: preset.themeTint.color)
                     Text(preset.displayName)
                         .font(DesignTokens.Typography.bodyEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)

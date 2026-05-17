@@ -51,7 +51,7 @@ struct DatabaseTableView: View {
     private var tableHeader: some View {
         HStack(spacing: DesignTokens.Spacing.spacing3) {
             HStack(spacing: DesignTokens.Spacing.spacing2) {
-                OWIconView(icon: database.icon, size: 20, color: database.tint.color)
+                OWUnicodeIconView(icon: database.icon, size: 20, color: database.tint.color)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(database.name)
                         .font(DesignTokens.Typography.heading3)
@@ -102,7 +102,7 @@ struct DatabaseTableView: View {
                 }
             } label: {
                 HStack(spacing: DesignTokens.Spacing.spacing2) {
-                    OWIconView(icon: .plus, size: 16, color: database.tint.color)
+                    OWUnicodeIconView(icon: .plus, size: 16, color: database.tint.color)
                     Text("+ New row")
                         .font(DesignTokens.Typography.bodyEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
@@ -163,7 +163,7 @@ struct DatabaseTableView: View {
                     cellText(entry: entry, field: field)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                OWIconView(icon: .chevronRight, size: 12, color: DesignTokens.Color.textTertiary)
+                OWUnicodeIconView(icon: .chevronRight, size: 12, color: DesignTokens.Color.textTertiary)
                     .frame(width: 28)
             }
             .padding(.horizontal, DesignTokens.Spacing.spacing5)
