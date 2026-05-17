@@ -16,5 +16,11 @@ struct OpenWriteApp: App {
                 .environmentObject(pastWrites)
         }
         .defaultSize(width: 1280, height: 760)
+
+        Settings {
+            AISettingsView()
+                .environmentObject(vaultStore)
+                .environmentObject(aiServices)
+        }
     }
 }
