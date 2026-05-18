@@ -11,8 +11,9 @@
 
 | Symptom | Status |
 |---------|--------|
-| Welcome editor CPU/RAM fork-bomb | **Addressed** — see root HANDOFF; editor uses SwiftUI `ScrollView`, not nested `OpenWriteThemedScrollView` |
-| Blank white editor on launch | **Addressed** — Welcome selection + Editor tab + block host initial layout |
+| Welcome editor CPU/RAM fork-bomb | **Addressed** — SwiftUI `ScrollView`; no per-keystroke block `applyDocumentLayout` |
+| Blank editor body (header only) | **Addressed** — `laidOutHeight` + `.frame(minHeight:)` on `OWBlockEditorView` |
+| Sheets hide shell / Refine dead | **Addressed** — fitted sheets + cover popover; Refine opens guidance sheet |
 | Source Serif fallback banner (Release) | **Open** — font target membership |
 | Block text clipping in cards | **Open** — `OWPreviewBlockRow` |
 | P0 header polish (emoji popover, cover gallery) | **Open** — UI refactor backlog |

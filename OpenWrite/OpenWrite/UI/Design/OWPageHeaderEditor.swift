@@ -66,7 +66,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
         }
         .onAppear { syncDescriptionFromDocument() }
         .onChange(of: documentID) { _, _ in syncDescriptionFromDocument() }
-        .sheet(isPresented: $showCoverPicker) {
+        .popover(isPresented: $showCoverPicker, arrowEdge: .bottom) {
             OWCoverStylePickerSheet(
                 documentID: documentID,
                 selection: $coverStyle,
@@ -74,6 +74,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             ) {
                 commitHeaderFields()
             }
+            .frame(width: 420, height: 440)
         }
     }
 

@@ -13,9 +13,11 @@ This document is the **single honest snapshot** of OpenWrite as it exists today.
 
 | Symptom | Root cause (2026-05-17) | Fix in tree |
 |---------|-------------------------|-------------|
-| **Welcome / editor: CPU ~99%, RAM 2GB+**, comments about 23GB fork-bomb | `OpenWriteThemedScrollView` + `BlockEditorPasteCaptureView` measure/apply feedback: `invalidateMeasurementCache` cleared width cache → `intrinsicContentSize` fell to **1pt** → relayout loop | Editor column uses **SwiftUI `ScrollView`**; block host keeps last height in intrinsic; keystrokes no longer call `applyDocumentLayout` |
-| **Blank white center editor on launch** | Same loop collapsed host height; or `selectedDocumentID` nil / Graph tab | `bootstrapOnLaunch` + `ContentView.onAppear` → `showEditor()`; initial `applyDocumentLayout` in `makeNSView` |
-| **User still broken after agent “fix”** | Running **old binary** (diff tab not committed, or no Clean Build) | Quit app, **Product → Clean Build Folder**, rebuild Debug, confirm `git log -1` |
+| **Welcome / editor: CPU ~99%, RAM 2GB+** | `OpenWriteThemedScrollView` + block host measure/apply loop | Editor column uses **SwiftUI `ScrollView`**; block host does not zero height on cache bust; no per-keystroke `applyDocumentLayout` |
+| **Blank editor body (header only)** | SwiftUI `ScrollView` ignores AppKit intrinsic height → `OWBlockEditorView` collapsed to ~0pt | `laidOutHeight` binding + `.frame(minHeight:)` synced from `measureDocumentSize` |
+| **Sheets hide entire app** | macOS sheet filled window; cover used `.sheet` | `openWriteSheetPresentationChrome()` → `.presentationSizing(.fitted)` (macOS 15+); cover picker → **popover** |
+| **Refine button appears dead** | Toolbar disabled when no selection captured | Refine always opens sheet; guidance when no selection; LM Studio errors in sheet |
+| **User still broken after agent “fix”** | Old binary / no clean build | Quit app, Clean Build Folder, rebuild Debug, confirm `git log -1` |
 
 **Not fixed in this pass:** Affine-style block suite, real vault crypto, font banner on Release if fonts missing, block text clipping in cards, emoji popover polish.
 
@@ -73,7 +75,7 @@ OpenWrite is a **local macOS app-of-apps**: one encrypted vault where you **writ
 
 | Area | Status |
 |------|--------|
-| **Welcome editor** | **Fix landed post-`99d9da1`** — SwiftUI `ScrollView` for document column; block host intrinsic keeps last height; no per-keystroke `applyDocumentLayout`. **Must clean-rebuild** to pick up. |
+| **Welcome editor** | SwiftUI `ScrollView` + measured `minHeight` on block host; Welcome blocks should render (callout, Space heading, bullets). **Clean-rebuild** after pull. |
 | **Chat connect** | **Improved** — connect step stays honest until first token; **30s** cap (`AISafetyLimits.chatStreamTimeoutSeconds`) fails connect + runs `diagnoseChatFailure` when LM Studio is off. Vault search already has 15s timeout → lexical fallback. |
 | **Launch selection** | `VaultStore.bootstrapOnLaunch` selects Welcome (or first doc); `ContentView.onAppear` forces **Editor** center tab. |
 

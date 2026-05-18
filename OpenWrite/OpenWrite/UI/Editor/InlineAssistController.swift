@@ -251,6 +251,13 @@ final class InlineAssistController: ObservableObject {
         }
     }
 
+    /// Opens the refine sheet with a user-visible message (no selection, LM Studio offline hint, etc.).
+    func presentRefineMessage(_ message: String) {
+        refineTask?.cancel()
+        phase = .failed(message)
+        showRefineResult = true
+    }
+
     private static func refineQuery(
         for selection: String,
         preset: InlineRefinePreset,

@@ -23,9 +23,22 @@ extension View {
         modifier(OpenWriteButtonKeyboardFocusModifier(shape: shape))
     }
 
-    /// macOS sheet window background — cream `background` token, not system white.
+    /// macOS sheet — themed panel sized to content so the shell stays visible behind the dimmed parent window.
     func openWriteSheetPresentationChrome() -> some View {
-        presentationBackground(DesignTokens.Color.background)
+        modifier(OpenWriteSheetPresentationChromeModifier())
+    }
+}
+
+private struct OpenWriteSheetPresentationChromeModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content
+                .presentationBackground(DesignTokens.Color.background)
+                .presentationSizing(.fitted)
+        } else {
+            content
+                .presentationBackground(DesignTokens.Color.background)
+        }
     }
 }
 

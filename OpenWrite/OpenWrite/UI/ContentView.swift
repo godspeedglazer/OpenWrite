@@ -51,6 +51,7 @@ struct ContentView: View {
             .environmentObject(aiServices)
             .openWriteThemeAppearance()
             .frame(minWidth: 480, minHeight: 520)
+            .openWriteSheetPresentationChrome()
         }
         .background(DesignTokens.Color.shellChrome)
         .id(themeManager.revision)

@@ -50,6 +50,7 @@ struct EditorView: View {
         .environment(\.blockFormatting, blockFormatting)
         .sheet(isPresented: $inlineAssist.showRefineResult) {
             refineResultSheet
+                .openWriteSheetPresentationChrome()
         }
         .onAppear {
             syncFromDocument(document)
@@ -232,12 +233,12 @@ struct EditorView: View {
                     OWLabel(title: "Refine", icon: .sparkles)
                 }
             }
-            .buttonStyle(OWToolbarActionButtonStyle(isEnabled: inlineAssist.canRefineSelection))
-            .disabled(!inlineAssist.canRefineSelection || inlineAssist.isRefining)
+            .buttonStyle(OWToolbarActionButtonStyle(isEnabled: !inlineAssist.isRefining))
+            .disabled(inlineAssist.isRefining)
             .help(
                 inlineAssist.canRefineSelection
                     ? "Improve selected text with local AI and vault context"
-                    : "Select text in the note to refine"
+                    : "Refine — select text in the note first, or open for guidance"
             )
         }
         .frame(maxWidth: .infinity)
@@ -435,7 +436,16 @@ struct EditorView: View {
     private func requestInlineRefine(preset: InlineRefinePreset) {
         guard let document else { return }
         inlineAssist.commitPendingCapture()
-        guard inlineAssist.canRefineSelection else { return }
+        guard inlineAssist.canRefineSelection else {
+            inlineAssist.presentRefineMessage(
+                """
+                Select text inside a block (drag across words), then choose Refine again.
+
+                Local AI uses LM Studio on this Mac — start the server and load a chat model in Settings → AI if refine fails.
+                """
+            )
+            return
+        }
         let excerpt = editingBlocks
             .map(\.text)
             .joined(separator: "\n")

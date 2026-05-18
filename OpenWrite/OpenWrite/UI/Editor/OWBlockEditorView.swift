@@ -10,16 +10,19 @@ struct OWBlockEditorView: View {
     var onActivateBlock: ((UUID) -> Void)? = nil
     var onSelectionChange: ((String?) -> Void)? = nil
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)? = nil
+    /// SwiftUI `ScrollView` ignores AppKit intrinsic height — keep measured body height in sync.
+    @State private var laidOutHeight: CGFloat = 480
+
     var body: some View {
         BlockEditorPasteHost(
             blocks: $blocks,
+            laidOutHeight: $laidOutHeight,
             previewMode: previewMode,
             onActivateBlock: onActivateBlock,
             onSelectionChange: onSelectionChange,
             onRefinePreset: onRefinePreset
         )
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, minHeight: max(laidOutHeight, 120), alignment: .topLeading)
     }
 }
 
@@ -143,13 +146,14 @@ private struct BlockEditorHostedContent: View {
 
 private struct BlockEditorPasteHost: NSViewRepresentable {
     @Binding var blocks: [NoteBlock]
+    @Binding var laidOutHeight: CGFloat
     var previewMode: Bool
     var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(blocks: $blocks)
+        Coordinator(blocks: $blocks, laidOutHeight: $laidOutHeight)
     }
 
     func makeNSView(context: Context) -> BlockEditorPasteCaptureView {
@@ -179,6 +183,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         context.coordinator.lastContentRevision = initialRevision
         context.coordinator.lastAppliedWidth = initialWidth
         host.applyDocumentLayout(width: initialWidth, contentRevision: initialRevision)
+        context.coordinator.publishDocumentHeight(
+            host.measureDocumentSize(width: initialWidth, contentRevision: initialRevision).height
+        )
         return host
     }
 
@@ -241,8 +248,13 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             return
         }
 
-        // Keystrokes: NSTextViews grow in place; SwiftUI ScrollView re-measures via `sizeThatFits` only.
+        // Keystrokes: NSTextViews grow in place; push height to SwiftUI (ScrollView ignores AppKit intrinsic).
         context.coordinator.lastContentRevision = contentRevision
+        let measureWidth = context.coordinator.roundedLayoutWidth(
+            max(host.bounds.width, context.coordinator.lastProposedWidth ?? 0)
+        )
+        let measured = host.measureDocumentSize(width: measureWidth, contentRevision: contentRevision)
+        context.coordinator.publishDocumentHeight(measured.height)
         host.notifyContentHeightMayHaveChanged()
     }
 
@@ -251,11 +263,14 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         context.coordinator.lastProposedWidth = width
         let contentRevision = context.coordinator.blocksContentRevision(blocks)
         // Read-only measure — apply runs only from `updateNSView` to avoid AttributeGraph layout loops.
-        return nsView.measureDocumentSize(width: width, contentRevision: contentRevision)
+        let size = nsView.measureDocumentSize(width: width, contentRevision: contentRevision)
+        context.coordinator.publishDocumentHeight(size.height)
+        return size
     }
 
     final class Coordinator {
         var blocks: Binding<[NoteBlock]>
+        var laidOutHeight: Binding<CGFloat>
         var onSelectionChange: ((String?) -> Void)?
         var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
         weak var hostingView: NSHostingView<BlockEditorHostedContent>?
@@ -271,8 +286,15 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         private var pendingLayoutWidth: CGFloat?
         private var pendingContentRevision: UInt64 = 0
 
-        init(blocks: Binding<[NoteBlock]>) {
+        init(blocks: Binding<[NoteBlock]>, laidOutHeight: Binding<CGFloat>) {
             self.blocks = blocks
+            self.laidOutHeight = laidOutHeight
+        }
+
+        func publishDocumentHeight(_ height: CGFloat) {
+            let safe = max(height, 120)
+            guard abs(laidOutHeight.wrappedValue - safe) > 0.5 else { return }
+            laidOutHeight.wrappedValue = safe
         }
 
         /// Pixel-stable width — subpixel oscillation in `host.bounds` was re-triggering apply every frame.
@@ -381,6 +403,8 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
                 let revision = self.pendingContentRevision
                 self.pendingLayoutWidth = nil
                 host.applyDocumentLayout(width: width, contentRevision: revision)
+                let measured = host.measureDocumentSize(width: width, contentRevision: revision)
+                self.publishDocumentHeight(measured.height)
             }
         }
     }
