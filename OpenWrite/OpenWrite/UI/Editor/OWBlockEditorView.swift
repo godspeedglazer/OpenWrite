@@ -212,9 +212,8 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             }
         }
 
-        let layoutWidth = max(
-            max(host.bounds.width, context.coordinator.lastProposedWidth ?? 0),
-            320
+        let layoutWidth = context.coordinator.roundedLayoutWidth(
+            max(host.bounds.width, context.coordinator.lastProposedWidth ?? 0)
         )
         let structureRevision = context.coordinator.blocksStructureRevision(blocks)
         let contentRevision = context.coordinator.blocksContentRevision(blocks)
@@ -223,20 +222,27 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         let contentChanged = contentRevision != context.coordinator.lastContentRevision
         guard widthChanged || structureChanged || contentChanged else { return }
 
-        if structureChanged || widthChanged || contentChanged {
+        // Only bust width-keyed measure cache on structure/width changes — not per keystroke.
+        // Content growth is handled by deferred `applyDocumentLayout` without collapsing intrinsic height.
+        if structureChanged || widthChanged {
             host.invalidateMeasurementCache()
         }
         context.coordinator.lastStructureRevision = structureRevision
         context.coordinator.lastContentRevision = contentRevision
         context.coordinator.lastAppliedWidth = layoutWidth
-        context.coordinator.scheduleLayout(on: host, width: layoutWidth)
+        context.coordinator.scheduleLayout(
+            on: host,
+            width: layoutWidth,
+            contentRevision: contentRevision
+        )
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BlockEditorPasteCaptureView, context: Context) -> CGSize? {
-        let width = max(proposal.width ?? 640, 320)
+        let width = Coordinator.roundedLayoutWidth(max(proposal.width ?? 640, 320))
         context.coordinator.lastProposedWidth = width
+        let contentRevision = context.coordinator.blocksContentRevision(blocks)
         // Read-only measure — apply runs only from `updateNSView` to avoid AttributeGraph layout loops.
-        return nsView.measureDocumentSize(width: width)
+        return nsView.measureDocumentSize(width: width, contentRevision: contentRevision)
     }
 
     final class Coordinator {
@@ -252,9 +258,21 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         var lastThemeRevision: UInt = 0
         private var lastHostedBlockIDs: [UUID] = []
         private var layoutGeneration = 0
+        private var layoutFlushScheduled = false
+        private var pendingLayoutWidth: CGFloat?
+        private var pendingContentRevision: UInt64 = 0
 
         init(blocks: Binding<[NoteBlock]>) {
             self.blocks = blocks
+        }
+
+        /// Pixel-stable width — subpixel oscillation in `host.bounds` was re-triggering apply every frame.
+        static func roundedLayoutWidth(_ width: CGFloat) -> CGFloat {
+            max(floor(max(width, 320) + 0.5), 320)
+        }
+
+        func roundedLayoutWidth(_ width: CGFloat) -> CGFloat {
+            Self.roundedLayoutWidth(width)
         }
 
         func seedHostedBlockIDs(_ blocks: [NoteBlock]) {
@@ -339,12 +357,21 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             return UInt64(bitPattern: Int64(hasher.finalize()))
         }
 
-        func scheduleLayout(on host: BlockEditorPasteCaptureView, width: CGFloat) {
+        /// Coalesces to at most one deferred apply per run-loop turn (generation token drops stale work).
+        func scheduleLayout(on host: BlockEditorPasteCaptureView, width: CGFloat, contentRevision: UInt64) {
+            pendingLayoutWidth = width
+            pendingContentRevision = contentRevision
             layoutGeneration += 1
+            guard !layoutFlushScheduled else { return }
+            layoutFlushScheduled = true
             let generation = layoutGeneration
-            DispatchQueue.main.async { [weak host] in
-                guard let host, generation == self.layoutGeneration else { return }
-                host.applyDocumentLayout(width: width)
+            DispatchQueue.main.async { [weak self, weak host] in
+                guard let self, let host, generation == self.layoutGeneration else { return }
+                self.layoutFlushScheduled = false
+                guard let width = self.pendingLayoutWidth else { return }
+                let revision = self.pendingContentRevision
+                self.pendingLayoutWidth = nil
+                host.applyDocumentLayout(width: width, contentRevision: revision)
             }
         }
     }

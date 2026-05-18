@@ -443,6 +443,8 @@ final class BlockEditorPasteCaptureView: NSView {
 
     private var cachedMeasureWidth: CGFloat = 0
     private var cachedMeasureHeight: CGFloat = 1
+    /// Bumped by the paste host coordinator when block text/checkbox changes; measure cache is keyed on this.
+    private(set) var cachedContentRevision: UInt64 = 0
     private var lastAppliedLayoutWidth: CGFloat = 0
     private var isApplyingLayout = false
 
@@ -484,16 +486,23 @@ final class BlockEditorPasteCaptureView: NSView {
         return false
     }
 
-    func invalidateMeasurementCache() {
+    /// Clears width-keyed measure state only. Never zero `cachedMeasureHeight` — that collapses
+    /// `intrinsicContentSize` to ~1pt, SwiftUI shrinks the host, measure returns full height, apply
+    /// expands, and `invalidateIntrinsicContentSize` repeats (Welcome fork-bomb / 23GB RAM).
+    func invalidateMeasurementCache(resetContentRevision: Bool = true) {
         cachedMeasureWidth = 0
-        cachedMeasureHeight = 1
         lastAppliedLayoutWidth = 0
+        if resetContentRevision {
+            cachedContentRevision = 0
+        }
     }
 
     /// Read-only measure — width probe + `fittingSize` only; never forces subtree layout (AttributeGraph-safe).
-    func measureDocumentSize(width: CGFloat) -> CGSize {
+    func measureDocumentSize(width: CGFloat, contentRevision: UInt64) -> CGSize {
         let safeWidth = max(width, 320)
-        if abs(cachedMeasureWidth - safeWidth) < 0.5, cachedMeasureHeight > 0 {
+        if abs(cachedMeasureWidth - safeWidth) < 0.5,
+           cachedMeasureHeight > 1,
+           cachedContentRevision == contentRevision {
             return CGSize(width: safeWidth, height: cachedMeasureHeight)
         }
         let priorFrame = hostedView.frame
@@ -506,12 +515,13 @@ final class BlockEditorPasteCaptureView: NSView {
         let contentHeight = max(max(fitting, intrinsic), 1)
         cachedMeasureWidth = safeWidth
         cachedMeasureHeight = contentHeight
+        cachedContentRevision = contentRevision
         return CGSize(width: safeWidth, height: contentHeight)
     }
 
     /// Applies width + height on the next run loop turn only — `layoutSubtreeIfNeeded` is safe here,
     /// not in `measureDocumentSize` / SwiftUI `sizeThatFits` (AttributeGraph precondition / SIGABRT).
-    func applyDocumentLayout(width: CGFloat) {
+    func applyDocumentLayout(width: CGFloat, contentRevision: UInt64) {
         guard !isApplyingLayout else { return }
         let safeWidth = max(width, 320)
         if abs(lastAppliedLayoutWidth - safeWidth) < 0.5,
@@ -536,6 +546,7 @@ final class BlockEditorPasteCaptureView: NSView {
         let target = CGSize(width: safeWidth, height: contentHeight)
         cachedMeasureWidth = safeWidth
         cachedMeasureHeight = contentHeight
+        cachedContentRevision = contentRevision
 
         let frameUnchanged =
             abs(frame.width - target.width) < 0.5

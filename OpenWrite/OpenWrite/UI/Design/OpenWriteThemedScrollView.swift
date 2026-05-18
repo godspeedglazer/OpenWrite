@@ -225,28 +225,36 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         hosting.rootView = content
 
         let themeRevision = ThemeManager.shared.revision
-        if context.coordinator.lastThemeRevision != themeRevision {
+        let themeChanged = context.coordinator.lastThemeRevision != themeRevision
+        if themeChanged {
             context.coordinator.lastThemeRevision = themeRevision
             context.coordinator.invalidateDocumentMeasurement(in: scrollView)
         }
 
-        context.coordinator.scheduleRefreshDocumentSize(in: scrollView)
-
-        if context.coordinator.lastScrollToken != scrollToken {
+        let scrollTokenChanged = context.coordinator.lastScrollToken != scrollToken
+        if scrollTokenChanged {
             let wasNearBottom = context.coordinator.isNearBottom(in: scrollView)
             context.coordinator.lastScrollToken = scrollToken
             if scrollToBottomOnTokenChange {
                 context.coordinator.scheduleScrollToBottomIfPinned(in: scrollView, wasNearBottom: wasNearBottom)
             } else {
                 context.coordinator.invalidateDocumentMeasurement(in: scrollView)
-                context.coordinator.scheduleRefreshDocumentSize(in: scrollView)
             }
+        }
+
+        // INVARIANT: Do not call `scheduleRefreshDocumentSize` on every SwiftUI tick — that fights the
+        // nested block-editor paste host and retriggers `invalidateIntrinsicContentSize` in a loop.
+        // Remeasure only when theme/scroll token changes or read-only probe shows height drift.
+        if themeChanged || scrollTokenChanged {
+            context.coordinator.scheduleRefreshDocumentSize(in: scrollView)
+        } else {
+            context.coordinator.scheduleRefreshDocumentSizeIfContentGrew(in: scrollView)
         }
     }
 
-    /// Read-only height probe — width + `fittingSize` only. Never `layoutSubtreeIfNeeded` here:
-    /// forcing layout during SwiftUI `updateNSView` / measure trips AttributeGraph ("setting value during update")
-    /// and can SIGABRT or recurse into a layout fork-bomb on long chat transcripts.
+    /// Read-only height probe — width + `fittingSize` only. Never `layoutSubtreeIfNeeded` or
+    /// `invalidateIntrinsicContentSize` here: invalidation during measure retriggers layout →
+    /// `updateNSView` → `refreshDocumentSize` (AttributeGraph / Welcome CPU fork-bomb).
     private static func measureDocumentHeight(
         for hosting: NSHostingView<Content>,
         width: CGFloat
@@ -256,7 +264,6 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         if abs(priorFrame.width - safeWidth) > 0.5 {
             hosting.frame.size.width = safeWidth
         }
-        hosting.invalidateIntrinsicContentSize()
         let fitting = hosting.fittingSize.height
         let intrinsic = hosting.intrinsicContentSize.height
         hosting.frame = priorFrame
@@ -271,24 +278,16 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
     ) -> CGFloat {
         let safeWidth = max(width, 1)
         let measured = measureDocumentHeight(for: hosting, width: safeWidth)
-        var frame = hosting.frame
-        frame.origin = .zero
-        frame.size.width = safeWidth
-        frame.size.height = max(measured, 1)
-        hosting.frame = frame
-        hosting.invalidateIntrinsicContentSize()
-        hosting.layoutSubtreeIfNeeded()
-
-        var height = max(hosting.intrinsicContentSize.height, measured, 1)
-        let fitting = hosting.fittingSize.height
-        if fitting.isFinite, fitting > 0, fitting < frame.size.height - 1 {
-            height = max(fitting, height)
+        let height = max(max(hosting.intrinsicContentSize.height, measured), 1)
+        let target = CGRect(origin: .zero, size: CGSize(width: safeWidth, height: height))
+        let frameUnchanged =
+            abs(hosting.frame.width - target.width) < 0.5
+            && abs(hosting.frame.height - target.height) < 0.5
+        if !frameUnchanged {
+            hosting.frame = target
+            hosting.layoutSubtreeIfNeeded()
+            hosting.invalidateIntrinsicContentSize()
         }
-
-        frame.size.height = height
-        hosting.frame = frame
-        hosting.invalidateIntrinsicContentSize()
-        hosting.layoutSubtreeIfNeeded()
         return max(hosting.intrinsicContentSize.height, height, 1)
     }
 
@@ -375,6 +374,19 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
             (scrollView as? OpenWriteThemedScrollContainer)?.resetClipLayoutTracking()
         }
 
+        /// Read-only probe; schedules deferred apply only when content height grew past last apply.
+        func scheduleRefreshDocumentSizeIfContentGrew(in scrollView: NSScrollView) {
+            guard let hosting = hostingView else { return }
+            let clipWidth = max(scrollView.contentView.bounds.width, 1)
+            let probeHeight = OpenWriteThemedScrollRepresentable.measureDocumentHeight(
+                for: hosting,
+                width: clipWidth
+            )
+            guard probeHeight > lastAppliedDocumentSize.height + 0.5 else { return }
+            scheduleRefreshDocumentSize(in: scrollView)
+        }
+
+        /// Coalesces to one deferred refresh per run-loop turn (generation token drops stale work).
         func scheduleRefreshDocumentSize(in scrollView: NSScrollView) {
             refreshGeneration += 1
             let generation = refreshGeneration
