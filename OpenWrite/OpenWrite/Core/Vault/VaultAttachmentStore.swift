@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import UniformTypeIdentifiers
 /// On-disk image attachments for pasted and embedded blocks.
 /// Default fallback: `~/Library/Application Support/openwrite/attachments/{assetId}.png`
 /// Vault-local: `{vaultRoot}/.openwrite/assets/{assetId}.{png|jpg}`
@@ -166,7 +167,7 @@ enum ImagePasteSupport {
         return nil
     }
 
-    static func placeholderBlock(alt: String = "Image") -> NoteBlock {
+    static func placeholderBlock(alt: String = "Pasting image…") -> NoteBlock {
         NoteBlock(
             kind: .image,
             text: alt,
@@ -194,6 +195,85 @@ enum ImagePasteSupport {
         await Task.detached(priority: .userInitiated) {
             ingestPastedImage(alt: alt, vaultRoot: vaultRoot)
         }.value
+    }
+
+    static func finalizeImage(
+        at url: URL,
+        alt: String? = nil,
+        vaultRoot: URL? = VaultLocationPreferences.resolvedVaultRootURL()
+    ) async -> NoteBlock? {
+        await Task.detached(priority: .userInitiated) {
+            ingestImageFile(at: url, alt: alt, vaultRoot: vaultRoot)
+        }.value
+    }
+
+    static func ingestImageFile(
+        at url: URL,
+        alt: String? = nil,
+        vaultRoot: URL? = VaultLocationPreferences.resolvedVaultRootURL()
+    ) -> NoteBlock? {
+        guard let image = NSImage(contentsOf: url) else { return nil }
+        let label = alt ?? url.deletingPathExtension().lastPathComponent
+        do {
+            let saved = try VaultAttachmentStore.saveImage(from: image, vaultRoot: vaultRoot)
+            return NoteBlock.imageBlock(alt: label, assetId: saved.assetId, relativePath: saved.relativePath)
+        } catch {
+            return nil
+        }
+    }
+
+    static func presentImagePicker(
+        onPicked: @escaping (URL?) -> Void
+    ) {
+        let panel = NSOpenPanel()
+        panel.title = "Insert image"
+        panel.message = "Choose an image to add to this note"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if #available(macOS 11.0, *) {
+            panel.allowedContentTypes = [.image]
+        } else {
+            panel.allowedFileTypes = ["png", "jpg", "jpeg", "gif", "heic", "tiff", "bmp", "webp"]
+        }
+        panel.begin { response in
+            onPicked(response == .OK ? panel.url : nil)
+        }
+    }
+
+    static func canAcceptDrag(_ info: NSDraggingInfo) -> Bool {
+        if imageFileURL(from: info) != nil { return true }
+        return imageFromPasteboard(draggingInfo: info) != nil
+    }
+
+    static func imageFileURL(from info: NSDraggingInfo) -> URL? {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        if let urls = info.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL],
+           let first = urls.first,
+           isImageFileURL(first) {
+            return first
+        }
+        return nil
+    }
+
+    private static func imageFromPasteboard(draggingInfo: NSDraggingInfo) -> NSImage? {
+        let pb = draggingInfo.draggingPasteboard
+        if let images = pb.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
+           let first = images.first {
+            return first
+        }
+        if let data = pb.data(forType: .tiff), let image = NSImage(data: data) {
+            return image
+        }
+        if let data = pb.data(forType: .png), let image = NSImage(data: data) {
+            return image
+        }
+        return nil
+    }
+
+    private static func isImageFileURL(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        return ["png", "jpg", "jpeg", "gif", "heic", "tiff", "tif", "bmp", "webp"].contains(ext)
     }
 
     static func copyImageToPasteboard(for block: NoteBlock, vaultRoot: URL? = VaultLocationPreferences.resolvedVaultRootURL()) -> Bool {

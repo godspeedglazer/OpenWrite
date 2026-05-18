@@ -95,8 +95,15 @@ struct OWBlockTextEditor: NSViewRepresentable {
             }
             container.containerSize = NSSize(width: safeWidth, height: .greatestFiniteMagnitude)
             textView.layoutManager?.ensureLayout(for: container)
-            let used = textView.layoutManager?.usedRect(for: container) ?? .zero
-            let newHeight = max(used.height + 6, 24)
+            var used = textView.layoutManager?.usedRect(for: container) ?? .zero
+            let insetY = textView.textContainerInset.height * 2
+            let tightContainerHeight = max(ceil(used.height) + insetY, 24)
+            if abs(container.containerSize.height - tightContainerHeight) > 0.5 {
+                container.containerSize = NSSize(width: safeWidth, height: tightContainerHeight)
+                textView.layoutManager?.ensureLayout(for: container)
+                used = textView.layoutManager?.usedRect(for: container) ?? used
+            }
+            let newHeight = max(ceil(used.height) + insetY, 24)
             let widthChanged = abs(lastLayoutWidth - safeWidth) > 0.5
             let heightChanged = abs(lastLayoutHeight - newHeight) > 0.5
             lastLayoutWidth = safeWidth

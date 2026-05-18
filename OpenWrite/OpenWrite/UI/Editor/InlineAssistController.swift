@@ -377,7 +377,8 @@ final class PasteAwareTextView: NSTextView {
 }
 
 /// Wraps a SwiftUI host and intercepts image paste for the block editor.
-final class BlockEditorPasteCaptureView: NSControl {
+/// `NSView` (not `NSControl`) so hit-testing reaches SwiftUI checklist buttons and fields.
+final class BlockEditorPasteCaptureView: NSView {
     var onPasteImage: (() -> Void)?
     let hostedView: NSView
 
@@ -391,6 +392,7 @@ final class BlockEditorPasteCaptureView: NSControl {
         openWriteSuppressFocusRing()
         hostedView.openWriteSuppressFocusRing()
         addSubview(hostedView)
+        registerForDraggedTypes([.fileURL, .tiff, .png])
     }
 
     @available(*, unavailable)
@@ -399,6 +401,28 @@ final class BlockEditorPasteCaptureView: NSControl {
     }
 
     override var acceptsFirstResponder: Bool { true }
+
+    var onDropImageFile: ((URL) -> Void)?
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        ImagePasteSupport.canAcceptDrag(sender) ? .copy : []
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        ImagePasteSupport.canAcceptDrag(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        if let url = ImagePasteSupport.imageFileURL(from: sender) {
+            onDropImageFile?(url)
+            return true
+        }
+        if ImagePasteSupport.canAcceptDrag(sender), ImagePasteSupport.imageFromPasteboard() != nil {
+            onPasteImage?()
+            return true
+        }
+        return false
+    }
 
     func invalidateMeasurementCache() {
         cachedMeasureWidth = 0
@@ -414,7 +438,10 @@ final class BlockEditorPasteCaptureView: NSControl {
         if abs(hostedView.frame.width - safeWidth) > 0.5 {
             hostedView.frame.size.width = safeWidth
         }
-        let contentHeight = max(hostedView.fittingSize.height, 1)
+        hostedView.layoutSubtreeIfNeeded()
+        let fitting = hostedView.fittingSize.height
+        let intrinsic = hostedView.intrinsicContentSize.height
+        let contentHeight = max(max(fitting, intrinsic), 1)
         cachedMeasureWidth = safeWidth
         cachedMeasureHeight = contentHeight
         return CGSize(width: safeWidth, height: contentHeight)

@@ -109,10 +109,13 @@ struct OWPreviewBlockRow: View {
                 checked.wrappedValue.toggle()
             } label: {
                 todoCheckboxGlyph(filled: checked.wrappedValue)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .openWriteFocusChrome()
-            .padding(.top, 2)
+            .frame(width: 28, height: 28, alignment: .topLeading)
+            .contentShape(Rectangle())
+            .padding(.top, 0)
         } else {
             todoCheckboxGlyph(filled: filled)
                 .padding(.top, 2)
@@ -266,9 +269,14 @@ struct OWPreviewBlockRow: View {
                 HStack(spacing: DesignTokens.Spacing.spacing2) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("Saving image…")
-                        .font(DesignTokens.Typography.caption)
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Adding image…")
+                            .font(DesignTokens.Typography.captionEmphasis)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                        Text("Paste with ⌘V, drop a file, or use Insert image in the toolbar.")
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else if let url = VaultAttachmentStore.resolveFileURL(for: block),
@@ -278,9 +286,14 @@ struct OWPreviewBlockRow: View {
             } else {
                 HStack(spacing: DesignTokens.Spacing.spacing2) {
                     OWUnicodeIconView(icon: .missingNote, size: 16, color: DesignTokens.Color.textTertiary)
-                    Text(block.text.isEmpty ? "Missing image" : block.text)
-                        .font(DesignTokens.Typography.caption)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(block.text.isEmpty ? "Image unavailable" : block.text)
+                            .font(DesignTokens.Typography.captionEmphasis)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                        Text("Paste with ⌘V or drop an image file onto the note.")
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary.opacity(0.85))
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

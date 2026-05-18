@@ -206,8 +206,16 @@ struct EditorView: View {
         )
     }
 
-    private func editorActionBar(_: VaultDocument) -> some View {
+    private func editorActionBar(_ document: VaultDocument) -> some View {
         HStack(spacing: DesignTokens.Spacing.spacing3) {
+            Button {
+                insertImageFromPicker(document: document)
+            } label: {
+                OWLabel(title: "Insert image", icon: .document)
+            }
+            .buttonStyle(OWToolbarActionButtonStyle(isEnabled: true))
+            .help("Choose an image file or paste with ⌘V")
+
             Spacer()
 
             Button {
@@ -259,7 +267,7 @@ struct EditorView: View {
                     }
             }
             .openWriteEditorContentWidth()
-            .padding(.bottom, DesignTokens.Spacing.spacing6)
+            .padding(.bottom, DesignTokens.Spacing.spacing4)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -379,6 +387,28 @@ struct EditorView: View {
             noteTitle: document.displayTitle,
             plainText: excerpt
         )
+    }
+
+    private func insertImageFromPicker(document: VaultDocument) {
+        ImagePasteSupport.presentImagePicker { url in
+            guard let url else { return }
+            let placeholder = ImagePasteSupport.placeholderBlock(alt: url.deletingPathExtension().lastPathComponent)
+            let blockID = placeholder.id
+            editingBlocks.append(placeholder)
+            commitBlocks(document: document, blocks: editingBlocks)
+            Task {
+                let finalized = await ImagePasteSupport.finalizeImage(at: url)
+                await MainActor.run {
+                    guard let index = editingBlocks.firstIndex(where: { $0.id == blockID }) else { return }
+                    if let finalized {
+                        editingBlocks[index] = finalized
+                    } else {
+                        editingBlocks.removeAll { $0.id == blockID }
+                    }
+                    commitBlocks(document: document, blocks: editingBlocks)
+                }
+            }
+        }
     }
 
 }

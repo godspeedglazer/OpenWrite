@@ -7,7 +7,6 @@ import SwiftUI
 struct OWBlockEditorView: View {
     @Binding var blocks: [NoteBlock]
     var onSelectionChange: ((String?) -> Void)? = nil
-
     var body: some View {
         BlockEditorPasteHost(blocks: $blocks) {
             VStack(alignment: .leading, spacing: DesignTokens.Layout.editorBlockStackSpacing) {
@@ -30,10 +29,7 @@ struct OWBlockEditorView: View {
                 block: block.wrappedValue,
                 text: editableText,
                 blockAttributes: attributesBinding(block),
-                checked: Binding(
-                    get: { block.wrappedValue.isChecked },
-                    set: { block.wrappedValue.isChecked = $0 }
-                ),
+                checked: todoCheckedBinding(block),
                 onSelectionChange: onSelectionChange
             )
         case .callout:
@@ -68,6 +64,17 @@ struct OWBlockEditorView: View {
         default:
             OWPreviewBlockRow(block: block.wrappedValue)
         }
+    }
+
+    private func todoCheckedBinding(_ block: Binding<NoteBlock>) -> Binding<Bool> {
+        Binding(
+            get: { block.wrappedValue.isChecked },
+            set: { newValue in
+                var updated = block.wrappedValue
+                updated.isChecked = newValue
+                block.wrappedValue = updated
+            }
+        )
     }
 
     private func attributesBinding(_ block: Binding<NoteBlock>) -> Binding<[String: String]> {
@@ -114,6 +121,9 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
         host.onPasteImage = {
             context.coordinator.ingestPastedImage()
         }
+        host.onDropImageFile = { url in
+            context.coordinator.ingestImageFile(url)
+        }
         return host
     }
 
@@ -121,6 +131,9 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
         guard let hosting = host.hostedView as? NSHostingView<Content> else { return }
         host.onPasteImage = {
             context.coordinator.ingestPastedImage()
+        }
+        host.onDropImageFile = { url in
+            context.coordinator.ingestImageFile(url)
         }
         hosting.rootView = content
 
@@ -170,11 +183,25 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
 
         func ingestPastedImage() {
             guard ImagePasteSupport.imageFromPasteboard() != nil else { return }
+            ingestImageWithPlaceholder {
+                await ImagePasteSupport.finalizePastedImage()
+            }
+        }
+
+        func ingestImageFile(_ url: URL) {
+            ingestImageWithPlaceholder {
+                await ImagePasteSupport.finalizeImage(at: url)
+            }
+        }
+
+        func ingestImageWithPlaceholder(
+            finalize: @escaping () async -> NoteBlock?
+        ) {
             let placeholder = ImagePasteSupport.placeholderBlock()
             let blockID = placeholder.id
             append(placeholder)
             Task {
-                let finalized = await ImagePasteSupport.finalizePastedImage()
+                let finalized = await finalize()
                 await MainActor.run {
                     if let finalized {
                         replaceBlock(id: blockID, with: finalized)
@@ -192,6 +219,10 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
                 hasher.combine(block.id)
                 hasher.combine(block.kind)
                 hasher.combine(block.text)
+                for key in block.attributes.keys.sorted() {
+                    hasher.combine(key)
+                    hasher.combine(block.attributes[key] ?? "")
+                }
             }
             return UInt64(bitPattern: Int64(hasher.finalize()))
         }

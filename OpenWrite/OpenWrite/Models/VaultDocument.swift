@@ -102,35 +102,70 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
     private static let welcomeRootBlocks: [NoteBlock] = [
         NoteBlock(
             kind: .callout,
-            text: "This is your Space — a private graph of notes on this Mac. Everything below is yours to edit.",
+            text: "This is your Space — a private graph of notes on this Mac. Everything below is yours to edit, link, and search.",
             attributes: ["callout": "tip"]
         ),
         NoteBlock(kind: .heading2, text: "Space"),
         NoteBlock(
             kind: .paragraph,
-            text: "OpenWrite keeps writing local-first: typed pages, NDL blocks, and optional on-device AI when you are ready."
+            text: "OpenWrite keeps writing local-first: typed pages, NDL blocks, properties on every page, and optional on-device AI when you are ready."
+        ),
+        NoteBlock(
+            kind: .bullet,
+            text: "Sidebar — pages, databases, and the Graph object"
+        ),
+        NoteBlock(
+            kind: .bullet,
+            text: "Center column — block editor (this page) or graph canvas"
+        ),
+        NoteBlock(
+            kind: .bullet,
+            text: "Right strip — chat, related notes, and refine tools"
         ),
         NoteBlock(kind: .heading3, text: "Get started"),
-        NoteBlock.todoBlock(text: "Skim the checklist below", checked: true),
+        NoteBlock.todoBlock(text: "Click each checkbox below to mark progress", checked: false),
         NoteBlock.todoBlock(text: "Create a page with + in the sidebar"),
-        NoteBlock.todoBlock(text: "Link notes with [[wikilinks]]"),
-        NoteBlock.todoBlock(text: "Open Graph in the sidebar to see connections"),
+        NoteBlock.todoBlock(text: "Open Properties on the title row and set Status or Tags"),
+        NoteBlock.todoBlock(text: "Link notes with [[wikilinks]] — try the demo links in Explore"),
+        NoteBlock.todoBlock(text: "Open Graph under Objects to see how pages connect"),
+        NoteBlock.todoBlock(text: "Paste or insert an image (⌘V or Insert image in the toolbar)"),
+        NoteBlock.todoBlock(text: "Ask a question in the AI chat strip with a note open"),
         NoteBlock(kind: .divider, text: ""),
         NoteBlock(kind: .heading3, text: "Explore"),
         NoteBlock(kind: .wikilink, text: "Graph view"),
+        NoteBlock(kind: .wikilink, text: "Demo concept"),
+        NoteBlock(kind: .wikilink, text: "Second concept"),
         NoteBlock(
             kind: .paragraph,
-            text: "Use the Graph row under Objects to switch the center column to your vault topology — links appear as you add [[wikilinks]] between pages."
+            text: "Wikilinks are double-bracket titles. They do not need a target page yet — OpenWrite still indexes them for search and graph edges."
         ),
         NoteBlock(
             kind: .code,
-            text: "[[wikilinks]] connect pages in your graph.",
+            text: "[[Graph view]]     # link to another page title\n[[Demo concept]]   # create this page when you are ready\n- [ ] NDL todos round-trip in plain text too",
             attributes: ["language": "ndl"]
         ),
         NoteBlock(
             kind: .callout,
-            text: "Click any filled block to edit inline — code snippets show a language label; callout icons open a type menu.",
+            text: "Properties live above the body — use the Properties chip on the title row. Status and tags show as metadata chips.",
             attributes: ["callout": "note"]
+        ),
+        NoteBlock(
+            kind: .callout,
+            text: "Images: copy from Finder or a browser, press ⌘V, drag a file onto the note, or choose Insert image. Assets stay in your vault folder.",
+            attributes: ["callout": "important"]
+        ),
+        NoteBlock(kind: .heading3, text: "Documentation"),
+        NoteBlock(
+            kind: .bullet,
+            text: "Project overview — docs/ProjectAtlas.md in the OpenWrite repository"
+        ),
+        NoteBlock(
+            kind: .bullet,
+            text: "Data model — docs/Architecture/DataModel.md (blocks, properties, NDL)"
+        ),
+        NoteBlock(
+            kind: .bullet,
+            text: "Lab runbook — build and run from OpenWrite/OpenWrite in Xcode"
         ),
         NoteBlock(kind: .quote, text: "Your corpus stays on this Mac by default — no account required.")
     ]
