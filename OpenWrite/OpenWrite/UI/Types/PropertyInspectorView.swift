@@ -25,9 +25,10 @@ struct PropertyInspectorView: View {
     private func inspectorContent(_ document: VaultDocument) -> some View {
         let schema = PageProperties.schema(for: document.pageType)
 
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
             Text("Properties")
                 .font(OWTypography.captionEmphasis)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
 
             ForEach(schema) { key in
                 fieldRow(key: key, document: document)
@@ -36,9 +37,15 @@ struct PropertyInspectorView: View {
             if schema.isEmpty {
                 Text("No properties for this type.")
                     .font(OWTypography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
             }
         }
+    }
+
+    private func propertyLabel(_ title: String) -> some View {
+        Text(title)
+            .font(OWTypography.caption)
+            .foregroundStyle(DesignTokens.Color.textSecondary)
     }
 
     @ViewBuilder
@@ -76,43 +83,44 @@ struct PropertyInspectorView: View {
     }
 
     private func textRow(key: PagePropertyKey) -> some View {
-        LabeledContent(key.displayName) {
-            TextField(key.displayName, text: bindingText(key: key))
-                .textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            propertyLabel(key.displayName)
+            OWThemedTextField(placeholder: key.displayName, text: bindingText(key: key))
         }
     }
 
     private func urlRow(key: PagePropertyKey) -> some View {
-        LabeledContent(key.displayName) {
-            TextField("https://…", text: bindingText(key: key))
-                .textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            propertyLabel(key.displayName)
+            OWThemedTextField(placeholder: "https://…", text: bindingText(key: key))
         }
     }
 
     private func tagsRow(key: PagePropertyKey) -> some View {
-        LabeledContent(key.displayName) {
-            TextField("comma, separated", text: bindingText(key: key))
-                .textFieldStyle(.roundedBorder)
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            propertyLabel(key.displayName)
+            OWThemedTextField(placeholder: "comma, separated", text: bindingText(key: key))
         }
     }
 
     private func dateRow(key: PagePropertyKey) -> some View {
-        LabeledContent(key.displayName) {
-            TextField("yyyy-MM-dd", text: bindingText(key: key))
-                .textFieldStyle(.roundedBorder)
-                .font(OWTypography.code)
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            propertyLabel(key.displayName)
+            OWThemedTextField(placeholder: "yyyy-MM-dd", text: bindingText(key: key))
         }
     }
 
     private func pickerRow(key: PagePropertyKey, options: [String], labels: [String]) -> some View {
-        LabeledContent(key.displayName) {
-            Picker(key.displayName, selection: bindingText(key: key)) {
-                ForEach(Array(zip(options, labels)), id: \.0) { option, label in
-                    Text(label).tag(option)
-                }
-            }
-            .labelsHidden()
-            .frame(maxWidth: 180)
+        let labelByOption = Dictionary(uniqueKeysWithValues: zip(options, labels))
+        return VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            propertyLabel(key.displayName)
+            OWThemedDropdown(
+                accessibilityLabel: key.displayName,
+                selection: bindingText(key: key),
+                options: options,
+                optionTitle: { labelByOption[$0] ?? $0 },
+                minWidth: 160
+            )
         }
     }
 
@@ -131,17 +139,33 @@ struct PropertyInspectorView: View {
             }
         )
 
-        return LabeledContent(key.displayName) {
-            Stepper(value: ratingBinding, in: 1 ... 5) {
+        return VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            propertyLabel(key.displayName)
+            HStack(spacing: DesignTokens.Spacing.spacing2) {
                 HStack(spacing: 2) {
                     ForEach(1 ... 5, id: \.self) { star in
                         OWUnicodeIconView(
                             icon: star <= ratingBinding.wrappedValue ? .starFilled : .star,
                             size: 12,
-                            color: star <= ratingBinding.wrappedValue ? .yellow : .secondary
+                            color: star <= ratingBinding.wrappedValue
+                                ? DesignTokens.Color.warning
+                                : DesignTokens.Color.textTertiary
                         )
                     }
                 }
+                Stepper("", value: ratingBinding, in: 1 ... 5)
+                    .labelsHidden()
+            }
+            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.vertical, DesignTokens.Spacing.spacing2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                DesignTokens.Color.surface,
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                    .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
             }
         }
     }
