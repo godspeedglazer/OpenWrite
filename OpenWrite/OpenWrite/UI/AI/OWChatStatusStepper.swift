@@ -19,12 +19,17 @@ struct OWChatStatusStepper: View {
     let steps: [ChatPipelineStep]
     var showsStreamingDots: Bool = false
 
+    private let railWidth: CGFloat = 14
+    private let dotSize: CGFloat = 12
+    private let connectorMinHeight: CGFloat = 22
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                 stepRow(step, isLast: index == steps.count - 1)
             }
         }
+        .padding(.leading, DesignTokens.Spacing.spacing1)
         .padding(.vertical, 2)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Response progress")
@@ -35,22 +40,27 @@ struct OWChatStatusStepper: View {
         HStack(alignment: .top, spacing: 10) {
             VStack(spacing: 0) {
                 stepIndicator(step.status)
+                    .frame(width: railWidth, height: railWidth)
                 if !isLast {
                     connector(from: step.status)
+                        .frame(width: 2)
+                        .frame(minHeight: connectorMinHeight)
+                        .padding(.top, 2)
                 }
             }
-            .frame(width: 14)
+            .frame(width: railWidth)
 
-            HStack(spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(step.title)
                     .font(OWTypography.caption)
                     .foregroundStyle(labelColor(for: step.status))
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 if step.status == .active, showsStreamingDots {
                     StepperStreamingDots()
                 }
             }
-            .padding(.bottom, isLast ? 0 : 8)
+            .padding(.bottom, isLast ? 0 : 6)
 
             Spacer(minLength: 0)
         }
@@ -64,29 +74,25 @@ struct OWChatStatusStepper: View {
                 Circle()
                     .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: 1.5)
                     .background(Circle().fill(DesignTokens.Color.surface))
-                    .frame(width: 10, height: 10)
             case .active:
                 Circle()
                     .strokeBorder(DesignTokens.Color.accent, lineWidth: 2)
                     .background(Circle().fill(DesignTokens.Color.background))
-                    .frame(width: 12, height: 12)
             case .completed:
                 Circle()
                     .fill(DesignTokens.Color.accent)
-                    .frame(width: 10, height: 10)
             case .failed:
                 Circle()
                     .fill(DesignTokens.Color.warning)
-                    .frame(width: 10, height: 10)
             }
         }
+        .frame(width: dotSize, height: dotSize)
         .animation(.easeInOut(duration: 0.32), value: status)
     }
 
     private func connector(from status: ChatPipelineStep.Status) -> some View {
         Rectangle()
             .fill(status == .completed ? DesignTokens.Color.accent.opacity(0.55) : DesignTokens.Color.borderSubtle)
-            .frame(width: 2, height: 18)
             .animation(.easeInOut(duration: 0.38), value: status)
     }
 

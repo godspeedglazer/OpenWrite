@@ -1,12 +1,23 @@
 import AppKit
 import SwiftUI
 
+// MARK: - AppKit focus ring (NSHostingView bridge)
+
+extension NSView {
+    /// Clears AppKit’s default focus ring on bridge containers (`NSHostingView`, paste capture, etc.).
+    /// SwiftUI buttons inside otherwise pick up the thick system blue highlight.
+    func openWriteSuppressFocusRing() {
+        focusRingType = .none
+    }
+}
+
 // MARK: - NSWindow configuration
 
 /// Applies unified transparent titlebar so custom shell chrome can sit behind traffic lights.
 struct OWWindowChromeConfigurator: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
+        view.openWriteSuppressFocusRing()
         view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         view.setContentHuggingPriority(.defaultLow, for: .vertical)
         return view
@@ -72,7 +83,9 @@ enum OWWindowChrome {
 /// Opts this view out of `isMovableByWindowBackground` drags (graph nodes, canvas).
 struct OWDisablesWindowDrag: NSViewRepresentable {
     func makeNSView(context: Context) -> OWWindowDragShieldView {
-        OWWindowDragShieldView()
+        let view = OWWindowDragShieldView()
+        view.openWriteSuppressFocusRing()
+        return view
     }
 
     func updateNSView(_ nsView: OWWindowDragShieldView, context: Context) {}
@@ -85,7 +98,9 @@ final class OWWindowDragShieldView: NSView {
 /// Keeps the custom shell title bar draggable when graph suppresses background window move.
 struct OWTitleBarDraggableRegion: NSViewRepresentable {
     func makeNSView(context: Context) -> OWTitleBarDragView {
-        OWTitleBarDragView()
+        let view = OWTitleBarDragView()
+        view.openWriteSuppressFocusRing()
+        return view
     }
 
     func updateNSView(_ nsView: OWTitleBarDragView, context: Context) {}
@@ -198,6 +213,7 @@ struct OWShellTitleBar: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .openWriteFocusChrome()
             }
         }
     }
@@ -225,6 +241,23 @@ enum OWShellLayout {
         )
     }
 
+    /// Lower editor floor while assist is expanded so the strip can shrink before collapsing.
+    static func editorMinimumWhenAssistOpen(forCenterWidth centerWidth: CGFloat) -> CGFloat {
+        max(
+            DesignTokens.Layout.editorMinWidthWhenAssistOpen,
+            centerWidth * DesignTokens.Layout.editorMinWidthWhenAssistFraction
+        )
+    }
+
+    static func flexibleMinimum(
+        forCenterWidth centerWidth: CGFloat,
+        assistExpanded: Bool
+    ) -> CGFloat {
+        assistExpanded
+            ? editorMinimumWhenAssistOpen(forCenterWidth: centerWidth)
+            : editorMinimum(forCenterWidth: centerWidth)
+    }
+
     static func splitChromeWidth(isResizable: Bool) -> CGFloat {
         DesignTokens.Layout.shellColumnGutter
             + (isResizable ? DesignTokens.Layout.splitDividerHitWidth : 0)
@@ -244,18 +277,20 @@ enum OWShellLayout {
         return preferred.clamped(to: minWidth ... min(maxWidth, maxFixed))
     }
 
-    /// When assist is expanded, returns false if there is not enough room for editor + assist minimums.
-    static func canFitAssistStrip(centerWidth: CGFloat) -> Bool {
-        let editorMin = editorMinimum(forCenterWidth: centerWidth)
+    /// When assist is expanded, returns false only when editor + minimum assist cannot fit (with hysteresis).
+    static func shouldAutoCollapseAssist(centerWidth: CGFloat) -> Bool {
+        let editorMin = editorMinimumWhenAssistOpen(forCenterWidth: centerWidth)
         let chrome = splitChromeWidth(isResizable: true)
-        return centerWidth >= editorMin + DesignTokens.Layout.assistStripMinWidth + chrome
+        let required = editorMin + DesignTokens.Layout.assistStripMinWidth + chrome
+        return centerWidth < required - DesignTokens.Layout.assistCollapseHysteresis
     }
 
     static func maxAssistWidth(
         centerWidth: CGFloat,
-        preferredAssistWidth: CGFloat
+        preferredAssistWidth: CGFloat,
+        assistExpanded: Bool = true
     ) -> CGFloat {
-        let editorMin = editorMinimum(forCenterWidth: centerWidth)
+        let editorMin = flexibleMinimum(forCenterWidth: centerWidth, assistExpanded: assistExpanded)
         let chrome = splitChromeWidth(isResizable: true)
         let cap = centerWidth - editorMin - chrome
         return preferredAssistWidth.clamped(

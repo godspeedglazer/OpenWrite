@@ -120,6 +120,7 @@ struct ContentView: View {
                 HStack {
                     Spacer()
                     Button("Cancel") { showNewPageSheet = false }
+                        .openWriteFocusChrome(.themedKeyboard)
                 }
             }
             .padding(DesignTokens.Spacing.spacing6)

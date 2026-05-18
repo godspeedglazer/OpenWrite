@@ -137,6 +137,7 @@ struct DatabaseTableView: View {
             }
         }
         .buttonStyle(.plain)
+    .openWriteFocusChrome()
     }
 
     private var tableBody: some View {
@@ -185,6 +186,7 @@ struct DatabaseTableView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .background(
             selectedEntryID == entry.id
                 ? database.tint.color.opacity(0.08)
@@ -239,12 +241,15 @@ private struct DatabaseEntryEditorSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
+                        .openWriteFocusChrome(.themedKeyboard)
                 }
                 ToolbarItem(placement: .destructiveAction) {
                     Button("Delete", role: .destructive, action: onDelete)
+                        .openWriteFocusChrome(.themedKeyboard)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { onSave(entry) }
+                        .openWriteFocusChrome(.themedKeyboard)
                 }
             }
         }

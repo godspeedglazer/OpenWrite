@@ -64,6 +64,7 @@ struct OWAIPanelHeader<Center: View, Trailing: View>: View {
                         OWUnicodeIconView(icon: .back, size: 14)
                     }
                     .buttonStyle(.plain)
+                    .openWriteFocusChrome()
                     .foregroundStyle(DesignTokens.Color.textSecondary)
                     .accessibilityLabel(backAccessibilityLabel ?? "Back")
                 }

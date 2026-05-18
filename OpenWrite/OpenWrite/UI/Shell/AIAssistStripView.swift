@@ -127,6 +127,7 @@ struct AIAssistStripView: View {
                     OWUnicodeIconView(icon: .forward, size: 14)
                 }
                 .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 .foregroundStyle(DesignTokens.Color.textSecondary)
                 .help("Forward")
             }
@@ -134,7 +135,7 @@ struct AIAssistStripView: View {
                 OWUnicodeIconView(icon: .collapseTrailing, size: 12)
             }
             .buttonStyle(.plain)
-            .focusable(false)
+            .openWriteFocusChrome()
             .foregroundStyle(DesignTokens.Color.textSecondary)
             .help("Collapse AI assist")
         }
@@ -161,6 +162,7 @@ struct AIAssistBottomBar: View {
                 }
             }
             .buttonStyle(.plain)
+            .openWriteFocusChrome()
 
             Spacer(minLength: DesignTokens.Spacing.spacing2)
 
@@ -177,6 +179,7 @@ struct AIAssistBottomBar: View {
                         )
                 }
                 .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 .help(tab.title)
             }
         }

@@ -735,6 +735,7 @@ struct ChatPanelView: View {
             }
         }
         .buttonStyle(.plain)
+    .openWriteFocusChrome()
     }
 
     private var conversationPanel: some View {
@@ -1141,6 +1142,7 @@ struct ChatPanelView: View {
                                 .font(OWTypography.captionEmphasis)
                         }
                         .buttonStyle(.plain)
+                    .openWriteFocusChrome()
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)

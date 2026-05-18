@@ -41,10 +41,12 @@ struct CreateDatabaseSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { isPresented = false }
+                        .openWriteFocusChrome(.themedKeyboard)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") { createDatabase() }
                         .keyboardShortcut(.defaultAction)
+                        .openWriteFocusChrome(.themedKeyboard)
                 }
             }
         }
@@ -85,6 +87,7 @@ struct CreateDatabaseSheet: View {
             }
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .accessibilityLabel(preset.displayName)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

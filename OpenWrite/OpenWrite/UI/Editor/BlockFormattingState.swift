@@ -159,6 +159,7 @@ struct OWBlockFormattingToolbar: View {
                 )
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .help(help)
         .disabled(formatting.focusedBlockID == nil)
     }

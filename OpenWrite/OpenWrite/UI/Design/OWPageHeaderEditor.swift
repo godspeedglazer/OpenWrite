@@ -88,6 +88,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                 )
             }
             .buttonStyle(.plain)
+            .openWriteFocusChrome()
             .help("Change cover")
 
             pageIconChip
@@ -121,6 +122,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                 .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .help("Change page icon")
         .popover(isPresented: $showEmojiPicker, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
             OWPageIconPicker { pick in
@@ -193,6 +195,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                 }
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .fixedSize()
         .help("Page options")
         .popover(isPresented: $showPageOptions, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
@@ -253,6 +256,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    .openWriteFocusChrome()
     }
 
     private var titleField: some View {
@@ -575,7 +579,7 @@ struct OWCoverStylePickerSheet: View {
             }
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
+        .openWriteFocusChrome()
     }
 }
 
@@ -767,7 +771,7 @@ struct OWPageIconPicker: View {
             .padding(.top, 2)
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
+        .openWriteFocusChrome()
     }
 
     private func symbolRowGrid(_ symbols: [String], useSerif: Bool) -> some View {
@@ -796,7 +800,7 @@ struct OWPageIconPicker: View {
                 )
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
+        .openWriteFocusChrome()
         .accessibilityLabel("Icon \(symbol)")
     }
 

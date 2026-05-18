@@ -140,7 +140,10 @@ struct AnytypeShellView: View {
                 0,
                 geometry.size.width - DesignTokens.Layout.centerCardOuterPadding * 2
             )
-            let editorMin = OWShellLayout.editorMinimum(forCenterWidth: paddedWidth)
+            let editorMin = OWShellLayout.flexibleMinimum(
+                forCenterWidth: paddedWidth,
+                assistExpanded: workbench.aiAssistExpanded
+            )
 
             Group {
                 if workbench.aiAssistExpanded {
@@ -205,7 +208,7 @@ struct AnytypeShellView: View {
     private func reconcileCenterWorkbenchLayout(centerWidth: CGFloat) {
         guard workbench.aiAssistExpanded else { return }
 
-        if !OWShellLayout.canFitAssistStrip(centerWidth: centerWidth) {
+        if OWShellLayout.shouldAutoCollapseAssist(centerWidth: centerWidth) {
             withAnimation(DesignTokens.Motion.animationStandard) {
                 workbench.aiAssistExpanded = false
                 workbench.persistChromePreferences()
@@ -215,7 +218,8 @@ struct AnytypeShellView: View {
 
         let resolvedAssist = OWShellLayout.maxAssistWidth(
             centerWidth: centerWidth,
-            preferredAssistWidth: assistStripWidth
+            preferredAssistWidth: assistStripWidth,
+            assistExpanded: true
         )
         if abs(assistStripWidth - resolvedAssist) > 0.5 {
             assistStripWidth = resolvedAssist
@@ -351,6 +355,7 @@ struct AnytypeShellView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .openWriteFocusChrome()
 
                     if let welcome = vaultStore.documents.first(where: { $0.id == VaultDocument.welcomeDocumentID }) {
                         Button {
@@ -371,6 +376,7 @@ struct AnytypeShellView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                    .openWriteFocusChrome()
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -385,6 +391,7 @@ struct AnytypeShellView: View {
                             OWPreviewBlockRow(block: block)
                         }
                     }
+                    .openWriteEditorLeadingInset()
                     .openWriteEditorContentWidth(
                         readableMaxWidth: DesignTokens.Layout.editorMaxContentWidth
                     )

@@ -1,5 +1,101 @@
 import SwiftUI
 
+// MARK: - Focus chrome
+
+/// How OpenWrite handles macOS keyboard focus rings on SwiftUI controls.
+enum OpenWriteFocusChromePolicy {
+    /// No system blue ring; control is not in the tab order (icon rails, segments, popover rows).
+    case hidden
+    /// No system ring; keeps default tab order (fields that draw their own accent outline).
+    case suppressSystemRing
+    /// No system ring; subtle accent outline when keyboard-focused (primary sheet / capsule actions).
+    case themedKeyboard
+}
+
+extension View {
+    /// Replaces the default macOS focus highlight with OpenWrite policy (see `OpenWriteFocusChromePolicy`).
+    func openWriteFocusChrome(_ policy: OpenWriteFocusChromePolicy = .hidden) -> some View {
+        modifier(OpenWriteFocusChromeModifier(policy: policy))
+    }
+
+    /// Accent keyboard focus ring for custom `ButtonStyle` labels (`Capsule`, `RoundedRectangle`, etc.).
+    func openWriteButtonKeyboardFocus<S: InsettableShape>(in shape: S) -> some View {
+        modifier(OpenWriteButtonKeyboardFocusModifier(shape: shape))
+    }
+}
+
+private struct OpenWriteFocusChromeModifier: ViewModifier {
+    let policy: OpenWriteFocusChromePolicy
+    @FocusState private var isKeyboardFocused: Bool
+
+    func body(content: Content) -> some View {
+        switch policy {
+        case .hidden:
+            content
+                .focusable(false)
+                .modifier(OpenWriteSuppressSystemFocusEffectModifier())
+        case .suppressSystemRing:
+            content
+                .modifier(OpenWriteSuppressSystemFocusEffectModifier())
+        case .themedKeyboard:
+            content
+                .focusable()
+                .focused($isKeyboardFocused)
+                .modifier(OpenWriteSuppressSystemFocusEffectModifier())
+                .overlay {
+                    OpenWriteKeyboardFocusRing(isVisible: isKeyboardFocused)
+                }
+        }
+    }
+}
+
+private struct OpenWriteButtonKeyboardFocusModifier<S: InsettableShape>: ViewModifier {
+    let shape: S
+    @FocusState private var isKeyboardFocused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .focusable()
+            .focused($isKeyboardFocused)
+            .modifier(OpenWriteSuppressSystemFocusEffectModifier())
+            .overlay {
+                shape
+                    .strokeBorder(
+                        DesignTokens.Color.accent.opacity(DesignTokens.Opacity.focusRing),
+                        lineWidth: DesignTokens.Layout.focusRingWidth
+                    )
+                    .allowsHitTesting(false)
+                    .opacity(isKeyboardFocused ? 1 : 0)
+            }
+    }
+}
+
+private struct OpenWriteKeyboardFocusRing: View {
+    var isVisible: Bool
+    var cornerRadius: CGFloat = DesignTokens.Radius.owRect
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(
+                DesignTokens.Color.accent.opacity(DesignTokens.Opacity.focusRing),
+                lineWidth: DesignTokens.Layout.focusRingWidth
+            )
+            .allowsHitTesting(false)
+            .opacity(isVisible ? 1 : 0)
+    }
+}
+
+private struct OpenWriteSuppressSystemFocusEffectModifier: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 14.0, *) {
+            content.focusEffectDisabled()
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - Settings sheet chrome
 
 /// Themed settings / modal shell — `shellChrome` header, `background` body, accent Done.
@@ -46,6 +142,7 @@ struct OWAccentCapsuleButtonStyle: ButtonStyle {
                 DesignTokens.Color.accent.opacity(configuration.isPressed ? 0.82 : 1),
                 in: Capsule()
             )
+            .openWriteButtonKeyboardFocus(in: Capsule())
     }
 }
 
@@ -64,6 +161,7 @@ struct OWSecondaryRectButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                     .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
             }
+            .openWriteButtonKeyboardFocus(in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
     }
 }
 
@@ -80,6 +178,7 @@ struct OWComposerIconButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
                     .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
             }
+            .openWriteFocusChrome()
     }
 }
 
@@ -96,6 +195,7 @@ struct OWComposerSendButtonStyle: ButtonStyle {
                 ),
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
             )
+            .openWriteFocusChrome()
     }
 }
 
@@ -112,6 +212,7 @@ struct OWComposerStopButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
                     .strokeBorder(DesignTokens.Color.warning.opacity(0.45), lineWidth: DesignTokens.Layout.borderWidth)
             }
+            .openWriteFocusChrome()
     }
 }
 
@@ -135,6 +236,7 @@ struct OWThemedIconButtonStyle: ButtonStyle {
                         lineWidth: DesignTokens.Layout.borderWidth
                     )
             }
+            .openWriteFocusChrome()
     }
 }
 
@@ -180,7 +282,7 @@ struct OWThemedComposerField: View {
             .foregroundStyle(DesignTokens.Color.textPrimary)
             .lineLimit(lineLimit)
             .focused($isFocused)
-            .focusEffectDisabled()
+            .openWriteFocusChrome(.suppressSystemRing)
             .frame(minHeight: DesignTokens.Layout.composerActionSize)
             .padding(.horizontal, DesignTokens.Spacing.spacing2)
             .padding(.vertical, DesignTokens.Spacing.spacing2)
@@ -267,6 +369,7 @@ struct OWThemedDropdown<Option: Hashable>: View {
             }
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .accessibilityLabel(accessibilityLabel)
         .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
             dropdownList
@@ -318,6 +421,7 @@ struct OWThemedDropdown<Option: Hashable>: View {
             )
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
     }
 }
 
@@ -379,7 +483,7 @@ struct OWThemedSegmentedControl<Option: Hashable>: View {
             )
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
+        .openWriteFocusChrome()
         .accessibilityLabel(title(option))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -390,6 +494,8 @@ struct OWThemedSegmentedControl<Option: Hashable>: View {
 struct OWThemedToggle: View {
     let label: String
     @Binding var isOn: Bool
+    /// When false, only the switch is shown (label remains for accessibility / help).
+    var showsLabel: Bool = true
 
     var body: some View {
         Button {
@@ -398,10 +504,14 @@ struct OWThemedToggle: View {
             }
         } label: {
             HStack(spacing: DesignTokens.Spacing.spacing2) {
-                Text(label)
-                    .font(OWTypography.caption)
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                Spacer(minLength: 0)
+                if showsLabel {
+                    Text(label)
+                        .font(OWTypography.caption)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 0)
+                }
                 ZStack(alignment: isOn ? .trailing : .leading) {
                     Capsule()
                         .fill(isOn ? DesignTokens.Color.accent : DesignTokens.Color.borderSubtle)
@@ -415,6 +525,7 @@ struct OWThemedToggle: View {
             }
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .accessibilityLabel(label)
         .accessibilityValue(isOn ? "On" : "Off")
     }

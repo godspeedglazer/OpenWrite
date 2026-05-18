@@ -160,5 +160,6 @@ struct RelatedNotesView: View {
             }
         }
         .buttonStyle(.plain)
+    .openWriteFocusChrome()
     }
 }

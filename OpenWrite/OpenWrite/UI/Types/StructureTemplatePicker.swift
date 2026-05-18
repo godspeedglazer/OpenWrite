@@ -49,6 +49,7 @@ struct StructureTemplatePicker: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .accessibilityLabel(structure.displayName)
         .accessibilityHint(structure.summary)
     }

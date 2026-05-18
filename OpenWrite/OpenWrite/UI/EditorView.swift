@@ -113,6 +113,7 @@ struct EditorView: View {
                     OWObjectTypeChip(pageType: document.pageType)
                 }
                 .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 .help(showTypePicker ? "Hide type picker" : "Change page type")
 
                 OWMetadataChip(
@@ -138,6 +139,7 @@ struct EditorView: View {
                     )
                 }
                 .buttonStyle(.plain)
+            .openWriteFocusChrome()
             }
         }
         .padding(.bottom, DesignTokens.Layout.editorMetadataToToolbarSpacing)
@@ -171,6 +173,7 @@ struct EditorView: View {
                 commitBlocks(document: doc, blocks: editingBlocks)
             }
             .buttonStyle(.plain)
+            .openWriteFocusChrome()
             .font(OWTypography.captionEmphasis)
             .foregroundStyle(DesignTokens.Color.accent)
         }

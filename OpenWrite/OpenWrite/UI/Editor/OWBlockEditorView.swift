@@ -108,6 +108,7 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
 
     func makeNSView(context: Context) -> BlockEditorPasteCaptureView {
         let hosting = NSHostingView(rootView: content)
+        hosting.openWriteSuppressFocusRing()
         hosting.sizingOptions = [.intrinsicContentSize]
         let host = BlockEditorPasteCaptureView(hostedView: hosting)
         host.onPasteImage = {

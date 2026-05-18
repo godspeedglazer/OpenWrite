@@ -263,6 +263,7 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
+        scrollView.openWriteSuppressFocusRing()
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
@@ -388,6 +389,8 @@ final class BlockEditorPasteCaptureView: NSControl {
     init(hostedView: NSView) {
         self.hostedView = hostedView
         super.init(frame: .zero)
+        openWriteSuppressFocusRing()
+        hostedView.openWriteSuppressFocusRing()
         addSubview(hostedView)
     }
 

@@ -114,6 +114,7 @@ struct AISettingsView: View {
                             .font(DesignTokens.Typography.captionEmphasis)
                             .foregroundStyle(DesignTokens.Color.danger)
                             .buttonStyle(.plain)
+                        .openWriteFocusChrome()
                         }
                     }
                 }
@@ -172,6 +173,7 @@ struct AISettingsView: View {
                     .font(DesignTokens.Typography.caption)
                     .foregroundStyle(DesignTokens.Color.accent)
                     .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 } else {
                     OWThemedDropdown(
                         accessibilityLabel: "Embedding preset",
@@ -184,6 +186,7 @@ struct AISettingsView: View {
                         .font(DesignTokens.Typography.caption)
                         .foregroundStyle(DesignTokens.Color.accent)
                         .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 }
             } else {
                 embeddingModelDropdown

@@ -17,6 +17,7 @@ struct DatabaseListView: View {
                     OWUnicodeIconView(icon: .plus, size: 14, color: DesignTokens.Color.accent)
                 }
                 .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 .help("New database")
             }
 
@@ -46,6 +47,7 @@ struct DatabaseListView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                    .openWriteFocusChrome()
                     }
                 }
             } else {

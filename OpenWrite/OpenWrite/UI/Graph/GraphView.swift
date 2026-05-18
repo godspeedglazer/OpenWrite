@@ -477,6 +477,7 @@ struct GraphView: View {
                 OWUnicodeIconView(icon: .zoomOut, size: 14, color: DesignTokens.Color.accent)
             }
             .buttonStyle(.plain)
+            .openWriteFocusChrome()
 
             Button {
                 resetToAutoLayout()
@@ -484,6 +485,7 @@ struct GraphView: View {
                 Text("Reset")
             }
             .buttonStyle(.plain)
+            .openWriteFocusChrome()
             .help("Reset zoom, pan, and auto-layout positions")
 
             Button {
@@ -492,6 +494,7 @@ struct GraphView: View {
                 OWUnicodeIconView(icon: .zoomIn, size: 14, color: DesignTokens.Color.accent)
             }
             .buttonStyle(.plain)
+        .openWriteFocusChrome()
         }
         .foregroundStyle(DesignTokens.Color.accent)
     }
@@ -569,6 +572,7 @@ private struct GraphWindowDragPolicyHost: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
+        view.openWriteSuppressFocusRing()
         context.coordinator.activate(from: view)
         return view
     }

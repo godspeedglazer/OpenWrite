@@ -109,6 +109,7 @@ struct TypePickerView: View {
             )
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .accessibilityLabel(pageType.displayName)
     }
 }

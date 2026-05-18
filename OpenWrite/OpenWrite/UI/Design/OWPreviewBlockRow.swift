@@ -111,6 +111,7 @@ struct OWPreviewBlockRow: View {
                 todoCheckboxGlyph(filled: checked.wrappedValue)
             }
             .buttonStyle(.plain)
+            .openWriteFocusChrome()
             .padding(.top, 2)
         } else {
             todoCheckboxGlyph(filled: filled)
@@ -425,6 +426,7 @@ private struct ImageBlockCopyView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> ImageCopyContainerView {
         let view = ImageCopyContainerView()
+        view.openWriteSuppressFocusRing()
         view.configure(block: block, image: image)
         return view
     }

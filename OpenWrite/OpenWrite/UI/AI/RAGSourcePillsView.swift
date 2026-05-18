@@ -48,6 +48,7 @@ struct RAGSourcePillsView: View {
                 pillLabel(label)
             }
             .buttonStyle(.plain)
+            .openWriteFocusChrome()
             .help("Open \(label)")
         } else {
             pillLabel(label)

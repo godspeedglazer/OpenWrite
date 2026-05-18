@@ -32,6 +32,7 @@ struct OWSidebarSectionHeader: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .padding(.horizontal, DesignTokens.Spacing.spacing2)
         .accessibilityAddTraits(.isHeader)
         .accessibilityLabel(title)
@@ -102,6 +103,7 @@ struct OWSidebarObjectTypeRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 .help(isSubmenuExpanded ? "Hide filter hint" : "Show filter hint")
 
                 Button(action: onSelect) {
@@ -141,7 +143,7 @@ struct OWSidebarObjectTypeRow: View {
                     .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .focusable(false)
+                .openWriteFocusChrome()
                 .onHover { isHovered = $0 }
             }
 

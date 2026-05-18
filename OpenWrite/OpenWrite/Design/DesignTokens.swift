@@ -324,6 +324,13 @@ enum DesignTokens {
         static let assistStripMaxWidth: CGFloat = 360
         static let assistStripDefaultWidth: CGFloat = 280
         static let assistStripCollapsedWidth: CGFloat = 44
+        /// Below this measured strip width, composer toggles show icon-only switches.
+        static let assistStripIconsOnlyThreshold: CGFloat = 268
+        /// Hysteresis before auto-collapsing assist on window shrink (avoids flicker on minor resize).
+        static let assistCollapseHysteresis: CGFloat = 40
+        /// Smaller editor floor when assist is open so the strip can narrow before collapsing.
+        static let editorMinWidthWhenAssistOpen: CGFloat = 360
+        static let editorMinWidthWhenAssistFraction: CGFloat = 0.42
         static let inspectorMinWidth: CGFloat = assistStripMinWidth
         static let inspectorIdealWidth: CGFloat = 280
         static let inspectorMaxWidth: CGFloat = assistStripMaxWidth

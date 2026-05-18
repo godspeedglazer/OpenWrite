@@ -142,6 +142,7 @@ struct OWToolbarActionButtonStyle: ButtonStyle {
           )
       }
       .opacity(configuration.isPressed ? 0.88 : 1)
+      .openWriteButtonKeyboardFocus(in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
   }
 }
 

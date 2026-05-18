@@ -83,7 +83,7 @@ struct OWSidebarRow: View {
             .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
         }
         .buttonStyle(.plain)
-        .focusable(false)
+        .openWriteFocusChrome()
         .onHover { isHovered = $0 }
         .animation(selectionAnimation, value: isSelected)
         .animation(selectionAnimation, value: isHovered)

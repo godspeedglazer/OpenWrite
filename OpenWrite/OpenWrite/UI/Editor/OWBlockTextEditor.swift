@@ -20,6 +20,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> BlockTextContainerView {
         let container = BlockTextContainerView()
+        container.openWriteSuppressFocusRing()
         let textView = BlockFormattingTextView()
         textView.isRichText = true
         textView.isEditable = true

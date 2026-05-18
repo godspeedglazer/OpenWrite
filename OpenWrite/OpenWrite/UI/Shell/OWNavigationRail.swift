@@ -49,6 +49,7 @@ struct OWRailSearchField: View {
                         .rotationEffect(.degrees(45))
                 }
                 .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 .help("Clear search")
             }
         }
@@ -188,6 +189,7 @@ struct OWNavigationRail: View {
                         .frame(width: 20, alignment: .center)
                 }
                 .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 .help(spaceSwitcherExpanded ? "Collapse vault menu" : "Expand vault menu")
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -209,6 +211,7 @@ struct OWNavigationRail: View {
                     OWUnicodeIconView(icon: .plus, size: 16, color: DesignTokens.Color.accent)
                 }
                 .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 .foregroundStyle(DesignTokens.Color.accent)
                 .help("New page")
             }
@@ -263,6 +266,7 @@ struct OWNavigationRail: View {
                             )
                         }
                         .buttonStyle(.plain)
+                    .openWriteFocusChrome()
                     }
                 }
                 .padding(.horizontal, DesignTokens.Spacing.spacing1)
@@ -321,6 +325,7 @@ struct OWNavigationRail: View {
                     }
                     .font(OWTypography.caption)
                     .buttonStyle(.plain)
+                    .openWriteFocusChrome()
                     .foregroundStyle(DesignTokens.Color.accent)
                 }
             }
@@ -370,6 +375,7 @@ struct OWNavigationRail: View {
                 vaultCTALabel("New \(filter.displayName.lowercased())")
             }
             .buttonStyle(.plain)
+        .openWriteFocusChrome()
         } else {
             let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             if !q.isEmpty {
@@ -384,6 +390,7 @@ struct OWNavigationRail: View {
                 vaultCTALabel("New page")
             }
             .buttonStyle(.plain)
+        .openWriteFocusChrome()
         }
     }
 
@@ -426,6 +433,7 @@ struct OWNavigationRail: View {
                         vaultCTALabel("Open a page to pin")
                     }
                     .buttonStyle(.plain)
+                .openWriteFocusChrome()
                 }
             }
         }
@@ -549,6 +557,7 @@ struct OWNavigationRail: View {
                 }
         }
         .buttonStyle(.plain)
+        .openWriteFocusChrome()
         .help(help)
     }
 
@@ -701,7 +710,7 @@ struct OWNavigationRailCollapsed: View {
             }
         }
         .buttonStyle(.plain)
-        .focusable(false)
+        .openWriteFocusChrome()
         .help(help)
     }
 }
@@ -727,7 +736,7 @@ struct OWShellColumnCollapseButton: View {
                 }
         }
         .buttonStyle(.plain)
-        .focusable(false)
+        .openWriteFocusChrome()
         .help(help)
     }
 }

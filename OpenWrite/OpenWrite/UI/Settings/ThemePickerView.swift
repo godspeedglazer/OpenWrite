@@ -23,6 +23,7 @@ struct ThemeQuickToggle: View {
                 }
             }
             .buttonStyle(.plain)
+            .openWriteFocusChrome()
             .accessibilityLabel("Cycle theme, currently \(themeManager.selectedTheme.displayName)")
 
             Spacer()
@@ -129,7 +130,7 @@ private struct ThemePreviewCard: View {
             }
         }
         .buttonStyle(.plain)
-        .focusEffectDisabled()
+        .openWriteFocusChrome()
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
         .accessibilityLabel("\(theme.displayName) theme")
     }
