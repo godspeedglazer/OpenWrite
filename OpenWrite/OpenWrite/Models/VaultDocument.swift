@@ -14,6 +14,8 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
     var pageIcon: String
     /// Optional gradient cover on the page header strip.
     var coverStyle: CoverStyle?
+    /// Vault-relative path to a custom cover image (e.g. `.openwrite/covers/{id}.png`).
+    var coverImagePath: String?
     /// Draggable page-icon offset on the cover strip (points, relative to default anchor).
     var pageIconOffsetX: CGFloat
     var pageIconOffsetY: CGFloat
@@ -29,6 +31,7 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
         metadata: [String: String] = [:],
         pageIcon: String = "",
         coverStyle: CoverStyle? = nil,
+        coverImagePath: String? = nil,
         pageIconOffsetX: CGFloat = 0,
         pageIconOffsetY: CGFloat = 0
     ) {
@@ -42,6 +45,7 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
         self.metadata = metadata
         self.pageIcon = pageIcon
         self.coverStyle = coverStyle
+        self.coverImagePath = coverImagePath
         self.pageIconOffsetX = pageIconOffsetX
         self.pageIconOffsetY = pageIconOffsetY
     }
@@ -157,7 +161,7 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, pageType, properties, rootBlocks, createdAt, updatedAt, metadata
-        case pageIcon, coverStyle, pageIconOffsetX, pageIconOffsetY
+        case pageIcon, coverStyle, coverImagePath, pageIconOffsetX, pageIconOffsetY
     }
 
     init(from decoder: Decoder) throws {
@@ -173,6 +177,7 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
         metadata = try c.decodeIfPresent([String: String].self, forKey: .metadata) ?? [:]
         pageIcon = try c.decodeIfPresent(String.self, forKey: .pageIcon) ?? ""
         coverStyle = try c.decodeIfPresent(CoverStyle.self, forKey: .coverStyle)
+        coverImagePath = try c.decodeIfPresent(String.self, forKey: .coverImagePath)
         pageIconOffsetX = CGFloat(try c.decodeIfPresent(Double.self, forKey: .pageIconOffsetX) ?? 0)
         pageIconOffsetY = CGFloat(try c.decodeIfPresent(Double.self, forKey: .pageIconOffsetY) ?? 0)
     }
@@ -189,6 +194,7 @@ struct VaultDocument: Identifiable, Codable, Hashable, Sendable {
         try c.encode(metadata, forKey: .metadata)
         try c.encode(pageIcon, forKey: .pageIcon)
         try c.encodeIfPresent(coverStyle, forKey: .coverStyle)
+        try c.encodeIfPresent(coverImagePath, forKey: .coverImagePath)
         try c.encode(Double(pageIconOffsetX), forKey: .pageIconOffsetX)
         try c.encode(Double(pageIconOffsetY), forKey: .pageIconOffsetY)
     }

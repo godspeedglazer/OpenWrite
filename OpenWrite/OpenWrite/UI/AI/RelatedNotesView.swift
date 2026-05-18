@@ -65,6 +65,7 @@ struct RelatedNotesView: View {
             content
         }
         .frame(minWidth: 260)
+        .background(DesignTokens.Color.background)
         .onChange(of: vaultStore.selectedDocumentID) { _, _ in
             model.scheduleLoad(document: vaultStore.selectedDocument, services: aiServices)
         }
@@ -80,14 +81,14 @@ struct RelatedNotesView: View {
         HStack {
             Text("Related notes")
                 .font(OWTypography.panelTitle)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
             Spacer()
             if model.isLoading {
                 ProgressView()
                     .controlSize(.small)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(DesignTokens.Spacing.assistStripContentPadding)
     }
 
     @ViewBuilder
@@ -98,7 +99,8 @@ struct RelatedNotesView: View {
                 icon: .warning,
                 description: Text(errorMessage)
             )
-            .padding()
+            .padding(DesignTokens.Spacing.assistStripContentPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.hits.isEmpty {
             OWEmptyState(
                 title: vaultStore.selectedDocument == nil ? "No note selected" : "No related notes yet",
@@ -109,31 +111,54 @@ struct RelatedNotesView: View {
                         : "Index the vault or add more notes for better matches."
                 )
             )
-            .padding()
+            .padding(DesignTokens.Spacing.assistStripContentPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            List(model.hits) { hit in
-                Button {
-                    workbench.aiAssistNavigation.openRelatedDetail(hit)
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(hit.documentTitle)
-                                .font(OWTypography.bodyEmphasis)
-                            Spacer()
-                            Text(String(format: "%.0f%%", hit.score * 100))
-                                .font(OWTypography.caption)
-                                .foregroundStyle(DesignTokens.Color.textTertiary)
-                        }
-                        Text(hit.snippet)
-                            .font(OWTypography.caption)
-                            .foregroundStyle(DesignTokens.Color.textSecondary)
-                            .lineLimit(3)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                    ForEach(model.hits) { hit in
+                        relatedNoteCard(hit)
                     }
-                    .padding(.vertical, 4)
                 }
-                .buttonStyle(.plain)
+                .padding(DesignTokens.Spacing.assistStripContentPadding)
             }
-            .listStyle(.plain)
         }
+    }
+
+    private func relatedNoteCard(_ hit: RetrievalHit) -> some View {
+        Button {
+            workbench.aiAssistNavigation.openRelatedDetail(hit)
+        } label: {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(hit.documentTitle)
+                        .font(OWTypography.bodyEmphasis)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: DesignTokens.Spacing.spacing2)
+                    Text(String(format: "%.0f%%", hit.score * 100))
+                        .font(OWTypography.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                }
+                Text(hit.snippet)
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+            }
+            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+            .padding(.vertical, DesignTokens.Spacing.spacing3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                DesignTokens.Color.surfaceElevated,
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .strokeBorder(DesignTokens.Color.borderSubtle.opacity(0.65), lineWidth: DesignTokens.Layout.borderWidth)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }

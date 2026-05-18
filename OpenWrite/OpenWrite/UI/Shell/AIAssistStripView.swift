@@ -35,7 +35,7 @@ struct AIAssistStripView: View {
 
             stripContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(DesignTokens.Color.editorCanvas)
+                .background(DesignTokens.Color.background)
         }
         .frame(
             minWidth: DesignTokens.Layout.inspectorMinWidth,
@@ -223,17 +223,14 @@ struct RelatedNoteDetailView: View {
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .textSelection(.enabled)
 
-                Text("chunk:\(hit.id.uuidString)")
-                    .font(OWTypography.caption.monospaced())
-                    .foregroundStyle(DesignTokens.Color.textTertiary)
-
                 Button("Open in editor") {
                     vaultStore.selectedDocumentID = hit.documentID
                 }
                 .buttonStyle(OWAccentCapsuleButtonStyle())
             }
-            .padding(DesignTokens.Spacing.spacing3)
+            .padding(DesignTokens.Spacing.assistStripContentPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .background(DesignTokens.Color.background)
     }
 }

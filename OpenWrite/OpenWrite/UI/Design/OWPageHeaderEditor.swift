@@ -20,6 +20,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
     @Binding var title: String
     @Binding var pageIcon: String
     @Binding var coverStyle: CoverStyle?
+    @Binding var coverImagePath: String?
     @Binding var pageIconOffsetX: CGFloat
     @Binding var pageIconOffsetY: CGFloat
     @ViewBuilder var metadata: () -> Metadata
@@ -28,6 +29,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
     @State private var showDescriptionField = false
     @State private var descriptionText = ""
     @State private var showEmojiPicker = false
+    @State private var showPageOptions = false
     @State private var dragBaseOffset = CGSize.zero
 
     private var document: VaultDocument? {
@@ -53,14 +55,18 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, bannerContentTopInset)
-            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.horizontal, DesignTokens.Layout.editorContentLeadingInset)
             .padding(.bottom, DesignTokens.Spacing.spacing2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { syncDescriptionFromDocument() }
         .onChange(of: documentID) { _, _ in syncDescriptionFromDocument() }
         .sheet(isPresented: $showCoverPicker) {
-            OWCoverStylePickerSheet(selection: $coverStyle) {
+            OWCoverStylePickerSheet(
+                documentID: documentID,
+                selection: $coverStyle,
+                coverImagePath: $coverImagePath
+            ) {
                 commitHeaderFields()
             }
         }
@@ -75,6 +81,8 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             } label: {
                 OWPageBannerGradient(
                     coverStyle: coverStyle,
+                    coverImagePath: coverImagePath,
+                    documentID: documentID,
                     pageType: document?.pageType,
                     stripHeight: OWPageBannerMetrics.stripHeight
                 )
@@ -83,7 +91,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             .help("Change cover")
 
             pageIconChip
-                .padding(.leading, DesignTokens.Spacing.spacing3 + pageIconOffsetX)
+                .padding(.leading, DesignTokens.Layout.editorContentLeadingInset + pageIconOffsetX)
                 .offset(y: OWPageBannerMetrics.iconOverlap + pageIconOffsetY)
                 .gesture(iconDragGesture)
         }
@@ -123,6 +131,12 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                 }
             }
             .padding(DesignTokens.Spacing.spacing2)
+            .presentationBackground(DesignTokens.Color.surfaceElevated)
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+            }
         }
         .accessibilityLabel("Page icon")
     }
@@ -162,31 +176,8 @@ struct OWPageHeaderEditor<Metadata: View>: View {
     }
 
     private var pageOptionsMenu: some View {
-        Menu {
-            Button("Change cover…") {
-                showCoverPicker = true
-            }
-            Button(showDescriptionField ? "Hide description" : "Add description") {
-                withAnimation(.easeOut(duration: 0.18)) {
-                    showDescriptionField.toggle()
-                    if showDescriptionField, descriptionText.isEmpty {
-                        syncDescriptionFromDocument()
-                    }
-                }
-            }
-            Button("Change icon…") {
-                showEmojiPicker = true
-            }
-            Divider()
-            Button("Reset icon position") {
-                pageIconOffsetX = 0
-                pageIconOffsetY = 0
-                commitHeaderFields()
-            }
-            Button("Remove cover", role: .destructive) {
-                coverStyle = nil
-                commitHeaderFields()
-            }
+        Button {
+            showPageOptions = true
         } label: {
             Text("⋯")
                 .font(OWTypography.captionEmphasis)
@@ -201,9 +192,67 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                         .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 0.5)
                 }
         }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
         .fixedSize()
         .help("Page options")
+        .popover(isPresented: $showPageOptions, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                pageOptionsRow("Change cover…") {
+                    showPageOptions = false
+                    showCoverPicker = true
+                }
+                pageOptionsRow(showDescriptionField ? "Hide description" : "Add description") {
+                    showPageOptions = false
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        showDescriptionField.toggle()
+                        if showDescriptionField, descriptionText.isEmpty {
+                            syncDescriptionFromDocument()
+                        }
+                    }
+                }
+                pageOptionsRow("Change icon…") {
+                    showPageOptions = false
+                    showEmojiPicker = true
+                }
+                Divider().padding(.vertical, 2)
+                pageOptionsRow("Reset icon position") {
+                    showPageOptions = false
+                    pageIconOffsetX = 0
+                    pageIconOffsetY = 0
+                    commitHeaderFields()
+                }
+                pageOptionsRow("Remove cover", destructive: true) {
+                    showPageOptions = false
+                    coverStyle = nil
+                    commitHeaderFields()
+                }
+            }
+            .padding(DesignTokens.Spacing.spacing2)
+            .frame(minWidth: 200)
+            .presentationBackground(DesignTokens.Color.surfaceElevated)
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+            }
+        }
+    }
+
+    private func pageOptionsRow(
+        _ title: String,
+        destructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(OWTypography.callout)
+                .foregroundStyle(destructive ? DesignTokens.Color.danger : DesignTokens.Color.textPrimary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DesignTokens.Spacing.spacing2)
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var titleField: some View {
@@ -259,6 +308,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
         guard var doc = document else { return }
         doc.pageIcon = pageIcon
         doc.coverStyle = coverStyle
+        doc.coverImagePath = coverImagePath
         doc.pageIconOffsetX = pageIconOffsetX
         doc.pageIconOffsetY = pageIconOffsetY
         vaultStore.updateDocument(doc)
@@ -297,17 +347,28 @@ struct OWPageBannerGradient: View {
     @Environment(\.openWritePalette) private var palette
 
     var coverStyle: CoverStyle?
+    var coverImagePath: String?
+    var documentID: UUID?
     var pageType: PageType?
     var stripHeight: CGFloat = OWPageBannerMetrics.stripHeight
 
     var body: some View {
-        LinearGradient(
-            colors: gradientColors,
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        ZStack {
+            if let coverImage = resolvedCoverImage {
+                coverImage
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                LinearGradient(
+                    colors: gradientColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        }
         .frame(height: stripHeight)
         .frame(maxWidth: .infinity)
+        .clipped()
         .overlay(alignment: .bottom) {
             LinearGradient(
                 colors: [palette.editorCanvas.opacity(0), palette.editorCanvas],
@@ -316,6 +377,22 @@ struct OWPageBannerGradient: View {
             )
             .frame(height: 36)
         }
+    }
+
+    private var resolvedCoverImage: Image? {
+        let vaultRoot = VaultLocationPreferences.resolvedVaultRootURL()
+        if let coverImagePath, !coverImagePath.isEmpty {
+            let url = VaultCoverStore.resolveURL(relativePath: coverImagePath, vaultRoot: vaultRoot)
+            if let nsImage = NSImage(contentsOf: url) {
+                return Image(nsImage: nsImage)
+            }
+        }
+        if let documentID,
+           let url = VaultCoverStore.fileURL(documentID: documentID, vaultRoot: vaultRoot),
+           let nsImage = NSImage(contentsOf: url) {
+            return Image(nsImage: nsImage)
+        }
+        return nil
     }
 
     private var gradientColors: [Color] {
@@ -335,45 +412,143 @@ struct OWPageBannerGradient: View {
 // MARK: - Cover picker sheet
 
 struct OWCoverStylePickerSheet: View {
+    let documentID: UUID
     @Binding var selection: CoverStyle?
+    @Binding var coverImagePath: String?
     var onSelect: () -> Void
     @Environment(\.dismiss) private var dismiss
 
+    @State private var importError: String?
+
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
 
+  private var hasCustomImage: Bool {
+        if let coverImagePath, !coverImagePath.isEmpty { return true }
+        let root = VaultLocationPreferences.resolvedVaultRootURL()
+        return VaultCoverStore.fileURL(documentID: documentID, vaultRoot: root) != nil
+    }
+
     var body: some View {
-        NavigationStack {
+        OWSettingsSheet(title: "Cover", onDone: { dismiss() }) {
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 12) {
-                    coverCell(label: "None", colors: [DesignTokens.Color.surface, DesignTokens.Color.surfaceElevated], isSelected: selection == nil) {
-                        selection = nil
-                        onSelect()
-                        dismiss()
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing4) {
+                    customImageSection
+
+                    if let importError {
+                        Text(importError)
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.danger)
                     }
 
-                    ForEach(CoverStyle.allCases) { style in
-                        coverCell(
-                            label: style.displayName,
-                            colors: style.gradientColors(fallbackAccent: DesignTokens.Color.accent),
-                            isSelected: selection == style
-                        ) {
-                            selection = style
-                            onSelect()
-                            dismiss()
-                        }
-                    }
+                    coverSection(title: "Gradients", styles: CoverStyle.gradientPresets)
+                    coverSection(title: "Solids", styles: CoverStyle.solidPresets)
                 }
-                .padding()
+                .padding(DesignTokens.Spacing.spacing4)
             }
-            .navigationTitle("Cover")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                        .buttonStyle(OWToolbarActionButtonStyle(isEnabled: true))
+        }
+        .frame(minWidth: 380, minHeight: 360)
+    }
+
+    private var customImageSection: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            Text("Custom")
+                .font(DesignTokens.Typography.captionEmphasis)
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+
+            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                Button("Choose image…") {
+                    chooseCoverImage()
+                }
+                .buttonStyle(OWSecondaryRectButtonStyle())
+
+                if hasCustomImage {
+                    Button("Remove image", role: .destructive) {
+                        clearCustomCover()
+                    }
+                    .buttonStyle(OWSecondaryRectButtonStyle())
+                }
+            }
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                coverCell(
+                    label: "None",
+                    colors: [DesignTokens.Color.surface, DesignTokens.Color.surfaceElevated],
+                    isSelected: selection == nil && !hasCustomImage
+                ) {
+                    selection = nil
+                    coverImagePath = nil
+                    VaultCoverStore.removeCover(
+                        documentID: documentID,
+                        vaultRoot: VaultLocationPreferences.resolvedVaultRootURL()
+                    )
+                    onSelect()
+                    dismiss()
                 }
             }
         }
-        .frame(minWidth: 360, minHeight: 280)
+    }
+
+    private func coverSection(title: String, styles: [CoverStyle]) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            Text(title)
+                .font(DesignTokens.Typography.captionEmphasis)
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(styles) { style in
+                    coverCell(
+                        label: style.displayName,
+                        colors: style.gradientColors(fallbackAccent: DesignTokens.Color.accent),
+                        isSelected: selection == style && !hasCustomImage
+                    ) {
+                        selection = style
+                        coverImagePath = nil
+                        VaultCoverStore.removeCover(
+                            documentID: documentID,
+                            vaultRoot: VaultLocationPreferences.resolvedVaultRootURL()
+                        )
+                        onSelect()
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+
+    private func chooseCoverImage() {
+        importError = nil
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = VaultCoverStore.openPanelAllowedTypes
+        panel.message = "Choose a cover image (PNG, JPEG, or WebP)"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let vaultRoot = VaultLocationPreferences.resolvedVaultRootURL()
+            let relative = try VaultCoverStore.importCover(
+                from: url,
+                documentID: documentID,
+                vaultRoot: vaultRoot
+            )
+            coverImagePath = relative
+            selection = nil
+            onSelect()
+            dismiss()
+        } catch {
+            importError = error.localizedDescription
+        }
+    }
+
+    private func clearCustomCover() {
+        coverImagePath = nil
+        VaultCoverStore.removeCover(
+            documentID: documentID,
+            vaultRoot: VaultLocationPreferences.resolvedVaultRootURL()
+        )
+        onSelect()
     }
 
     private func coverCell(
@@ -389,7 +564,10 @@ struct OWCoverStylePickerSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-                            .strokeBorder(isSelected ? DesignTokens.Color.accent : DesignTokens.Color.borderHairline, lineWidth: isSelected ? 2 : 0.5)
+                            .strokeBorder(
+                                isSelected ? DesignTokens.Color.accent : DesignTokens.Color.borderHairline,
+                                lineWidth: isSelected ? DesignTokens.Layout.focusRingWidth : DesignTokens.Layout.borderWidth
+                            )
                     }
                 Text(label)
                     .font(DesignTokens.Typography.caption)
@@ -397,27 +575,62 @@ struct OWCoverStylePickerSheet: View {
             }
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
     }
 }
 
 // MARK: - Page icon picker
+
+private enum OWPageIconPickerRow: Identifiable {
+    case sectionHeader(id: String, title: String, isExpanded: Bool)
+    case symbolRow(symbols: [String], useSerif: Bool)
+
+    var id: String {
+        switch self {
+        case .sectionHeader(let id, _, _):
+            return "header-\(id)"
+        case .symbolRow(let symbols, _):
+            return "row-\(symbols.joined())"
+        }
+    }
+}
 
 struct OWPageIconPicker: View {
     let onPick: (String) -> Void
 
     @State private var tab: OWUnicodeSymbolCatalog.PickerTab = .symbols
     @State private var searchText = ""
+    @State private var debouncedSearchText = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
+    @State private var expandedSectionIDs: Set<String> = []
 
-    private let columns = Array(repeating: GridItem(.fixed(36), spacing: 4), count: 8)
+    private let symbolsPerRow = 8
     private let popoverWidth: CGFloat = 360
     private let scrollHeight: CGFloat = 300
 
-    private var filteredSections: [OWUnicodeSymbolCatalog.Section] {
-        OWUnicodeSymbolCatalog.filteredSections(matching: searchText)
+    private var isSearching: Bool {
+        !debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var filteredEmojis: [String] {
-        OWUnicodeSymbolCatalog.filteredEmojis(matching: searchText)
+    private var symbolRows: [OWPageIconPickerRow] {
+        let sections = OWUnicodeSymbolCatalog.filteredSections(matching: debouncedSearchText)
+        var rows: [OWPageIconPickerRow] = []
+        rows.reserveCapacity(sections.count * 6)
+        for section in sections {
+            let isExpanded = isSearching || expandedSectionIDs.contains(section.id)
+            rows.append(.sectionHeader(id: section.id, title: section.title, isExpanded: isExpanded))
+            guard isExpanded else { continue }
+            let useSerif = section.id == "stars" || section.id == "punctuation"
+            for chunk in section.symbols.owChunked(into: symbolsPerRow) {
+                rows.append(.symbolRow(symbols: chunk, useSerif: useSerif))
+            }
+        }
+        return rows
+    }
+
+    private var emojiRows: [OWPageIconPickerRow] {
+        let emojis = OWUnicodeSymbolCatalog.filteredEmojis(matching: debouncedSearchText)
+        return emojis.owChunked(into: symbolsPerRow).map { .symbolRow(symbols: $0, useSerif: false) }
     }
 
     var body: some View {
@@ -426,13 +639,11 @@ struct OWPageIconPicker: View {
                 .font(OWTypography.captionEmphasis)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
 
-            Picker("Kind", selection: $tab) {
-                ForEach(OWUnicodeSymbolCatalog.PickerTab.allCases) { pickerTab in
-                    Text(pickerTab.rawValue).tag(pickerTab)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            OWThemedSegmentedControl(
+                selection: $tab,
+                options: OWUnicodeSymbolCatalog.PickerTab.allCases,
+                title: { $0.rawValue }
+            )
 
             searchField
 
@@ -447,6 +658,33 @@ struct OWPageIconPicker: View {
             .frame(height: scrollHeight)
         }
         .frame(width: popoverWidth)
+        .onAppear {
+            debouncedSearchText = searchText
+            if expandedSectionIDs.isEmpty, let first = OWUnicodeSymbolCatalog.sections.first {
+                expandedSectionIDs = [first.id]
+            }
+        }
+        .onChange(of: searchText) { _, newValue in
+            scheduleSearchDebounce(newValue)
+        }
+        .onChange(of: debouncedSearchText) { _, newValue in
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if expandedSectionIDs.isEmpty, let first = OWUnicodeSymbolCatalog.sections.first {
+                    expandedSectionIDs = [first.id]
+                }
+            } else {
+                expandedSectionIDs = Set(
+                    OWUnicodeSymbolCatalog.filteredSections(matching: newValue).map(\.id)
+                )
+            }
+        }
+        .onChange(of: tab) { _, _ in
+            searchDebounceTask?.cancel()
+            debouncedSearchText = searchText
+        }
+        .onDisappear {
+            searchDebounceTask?.cancel()
+        }
     }
 
     private var searchField: some View {
@@ -454,7 +692,7 @@ struct OWPageIconPicker: View {
             Text("⌕")
                 .font(.system(size: 14))
                 .foregroundStyle(DesignTokens.Color.textTertiary)
-            TextField("Search symbols…", text: $searchText)
+            TextField(tab == .symbols ? "Search symbols…" : "Search emoji…", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(OWTypography.caption)
         }
@@ -466,27 +704,22 @@ struct OWPageIconPicker: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
-                .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 0.5)
+                .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
         }
     }
 
     @ViewBuilder
     private var symbolsContent: some View {
-        if filteredSections.isEmpty {
+        if symbolRows.isEmpty {
             emptyState("No symbols match your search.")
         } else {
             LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-                ForEach(filteredSections) { section in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(section.title)
-                            .font(OWTypography.caption)
-                            .foregroundStyle(DesignTokens.Color.textTertiary)
-
-                        LazyVGrid(columns: columns, spacing: 4) {
-                            ForEach(section.symbols, id: \.self) { symbol in
-                                symbolCell(symbol, useSerif: section.id == "stars" || section.id == "punctuation")
-                            }
-                        }
+                ForEach(symbolRows) { row in
+                    switch row {
+                    case .sectionHeader(let sectionID, let title, let isExpanded):
+                        sectionHeaderRow(sectionID: sectionID, title: title, isExpanded: isExpanded)
+                    case .symbolRow(let symbols, let useSerif):
+                        symbolRowGrid(symbols, useSerif: useSerif)
                     }
                 }
             }
@@ -496,15 +729,57 @@ struct OWPageIconPicker: View {
 
     @ViewBuilder
     private var emojiContent: some View {
-        if filteredEmojis.isEmpty {
+        if emojiRows.isEmpty {
             emptyState("No emoji match your search.")
         } else {
-            LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(filteredEmojis, id: \.self) { emoji in
-                    symbolCell(emoji, useSerif: false)
+            LazyVStack(alignment: .leading, spacing: 4) {
+                ForEach(emojiRows) { row in
+                    if case .symbolRow(let symbols, let useSerif) = row {
+                        symbolRowGrid(symbols, useSerif: useSerif)
+                    }
                 }
             }
             .padding(.bottom, DesignTokens.Spacing.spacing1)
+        }
+    }
+
+    private func sectionHeaderRow(sectionID: String, title: String, isExpanded: Bool) -> some View {
+        Button {
+            withAnimation(DesignTokens.Motion.animationFast) {
+                if isExpanded {
+                    expandedSectionIDs.remove(sectionID)
+                } else {
+                    expandedSectionIDs.insert(sectionID)
+                }
+            }
+        } label: {
+            HStack(spacing: DesignTokens.Spacing.spacing1) {
+                OWUnicodeIconView(
+                    icon: isExpanded ? .chevronDown : .chevronRight,
+                    size: 10,
+                    color: DesignTokens.Color.textTertiary
+                )
+                Text(title)
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 2)
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+    }
+
+    private func symbolRowGrid(_ symbols: [String], useSerif: Bool) -> some View {
+        HStack(spacing: 4) {
+            ForEach(symbols, id: \.self) { symbol in
+                symbolCell(symbol, useSerif: useSerif)
+            }
+            if symbols.count < symbolsPerRow {
+                ForEach(0 ..< (symbolsPerRow - symbols.count), id: \.self) { _ in
+                    Color.clear.frame(width: 32, height: 32)
+                }
+            }
         }
     }
 
@@ -521,6 +796,7 @@ struct OWPageIconPicker: View {
                 )
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .accessibilityLabel("Icon \(symbol)")
     }
 
@@ -531,12 +807,32 @@ struct OWPageIconPicker: View {
         return .system(size: 22)
     }
 
+    private func scheduleSearchDebounce(_ value: String) {
+        searchDebounceTask?.cancel()
+        searchDebounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                debouncedSearchText = value
+            }
+        }
+    }
+
     private func emptyState(_ message: String) -> some View {
         Text(message)
             .font(OWTypography.caption)
             .foregroundStyle(DesignTokens.Color.textTertiary)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.vertical, DesignTokens.Spacing.spacing3)
+    }
+}
+
+private extension Array {
+    func owChunked(into size: Int) -> [[Element]] {
+        guard size > 0, !isEmpty else { return [] }
+        return stride(from: 0, to: count, by: size).map { start in
+            Array(self[start ..< Swift.min(start + size, count)])
+        }
     }
 }
 

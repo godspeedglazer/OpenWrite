@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ChatMessage: Identifiable, Hashable {
     enum Role: Hashable {
@@ -11,7 +12,11 @@ struct ChatMessage: Identifiable, Hashable {
     let role: Role
     var text: String
     var sourceHits: [RetrievalHit]
+    var attachmentNames: [String]
     var isStreaming: Bool
+    var isError: Bool = false
+    /// Vertical stepper state between the user turn and this assistant reply.
+    var pipelineSteps: [ChatPipelineStep] = []
 }
 
 @MainActor
@@ -20,95 +25,408 @@ final class ChatPanelModel: ObservableObject {
     @Published var draft: String = ""
     @Published var retrievalSummary: String?
     @Published var searchVaultEnabled: Bool = ChatPanelModel.initialSearchVaultEnabled()
+    @Published var webLookupEnabled: Bool = ChatPanelModel.initialWebLookupEnabled()
+    @Published var pendingAttachments: [ChatAttachment] = []
+    @Published var attachmentError: String?
 
     private static let searchVaultDefaultsKey = "com.openwrite.chat.searchVault"
+    private static let webLookupDefaultsKey = "com.openwrite.chat.webLookup"
 
     private static func initialSearchVaultEnabled() -> Bool {
         if UserDefaults.standard.object(forKey: searchVaultDefaultsKey) == nil { return true }
         return UserDefaults.standard.bool(forKey: searchVaultDefaultsKey)
     }
 
+    private static func initialWebLookupEnabled() -> Bool {
+        UserDefaults.standard.bool(forKey: webLookupDefaultsKey)
+    }
+
     private var streamTask: Task<Void, Never>?
+    private static let maxInMemoryMessages = 48
 
     var isBusy: Bool {
         streamTask != nil
     }
 
+    /// True while the assistant placeholder message is still receiving a stream.
+    var hasStreamingAssistant: Bool {
+        messages.contains { $0.role == .assistant && $0.isStreaming }
+    }
+
+    /// Panel chrome should stay in a loading phase until the stream task finishes or errors.
+    var isChatSessionActive: Bool {
+        isBusy || hasStreamingAssistant
+    }
+
     func send(services: OpenWriteAIServices, agent: AgentConfig) {
-        guard let query = AIInput.sanitizeQuery(draft) else { return }
+        let attachments = pendingAttachments
+        let draftText = AIInput.sanitizeQuery(draft)
+        let queryText = draftText
+            ?? (attachments.isEmpty ? nil : "Review the attached files and answer my question.")
+        guard let query = queryText else { return }
+
         draft = ""
+        pendingAttachments = []
+        attachmentError = nil
         streamTask?.cancel()
         UserDefaults.standard.set(searchVaultEnabled, forKey: Self.searchVaultDefaultsKey)
+        UserDefaults.standard.set(webLookupEnabled, forKey: Self.webLookupDefaultsKey)
 
         let effectiveAgent = agent.withVaultRetrieval(searchVaultEnabled)
+        let webURLs = webLookupEnabled ? WebURLExtractor.extract(from: query) : []
+        let fetchesWeb = webLookupEnabled && !webURLs.isEmpty
+        let attachmentNames = attachments.map(\.displayName)
 
-        messages.append(ChatMessage(role: .user, text: query, sourceHits: [], isStreaming: false))
+        messages.append(
+            ChatMessage(
+                role: .user,
+                text: query,
+                sourceHits: [],
+                attachmentNames: attachmentNames,
+                isStreaming: false
+            )
+        )
         let assistantIndex = messages.count
-        messages.append(ChatMessage(role: .assistant, text: "", sourceHits: [], isStreaming: true))
+        messages.append(
+            ChatMessage(
+                role: .assistant,
+                text: "",
+                sourceHits: [],
+                attachmentNames: [],
+                isStreaming: true,
+                isError: false
+            )
+        )
         retrievalSummary = nil
-        services.setActivity(effectiveAgent.toolFlags.useVaultRetrieval ? .retrieving : .connecting)
+        let searchesVault = effectiveAgent.toolFlags.useVaultRetrieval
+        messages[assistantIndex].pipelineSteps = Self.initialPipelineSteps(
+            searchesVault: searchesVault,
+            fetchesWeb: fetchesWeb
+        )
+        if fetchesWeb {
+            setPipelineStep(at: assistantIndex, id: "web", status: .active)
+        } else if searchesVault {
+            setPipelineStep(at: assistantIndex, id: "search", status: .active)
+        } else {
+            setPipelineStep(at: assistantIndex, id: "connect", status: .active)
+        }
+        if fetchesWeb {
+            services.setActivity(.fetchingWeb)
+        } else {
+            services.setActivity(searchesVault || !attachments.isEmpty ? .retrieving : .connecting)
+        }
+
+        let priorHistory = Self.conversationHistory(before: assistantIndex, in: messages)
 
         streamTask = Task {
+            defer {
+                Task { @MainActor in
+                    streamTask = nil
+                    if services.activityState != .indexing {
+                        services.setActivity(.idle)
+                    }
+                }
+            }
+
             do {
+                var webPages: [WebPageSnapshot] = []
+                if fetchesWeb {
+                    webPages = await services.webFetch.fetchPages(urls: webURLs)
+                    await MainActor.run {
+                        if assistantIndex < messages.count {
+                            let count = webPages.count
+                            if count > 0 {
+                                updatePipelineStepTitle(
+                                    at: assistantIndex,
+                                    id: "web",
+                                    title: "Fetched \(count) page\(count == 1 ? "" : "s")"
+                                )
+                            } else {
+                                updatePipelineStepTitle(at: assistantIndex, id: "web", title: "Web fetch failed")
+                            }
+                            completePipelineStep(at: assistantIndex, id: "web")
+                            if searchesVault {
+                                setPipelineStep(at: assistantIndex, id: "search", status: .active)
+                                services.setActivity(.retrieving)
+                            } else {
+                                setPipelineStep(at: assistantIndex, id: "connect", status: .active)
+                                services.setActivity(.connecting)
+                            }
+                        }
+                    }
+                }
+
                 let context = try await services.rag.buildContext(
                     query: query,
-                    agent: effectiveAgent
+                    agent: effectiveAgent,
+                    attachments: attachments,
+                    webPages: webPages
                 )
                 await MainActor.run {
                     if assistantIndex < messages.count {
-                        messages[assistantIndex].sourceHits = context.hits
+                        messages[assistantIndex].sourceHits = context.allHits
+                        if searchesVault {
+                            completePipelineStep(at: assistantIndex, id: "search")
+                            let pillCount = context.allHits.uniqueDocumentSources().count
+                            if pillCount > 0 {
+                                updatePipelineStepTitle(
+                                    at: assistantIndex,
+                                    id: "sources",
+                                    title: "Found \(pillCount) source\(pillCount == 1 ? "" : "s")"
+                                )
+                                completePipelineStep(at: assistantIndex, id: "sources")
+                            } else {
+                                updatePipelineStepTitle(at: assistantIndex, id: "sources", title: "No matching sources")
+                                completePipelineStep(at: assistantIndex, id: "sources")
+                            }
+                        }
+                        updatePipelineStepTitle(
+                            at: assistantIndex,
+                            id: "connect",
+                            title: AIActivityState.connecting.connectedStatus(
+                                modelDisplay: services.lmConfig.chatModelDisplay
+                            )
+                        )
+                        completePipelineStep(at: assistantIndex, id: "connect")
+                        setPipelineStep(at: assistantIndex, id: "respond", status: .active)
                     }
-                    retrievalSummary = context.hits.isEmpty
-                        ? "No indexed matches · \(agent.name)"
-                        : "\(context.hits.count) source\(context.hits.count == 1 ? "" : "s") · \(agent.name)"
+                    retrievalSummary = Self.retrievalSummary(
+                        hits: context.allHits,
+                        attachmentCount: attachments.count,
+                        agentName: agent.name
+                    )
+                    if !context.allHits.isEmpty || attachments.isEmpty {
+                        services.setActivity(.connecting)
+                    }
                 }
 
-                for try await event in services.rag.streamAnswer(context: context, agent: effectiveAgent) {
+                for try await event in services.rag.streamAnswer(
+                    context: context,
+                    agent: effectiveAgent,
+                    history: priorHistory
+                ) {
                     try Task.checkCancellation()
                     await MainActor.run {
                         guard assistantIndex < messages.count else { return }
                         switch event.kind {
                         case .activity(let state):
-                            services.setActivity(state)
-                        case .token(let token):
-                            if messages[assistantIndex].text.isEmpty {
-                                services.setActivity(.streaming)
+                            if state != .idle {
+                                services.setActivity(state)
                             }
+                            if state == .streaming {
+                                setPipelineStep(at: assistantIndex, id: "respond", status: .active)
+                            }
+                        case .token(let token):
+                            services.setActivity(.streaming)
+                            setPipelineStep(at: assistantIndex, id: "respond", status: .active)
                             messages[assistantIndex].text += token
                         case .citations:
                             break
                         case .completed:
+                            messages[assistantIndex].text = AIInput.stripChunkReferences(
+                                messages[assistantIndex].text
+                            )
                             messages[assistantIndex].isStreaming = false
-                            services.setActivity(.idle)
-                            streamTask = nil
+                            completePipelineStep(at: assistantIndex, id: "respond")
+                            completePipelineStep(at: assistantIndex, id: "done")
+                            trimMessagesIfNeeded()
                         case .error(let message):
-                            messages[assistantIndex].text = message
+                            messages[assistantIndex].text = OpenWriteAIServices.chatFailureBubble(message: message)
+                            messages[assistantIndex].isError = true
                             messages[assistantIndex].isStreaming = false
-                            services.setActivity(.error(message))
-                            streamTask = nil
+                            markPipelineFailed(at: assistantIndex)
+                            services.setActivity(.idle)
+                            services.lastChatError = nil
                         }
                     }
                 }
+
+                await MainActor.run {
+                    guard assistantIndex < messages.count else { return }
+                    if messages[assistantIndex].isStreaming {
+                        messages[assistantIndex].isStreaming = false
+                        completePipelineStep(at: assistantIndex, id: "respond")
+                        completePipelineStep(at: assistantIndex, id: "done")
+                        trimMessagesIfNeeded()
+                    }
+                }
             } catch {
-                let diagnosed = await services.diagnoseChatFailure(error)
+                let diagnosed = OpenWriteAIServices.chatFailureBubble(error, config: services.lmConfig)
                 await MainActor.run {
                     if assistantIndex < messages.count {
                         messages[assistantIndex].text = diagnosed
+                        messages[assistantIndex].isError = true
                         messages[assistantIndex].isStreaming = false
+                        markPipelineFailed(at: assistantIndex)
                     }
-                    streamTask = nil
+                    services.setActivity(.idle)
+                    services.lastChatError = nil
                 }
             }
         }
     }
 
+    func importAttachments(from urls: [URL]) {
+        attachmentError = nil
+        var imported: [ChatAttachment] = []
+        for url in urls {
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessed { url.stopAccessingSecurityScopedResource() }
+            }
+            do {
+                let attachment = try ChatAttachmentStore.importFile(from: url)
+                imported.append(attachment)
+            } catch {
+                attachmentError = error.localizedDescription
+            }
+        }
+        guard !imported.isEmpty else { return }
+        pendingAttachments.append(contentsOf: imported)
+    }
+
+    func removePendingAttachment(id: UUID) {
+        pendingAttachments.removeAll { $0.id == id }
+    }
+
+    func cancelSend(services: OpenWriteAIServices) {
+        streamTask?.cancel()
+        streamTask = nil
+        if let index = messages.lastIndex(where: { $0.role == .assistant && $0.isStreaming }) {
+            messages[index].isStreaming = false
+            if messages[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                messages[index].text = "Stopped."
+            }
+            setPipelineStep(at: index, id: "respond", status: .completed)
+            completePipelineStep(at: index, id: "done")
+        }
+        services.setActivity(.idle)
+        services.lastChatError = nil
+    }
+
     func clear(services: OpenWriteAIServices) {
         streamTask?.cancel()
         streamTask = nil
+
+        if !messages.isEmpty {
+            let payload = messages.map { message in
+                (
+                    role: message.role == .user ? "user" : "assistant",
+                    text: displayText(for: message),
+                    isError: message.isError
+                )
+            }
+            try? ChatSessionStore.archive(
+                messages: payload,
+                agentID: services.selectedAgentID
+            )
+        }
+
         messages.removeAll()
         retrievalSummary = nil
+        pendingAttachments = []
+        attachmentError = nil
         services.setActivity(.idle)
         services.lastChatError = nil
+    }
+
+    private func displayText(for message: ChatMessage) -> String {
+        let raw = message.text
+        guard message.role == .assistant else { return raw }
+        return AIInput.stripChunkReferences(raw)
+    }
+
+    private func trimMessagesIfNeeded() {
+        guard messages.count > Self.maxInMemoryMessages else { return }
+        messages.removeFirst(messages.count - Self.maxInMemoryMessages)
+    }
+
+    private static func conversationHistory(
+        before assistantIndex: Int,
+        in messages: [ChatMessage]
+    ) -> [RAGConversationTurn] {
+        guard assistantIndex > 0 else { return [] }
+        var turns: [RAGConversationTurn] = []
+        for message in messages.prefix(assistantIndex) {
+            switch message.role {
+            case .user:
+                guard let text = AIInput.sanitizeQuery(message.text) else { continue }
+                turns.append(RAGConversationTurn(role: .user, text: text))
+            case .assistant:
+                let text = AIInput.stripChunkReferences(message.text)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty, !message.isError else { continue }
+                turns.append(RAGConversationTurn(role: .assistant, text: text))
+            case .system:
+                continue
+            }
+        }
+        let maxTurns = 12
+        if turns.count > maxTurns {
+            return Array(turns.suffix(maxTurns))
+        }
+        return turns
+    }
+
+    private static func initialPipelineSteps(searchesVault: Bool, fetchesWeb: Bool = false) -> [ChatPipelineStep] {
+        var steps: [ChatPipelineStep] = []
+        if fetchesWeb {
+            steps.append(ChatPipelineStep(id: "web", title: "Fetching page…", status: .pending))
+        }
+        if searchesVault {
+            steps.append(ChatPipelineStep(id: "search", title: "Searching vault", status: .pending))
+            steps.append(ChatPipelineStep(id: "sources", title: "Found sources", status: .pending))
+        }
+        steps.append(ChatPipelineStep(id: "connect", title: "Connected to model", status: .pending))
+        steps.append(ChatPipelineStep(id: "respond", title: "Responding", status: .pending))
+        steps.append(ChatPipelineStep(id: "done", title: "Done", status: .pending))
+        return steps
+    }
+
+    private func setPipelineStep(at index: Int, id: String, status: ChatPipelineStep.Status) {
+        guard index < messages.count,
+              let stepIndex = messages[index].pipelineSteps.firstIndex(where: { $0.id == id }) else { return }
+        messages[index].pipelineSteps[stepIndex].status = status
+    }
+
+    private func completePipelineStep(at index: Int, id: String) {
+        setPipelineStep(at: index, id: id, status: .completed)
+    }
+
+    private func updatePipelineStepTitle(at index: Int, id: String, title: String) {
+        guard index < messages.count,
+              let stepIndex = messages[index].pipelineSteps.firstIndex(where: { $0.id == id }) else { return }
+        messages[index].pipelineSteps[stepIndex].title = title
+    }
+
+    private func markPipelineFailed(at index: Int) {
+        guard index < messages.count else { return }
+        for stepIndex in messages[index].pipelineSteps.indices {
+            if messages[index].pipelineSteps[stepIndex].status == .active {
+                messages[index].pipelineSteps[stepIndex].status = .failed
+            } else if messages[index].pipelineSteps[stepIndex].status == .pending {
+                messages[index].pipelineSteps[stepIndex].status = .failed
+            }
+        }
+        if let doneIndex = messages[index].pipelineSteps.firstIndex(where: { $0.id == "done" }) {
+            messages[index].pipelineSteps[doneIndex].title = "Failed"
+            messages[index].pipelineSteps[doneIndex].status = .failed
+        }
+    }
+
+    private static func retrievalSummary(hits: [RetrievalHit], attachmentCount: Int, agentName: String) -> String {
+        let pillCount = hits.uniqueDocumentSources().count
+        if pillCount == 0, attachmentCount == 0 {
+            return "No matching notes · \(agentName)"
+        }
+        var parts: [String] = []
+        if pillCount > 0 {
+            parts.append("\(pillCount) source\(pillCount == 1 ? "" : "s")")
+        }
+        if attachmentCount > 0 {
+            parts.append("\(attachmentCount) file\(attachmentCount == 1 ? "" : "s")")
+        }
+        return "\(parts.joined(separator: ", ")) · \(agentName)"
     }
 }
 
@@ -117,13 +435,24 @@ final class ChatPanelModel: ObservableObject {
 struct AIActivityIndicator: View {
     let state: AIActivityState
     var retrievalSummary: String?
+    /// Keeps spinner/dots visible when tokens arrive but the stream has not completed.
+    var isReceivingTokens: Bool = false
 
     @State private var pulse = false
 
+    private var showsProgress: Bool {
+        state.isBusy || isReceivingTokens
+    }
+
+    private var showsStreamingDots: Bool {
+        (state == .streaming || state == .retrieving || state == .fetchingWeb || state == .connecting) && isReceivingTokens
+            || (state == .streaming && !isReceivingTokens)
+    }
+
     var body: some View {
-        if state.isBusy || state.statusMessage != nil {
+        if showsProgress || state.statusMessage != nil || isReceivingTokens {
             HStack(alignment: .top, spacing: 10) {
-                if state.isBusy {
+                if showsProgress {
                     ProgressView()
                         .controlSize(.small)
                         .scaleEffect(pulse ? 1.05 : 0.95)
@@ -132,18 +461,18 @@ struct AIActivityIndicator: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    if let message = state.statusMessage {
+                    if let message = activityMessage {
                         Text(message)
                             .font(OWTypography.caption)
                             .foregroundStyle(stateLabelColor)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if let retrievalSummary, state == .retrieving || state == .streaming {
+                    if let retrievalSummary, state == .retrieving || state == .fetchingWeb || state == .streaming || isReceivingTokens {
                         Text(retrievalSummary)
                             .font(OWTypography.caption2)
                             .foregroundStyle(DesignTokens.Color.textSecondary)
                     }
-                    if state == .streaming {
+                    if showsStreamingDots {
                         StreamingDots()
                     }
                 }
@@ -160,6 +489,13 @@ struct AIActivityIndicator: View {
         }
     }
 
+    private var activityMessage: String? {
+        if isReceivingTokens, state == .idle {
+            return "Receiving response…"
+        }
+        return state.statusMessage
+    }
+
     private var stateLabelColor: Color {
         if case .error = state { return DesignTokens.Color.textPrimary }
         return DesignTokens.Color.textSecondary
@@ -167,7 +503,7 @@ struct AIActivityIndicator: View {
 
     private var activityBackground: Color {
         if case .error = state { return DesignTokens.Color.warning.opacity(0.14) }
-        return DesignTokens.Color.surface.opacity(0.85)
+        return DesignTokens.Color.surface
     }
 }
 
@@ -181,10 +517,8 @@ private struct StreamingDots: View {
                     .fill(DesignTokens.Color.accent.opacity(index == phase ? 1 : 0.35))
                     .frame(width: 5, height: 5)
             }
-            Text("Receiving tokens")
-                .font(OWTypography.caption2)
-                .foregroundStyle(DesignTokens.Color.textTertiary)
         }
+        .accessibilityLabel("Receiving response")
         .onAppear { startCycle() }
         .onDisappear { phase = 0 }
     }
@@ -207,6 +541,7 @@ struct ChatPanelView: View {
     @EnvironmentObject private var workbench: WorkbenchState
     @Environment(\.aiAssistStripWidth) private var assistStripWidth
     @StateObject private var model = ChatPanelModel()
+    @State private var showFileImporter = false
 
     private var navigation: AIAssistNavigationState { workbench.aiAssistNavigation }
 
@@ -247,8 +582,9 @@ struct ChatPanelView: View {
                         agentRow(agent)
                     }
                 }
-                .padding(DesignTokens.Spacing.spacing3)
+                .padding(DesignTokens.Spacing.assistStripContentPadding)
             }
+            .background(DesignTokens.Color.background)
         }
     }
 
@@ -281,9 +617,16 @@ struct ChatPanelView: View {
             .background(
                 isSelected
                     ? DesignTokens.Color.accentMuted
-                    : DesignTokens.Color.surface.opacity(0.6),
+                    : DesignTokens.Color.surface,
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium)
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? DesignTokens.Color.accent.opacity(0.3) : DesignTokens.Color.borderSubtle.opacity(0.65),
+                        lineWidth: DesignTokens.Layout.borderWidth
+                    )
+            }
         }
         .buttonStyle(.plain)
     }
@@ -291,17 +634,10 @@ struct ChatPanelView: View {
     private var conversationPanel: some View {
         VStack(spacing: 0) {
             conversationHeader
-            AIActivityIndicator(
-                state: aiServices.activityState,
-                retrievalSummary: model.retrievalSummary
-            )
-            if aiServices.activityState.isBusy || aiServices.activityState.statusMessage != nil {
-                Divider()
-            }
             messageList
-            Divider()
             composer
         }
+        .background(DesignTokens.Color.background)
     }
 
     private var conversationHeader: some View {
@@ -316,7 +652,7 @@ struct ChatPanelView: View {
                 Text("Ask vault")
                     .font(OWTypography.calloutEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                    HStack(spacing: 6) {
+                    HStack(alignment: .center, spacing: 6) {
                         AgentPickerView(selectedAgentID: $aiServices.selectedAgentID)
                         Text(aiServices.lmConfig.chatModelDisplay)
                             .font(OWTypography.caption)
@@ -326,20 +662,12 @@ struct ChatPanelView: View {
                 }
             },
             trailing: {
-                HStack(spacing: 8) {
-                    if aiServices.activityState != .idle {
-                        Text(aiServices.activityState.shortLabel)
-                            .font(OWTypography.caption)
-                            .foregroundStyle(DesignTokens.Color.textSecondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(DesignTokens.Color.surface)
-                            .clipShape(Capsule())
-                    }
+                HStack(alignment: .center, spacing: 8) {
                     Button("Clear") { model.clear(services: aiServices) }
-                        .font(OWTypography.caption)
+                        .buttonStyle(OWSecondaryRectButtonStyle())
                         .disabled(model.messages.isEmpty)
                 }
+                .frame(minHeight: 28, alignment: .center)
             }
         )
     }
@@ -360,7 +688,7 @@ struct ChatPanelView: View {
                                 .foregroundStyle(DesignTokens.Color.textTertiary)
                             Text("Ask about your notes")
                                 .font(OWTypography.calloutEmphasis)
-                            Text("Answers cite indexed chunks on this Mac.")
+                            Text("Answers cite your notes when search is on.")
                                 .font(OWTypography.caption)
                                 .foregroundStyle(DesignTokens.Color.textTertiary)
                                 .multilineTextAlignment(.center)
@@ -369,16 +697,20 @@ struct ChatPanelView: View {
                         .padding(.vertical, DesignTokens.Spacing.spacing6)
                     }
                     ForEach(model.messages) { message in
-                        messageBubble(message)
+                        messageRow(message)
                             .id(message.id)
                     }
                 }
-                .padding(DesignTokens.Spacing.spacing3)
+                .padding(DesignTokens.Spacing.assistStripContentPadding)
             }
+            .background(DesignTokens.Color.background)
             .onChange(of: model.messages.count) { _, _ in
                 scrollToBottom(proxy: proxy)
             }
             .onChange(of: streamingTail) { _, _ in
+                scrollToBottom(proxy: proxy)
+            }
+            .onChange(of: pipelineStepsTail) { _, _ in
                 scrollToBottom(proxy: proxy)
             }
         }
@@ -386,6 +718,10 @@ struct ChatPanelView: View {
 
     private var streamingTail: String {
         model.messages.last(where: { $0.isStreaming })?.text ?? ""
+    }
+
+    private var pipelineStepsTail: Int {
+        model.messages.last?.pipelineSteps.count ?? 0
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
@@ -397,70 +733,205 @@ struct ChatPanelView: View {
     }
 
     @ViewBuilder
-    private func messageBubble(_ message: ChatMessage) -> some View {
-        VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
-            if message.role == .assistant, !message.sourceHits.isEmpty {
-                RAGSourcePillsView(hits: message.sourceHits) { documentID in
-                    vaultStore.selectedDocumentID = documentID
-                }
-            }
+    private func messageRow(_ message: ChatMessage) -> some View {
+        switch message.role {
+        case .user:
+            userMessageRow(message)
+        case .assistant:
+            assistantMessageRow(message)
+        case .system:
+            systemMessageRow(message)
+        }
+    }
 
-            Group {
-                if message.isStreaming, message.text.isEmpty {
-                    HStack(spacing: 6) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text(aiServices.activityState.statusMessage ?? "Waiting for model…")
-                            .font(OWTypography.callout)
-                            .foregroundStyle(DesignTokens.Color.textSecondary)
-                    }
-                } else {
-                    Text(message.text)
+    private func userMessageRow(_ message: ChatMessage) -> some View {
+        VStack(alignment: .trailing, spacing: DesignTokens.Spacing.spacing1) {
+            Text("You")
+                .font(OWTypography.captionEmphasis)
+                .foregroundStyle(DesignTokens.Color.textTertiary)
+
+            userBubble(message)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    @ViewBuilder
+    private func userBubble(_ message: ChatMessage) -> some View {
+        let hasBody = !message.text.isEmpty || !message.attachmentNames.isEmpty
+        if hasBody {
+            VStack(alignment: .trailing, spacing: DesignTokens.Spacing.spacing2) {
+                if !message.attachmentNames.isEmpty {
+                    attachmentNameRow(message.attachmentNames)
+                }
+                if !message.text.isEmpty {
+                    Text(displayText(for: message))
+                        .font(OWTypography.body)
+                        .lineSpacing(OWTypography.bodyLineSpacing)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
                         .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(DesignTokens.Spacing.spacing2)
-            .font(OWTypography.callout)
-            .background(bubbleColor(for: message.role))
-            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium))
-            .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
+            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.vertical, DesignTokens.Spacing.spacing2)
+            .background(
+                DesignTokens.Color.accentMuted,
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+            )
+        }
+    }
 
-            if message.isStreaming, !message.text.isEmpty {
-                HStack(spacing: 4) {
-                    OWUnicodeIconView(icon: .waveform, size: 12, color: DesignTokens.Color.textTertiary)
-                    Text("Streaming")
-                        .font(OWTypography.caption2)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
+    private func assistantMessageRow(_ message: ChatMessage) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            if !message.pipelineSteps.isEmpty {
+                OWChatStatusStepper(
+                    steps: message.pipelineSteps,
+                    showsStreamingDots: message.isStreaming
+                )
+            }
+
+            if showsAssistantBubble(message) {
+                Text("Assistant")
+                    .font(OWTypography.captionEmphasis)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+
+                assistantMessageBody(message)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func showsAssistantBubble(_ message: ChatMessage) -> Bool {
+        if message.isError { return true }
+        if !message.sourceHits.isEmpty { return true }
+        if !displayText(for: message).isEmpty { return true }
+        return !message.isStreaming
+    }
+
+    private func systemMessageRow(_ message: ChatMessage) -> some View {
+        Text(displayText(for: message))
+            .font(OWTypography.caption)
+            .foregroundStyle(DesignTokens.Color.textSecondary)
+            .italic()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, DesignTokens.Spacing.spacing1)
+            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+            .background(DesignTokens.Color.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small))
+    }
+
+    private func attachmentNameRow(_ names: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(names, id: \.self) { name in
+                Text(name)
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func assistantMessageBody(_ message: ChatMessage) -> some View {
+        assistantBubble(message: message) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                if !message.sourceHits.isEmpty {
+                    RAGSourcePillsView(hits: message.sourceHits, onOpenDocument: { documentID in
+                        vaultStore.selectedDocumentID = documentID
+                    }, compact: true)
+                }
+
+                if message.isError {
+                    failureBubbleContent(displayText(for: message))
+                } else {
+                    let visible = displayText(for: message)
+                    if !visible.isEmpty {
+                        Text(visible)
+                            .font(OWTypography.body)
+                            .lineSpacing(OWTypography.bodyLineSpacing)
+                            .textSelection(.enabled)
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
     }
 
-    private func bubbleColor(for role: ChatMessage.Role) -> Color {
-        switch role {
-        case .user:
-            return DesignTokens.Color.accentMuted
-        case .assistant:
-            return DesignTokens.Color.surfaceElevated.opacity(0.9)
-        case .system:
-            return DesignTokens.Color.warning.opacity(0.14)
+    private func assistantBubble<Content: View>(
+        message: ChatMessage,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.vertical, DesignTokens.Spacing.spacing2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                message.isError
+                    ? DesignTokens.Color.warning.opacity(0.14)
+                    : DesignTokens.Color.surfaceElevated,
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+            )
+            .overlay {
+                if message.isError {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                        .strokeBorder(DesignTokens.Color.warning.opacity(0.35), lineWidth: DesignTokens.Layout.borderWidth)
+                }
+            }
+    }
+
+    private func failureBubbleContent(_ text: String) -> some View {
+        let parts = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+        let title = parts.first.map(String.init) ?? "Response failed"
+        let detail = parts.count > 1 ? String(parts[1]) : ""
+
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
+                OWUnicodeIconView(icon: .warningFill, size: 16, color: DesignTokens.Color.warning)
+                Text(title)
+                    .font(OWTypography.calloutEmphasis)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+            }
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    private func displayText(for message: ChatMessage) -> String {
+        let raw = message.text
+        guard message.role == .assistant else { return raw }
+        return AIInput.stripChunkReferences(raw)
     }
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let lastChatError = aiServices.lastChatError, case .error = aiServices.activityState {
-                Text(lastChatError)
+            if let attachmentError = model.attachmentError {
+                Text(attachmentError)
                     .font(OWTypography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            if !model.pendingAttachments.isEmpty {
+                pendingAttachmentRow
+            }
+
             if stripIsCompact {
-                OWThemedToggle(label: "Search notes", isOn: $model.searchVaultEnabled)
-            } else {
-                HStack(spacing: 8) {
+                HStack(spacing: 12) {
                     OWThemedToggle(label: "Search notes", isOn: $model.searchVaultEnabled)
+                    OWThemedToggle(label: "Web", isOn: $model.webLookupEnabled)
+                }
+            } else {
+                HStack(spacing: 12) {
+                    OWThemedToggle(label: "Search notes", isOn: $model.searchVaultEnabled)
+                    OWThemedToggle(label: "Web", isOn: $model.webLookupEnabled)
+                        .help("Fetch HTTPS links in your message (off by default). No in-page JavaScript.")
                     Spacer(minLength: 0)
                     Text(aiServices.lmConfig.embeddingModelDisplay)
                         .font(OWTypography.caption2)
@@ -469,50 +940,108 @@ struct ChatPanelView: View {
                 }
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField(stripIsCompact ? "Ask…" : "Ask about your notes…", text: $model.draft, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(OWTypography.body)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .lineLimit(1 ... 4)
-                    .padding(.horizontal, DesignTokens.Spacing.spacing2)
-                    .padding(.vertical, DesignTokens.Spacing.spacing2)
-                    .background(
-                        DesignTokens.Color.surfaceElevated,
-                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
-                            .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+            HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
+                OWThemedComposerField(
+                    placeholder: stripIsCompact ? "Ask…" : "Ask about your notes…",
+                    text: $model.draft,
+                    lineLimit: 1 ... 4
+                ) {
+                    if !model.isBusy {
+                        model.send(services: aiServices, agent: aiServices.selectedAgent)
                     }
-                    .onSubmit { model.send(services: aiServices, agent: aiServices.selectedAgent) }
-
-                Button {
-                    aiServices.voiceInput.toggleListening(appendTo: &model.draft)
-                } label: {
-                    OWUnicodeIconView(
-                        icon: aiServices.voiceInput.isListening ? .micActive : .mic,
-                        size: 20,
-                        color: aiServices.voiceInput.isListening
-                            ? DesignTokens.Color.accent
-                            : DesignTokens.Color.textSecondary
-                    )
                 }
-                .help(aiServices.voiceInput.statusMessage ?? "Dictate into the message field")
+                .frame(maxWidth: .infinity)
+                .disabled(model.isBusy)
 
-                Button {
-                    model.send(services: aiServices, agent: aiServices.selectedAgent)
-                } label: {
-                    OWUnicodeIconView(icon: .send, size: 24, color: DesignTokens.Color.accent)
+                HStack(spacing: DesignTokens.Spacing.spacing1) {
+                    Button {
+                        showFileImporter = true
+                    } label: {
+                        OWUnicodeIconView(
+                            icon: .document,
+                            size: 17,
+                            color: DesignTokens.Color.textSecondary
+                        )
+                    }
+                    .buttonStyle(OWComposerIconButtonStyle())
+                    .help("Attach .md, .txt, or .pdf")
+                    .disabled(model.isBusy)
+                    .fileImporter(
+                        isPresented: $showFileImporter,
+                        allowedContentTypes: ChatAttachmentStore.allowedContentTypes,
+                        allowsMultipleSelection: true
+                    ) { result in
+                        switch result {
+                        case .success(let urls):
+                            model.importAttachments(from: urls)
+                        case .failure(let error):
+                            model.attachmentError = error.localizedDescription
+                        }
+                    }
+
+                    if model.isBusy {
+                        Button {
+                            model.cancelSend(services: aiServices)
+                        } label: {
+                            OWUnicodeIconView(icon: .stop, size: 14, color: DesignTokens.Color.warning)
+                        }
+                        .buttonStyle(OWComposerStopButtonStyle())
+                        .help("Stop response")
+                    } else {
+                        Button {
+                            model.send(services: aiServices, agent: aiServices.selectedAgent)
+                        } label: {
+                            OWUnicodeIconView(
+                                icon: .send,
+                                size: 17,
+                                color: DesignTokens.Color.selectionPill
+                            )
+                        }
+                        .buttonStyle(OWComposerSendButtonStyle(isEnabled: canSendMessage))
+                        .disabled(!canSendMessage)
+                        .help("Send")
+                        .keyboardShortcut(.return, modifiers: [.command])
+                    }
                 }
-                .disabled(model.isBusy || AIInput.sanitizeQuery(model.draft) == nil)
-                .keyboardShortcut(.return, modifiers: [.command])
             }
         }
-        .padding(DesignTokens.Spacing.spacing3)
+        .padding(DesignTokens.Spacing.assistStripContentPadding)
         .padding(.bottom, DesignTokens.Layout.assistStripComposerBottomInset)
         .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing2)
-        .background(DesignTokens.Color.editorCanvas.opacity(0.5))
+        .background(DesignTokens.Color.background)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(DesignTokens.Color.borderSubtle.opacity(0.65))
+                .frame(height: DesignTokens.Layout.borderWidth)
+        }
+    }
+
+    private var canSendMessage: Bool {
+        AIInput.sanitizeQuery(model.draft) != nil || !model.pendingAttachments.isEmpty
+    }
+
+    private var pendingAttachmentRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(model.pendingAttachments) { attachment in
+                    HStack(spacing: 4) {
+                        Text(attachment.displayName)
+                            .font(OWTypography.caption)
+                            .lineLimit(1)
+                        Button {
+                            model.removePendingAttachment(id: attachment.id)
+                        } label: {
+                            Text("×")
+                                .font(OWTypography.captionEmphasis)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(DesignTokens.Color.surface.opacity(0.9), in: Capsule())
+                }
+            }
+        }
     }
 
     private func agentHelp(_ agent: AgentConfig) -> String {

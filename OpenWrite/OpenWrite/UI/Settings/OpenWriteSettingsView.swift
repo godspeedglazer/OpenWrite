@@ -57,6 +57,7 @@ struct OpenWriteSettingsView: View {
                         ? "Added \(DemoVaultSeeder.seededDocumentIDs.count) demo pages. Switched to Links Demo."
                         : "Demo vault is already installed."
                 }
+                .buttonStyle(OWSecondaryRectButtonStyle())
                 .disabled(vaultStore.isDemoVaultInstalled)
 
                 if vaultStore.isDemoVaultInstalled {

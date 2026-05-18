@@ -3,6 +3,24 @@ import Foundation
 struct RAGContext: Sendable {
     var query: String
     var hits: [RetrievalHit]
+    var attachmentHits: [RetrievalHit] = []
+    /// Server-fetched page text (safe web lookup); injected into system context, not indexed.
+    var webPages: [WebPageSnapshot] = []
+
+    var allHits: [RetrievalHit] {
+        hits + attachmentHits
+    }
+}
+
+/// Prior user/assistant turns sent to LM Studio (RAG excerpts stay in system).
+struct RAGConversationTurn: Sendable {
+    enum Role: String, Sendable {
+        case user
+        case assistant
+    }
+
+    let role: Role
+    let text: String
 }
 
 struct RAGStreamEvent: Sendable {
@@ -25,39 +43,99 @@ struct RAGAnswer: Sendable {
 
 /// Retrieval-augmented generation over the local vault.
 protocol RAGService: Sendable {
-    func buildContext(query: String, agent: AgentConfig) async throws -> RAGContext
-    func streamAnswer(context: RAGContext, agent: AgentConfig) -> AsyncThrowingStream<RAGStreamEvent, Error>
-    func answer(query: String, agent: AgentConfig) async throws -> RAGAnswer
+    func buildContext(
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment],
+        webPages: [WebPageSnapshot]
+    ) async throws -> RAGContext
+    func streamAnswer(
+        context: RAGContext,
+        agent: AgentConfig,
+        history: [RAGConversationTurn]
+    ) -> AsyncThrowingStream<RAGStreamEvent, Error>
+    func answer(
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment],
+        history: [RAGConversationTurn]
+    ) async throws -> RAGAnswer
+}
+
+extension RAGService {
+    func buildContext(query: String, agent: AgentConfig) async throws -> RAGContext {
+        try await buildContext(query: query, agent: agent, attachments: [], webPages: [])
+    }
+
+    func buildContext(
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment]
+    ) async throws -> RAGContext {
+        try await buildContext(query: query, agent: agent, attachments: attachments, webPages: [])
+    }
+
+    func streamAnswer(context: RAGContext, agent: AgentConfig) -> AsyncThrowingStream<RAGStreamEvent, Error> {
+        streamAnswer(context: context, agent: agent, history: [])
+    }
+
+    func answer(query: String, agent: AgentConfig) async throws -> RAGAnswer {
+        try await answer(query: query, agent: agent, attachments: [], history: [])
+    }
+
+    func answer(
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment]
+    ) async throws -> RAGAnswer {
+        try await answer(query: query, agent: agent, attachments: attachments, history: [])
+    }
 }
 
 struct LiveRAGService: RAGService {
     let retrieval: RetrievalService
     let client: LMStudioClient
 
-    func buildContext(query: String, agent: AgentConfig) async throws -> RAGContext {
+    func buildContext(
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment] = [],
+        webPages: [WebPageSnapshot] = []
+    ) async throws -> RAGContext {
         guard let sanitized = AIInput.sanitizeQuery(query) else {
-            return RAGContext(query: query, hits: [])
+            return RAGContext(
+                query: query,
+                hits: [],
+                attachmentHits: ChatAttachmentStore.retrievalHits(from: attachments),
+                webPages: webPages
+            )
         }
+        let attachmentHits = ChatAttachmentStore.retrievalHits(from: attachments)
         let limit = agent.toolFlags.useVaultRetrieval ? agent.effectiveChunkLimit : 0
         guard limit > 0 else {
-            return RAGContext(query: sanitized, hits: [])
+            return RAGContext(query: sanitized, hits: [], attachmentHits: attachmentHits, webPages: webPages)
         }
         let hits = try await retrieval.search(
             query: sanitized,
             limit: limit
         )
-        return RAGContext(query: sanitized, hits: hits)
+        return RAGContext(query: sanitized, hits: hits, attachmentHits: attachmentHits, webPages: webPages)
     }
 
-    func streamAnswer(context: RAGContext, agent: AgentConfig) -> AsyncThrowingStream<RAGStreamEvent, Error> {
+    func streamAnswer(
+        context: RAGContext,
+        agent: AgentConfig,
+        history: [RAGConversationTurn] = []
+    ) -> AsyncThrowingStream<RAGStreamEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let (userMessage, citationIDs) = Self.promptPayload(context: context, agent: agent)
-                    let messages: [[String: String]] = [
-                        ["role": "system", "content": agent.systemPrompt],
-                        ["role": "user", "content": userMessage]
+                    let (systemContent, citationIDs) = Self.systemAndCitations(context: context, agent: agent)
+                    var messages: [[String: String]] = [
+                        ["role": "system", "content": systemContent]
                     ]
+                    messages.append(contentsOf: Self.historyPayload(history))
+                    messages.append(["role": "user", "content": Self.userMessageContent(query: context.query)])
 
                     continuation.yield(RAGStreamEvent(kind: .activity(.connecting)))
                     continuation.yield(RAGStreamEvent(kind: .citations(citationIDs)))
@@ -76,13 +154,13 @@ struct LiveRAGService: RAGService {
 
                     let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
                     if trimmed.isEmpty {
-                        continuation.yield(RAGStreamEvent(kind: .error("Empty response from LM Studio")))
+                        continuation.yield(RAGStreamEvent(kind: .error(Self.emptyCompletionUserMessage)))
                     } else {
                         continuation.yield(RAGStreamEvent(kind: .completed))
                     }
                     continuation.finish()
                 } catch {
-                    continuation.yield(RAGStreamEvent(kind: .error(error.localizedDescription)))
+                    continuation.yield(RAGStreamEvent(kind: .error(Self.streamErrorUserMessage(error))))
                     continuation.finish()
                 }
             }
@@ -92,12 +170,17 @@ struct LiveRAGService: RAGService {
         }
     }
 
-    func answer(query: String, agent: AgentConfig) async throws -> RAGAnswer {
-        let context = try await buildContext(query: query, agent: agent)
+    func answer(
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment] = [],
+        history: [RAGConversationTurn] = []
+    ) async throws -> RAGAnswer {
+        let context = try await buildContext(query: query, agent: agent, attachments: attachments)
         var text = ""
         var citationIDs: [UUID] = []
 
-        for try await event in streamAnswer(context: context, agent: agent) {
+        for try await event in streamAnswer(context: context, agent: agent, history: history) {
             switch event.kind {
             case .token(let token):
                 text += token
@@ -113,20 +196,94 @@ struct LiveRAGService: RAGService {
         return RAGAnswer(
             text: text.trimmingCharacters(in: .whitespacesAndNewlines),
             citationChunkIDs: citationIDs,
-            hits: context.hits
+            hits: context.allHits
         )
     }
 
-    private static func promptPayload(context: RAGContext, agent: AgentConfig) -> (String, [UUID]) {
-        var lines: [String] = ["Question: \(context.query)", "", "Note excerpts:"]
-        var ids: [UUID] = []
-        var usedTokens = AIInput.estimatedTokenCount(for: context.query) + AISafetyLimits.systemPromptReservedTokens
-        let maxSnippet = agent.snippetCharsPerChunk
+    private static let emptyCompletionUserMessage = "The chat model returned an empty reply."
 
-        for (index, hit) in context.hits.enumerated() {
-            let header = "[chunk:\(hit.id.uuidString)] \(hit.documentTitle)"
+    private static func streamErrorUserMessage(_ error: Error) -> String {
+        if let lm = error as? LMStudioError, case .emptyResponse = lm {
+            return emptyCompletionUserMessage
+        }
+        let detail = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        return String(detail.prefix(240))
+    }
+
+    private static func historyPayload(_ history: [RAGConversationTurn]) -> [[String: String]] {
+        history.compactMap { turn in
+            let trimmed = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            let capped = trimmed.count <= AISafetyLimits.maxChatMessageCharacters
+                ? trimmed
+                : String(trimmed.prefix(AISafetyLimits.maxChatMessageCharacters))
+            return ["role": turn.role.rawValue, "content": capped]
+        }
+    }
+
+    private static func userMessageContent(query: String) -> String {
+        """
+        User question:
+        \(query)
+        """
+    }
+
+    private static func systemAndCitations(context: RAGContext, agent: AgentConfig) -> (String, [UUID]) {
+        let (excerptBlock, ids) = excerptBlock(context: context, agent: agent)
+        var parts = [agent.systemPrompt]
+        parts.append("")
+        parts.append(
+            """
+            The latest user message (role: user) contains the question to answer. \
+            Reference excerpts below are supporting evidence only — do not summarize them by default.
+            """
+        )
+        if !excerptBlock.isEmpty {
+            parts.append("")
+            parts.append(excerptBlock)
+        }
+        if !context.webPages.isEmpty {
+            parts.append("")
+            parts.append(webExcerptBlock(pages: context.webPages))
+        }
+        return (parts.joined(separator: "\n"), ids)
+    }
+
+    private static func webExcerptBlock(pages: [WebPageSnapshot]) -> String {
+        var lines = [
+            "Web pages fetched for this turn (supporting evidence only; cite URLs when used):",
+            ""
+        ]
+        var usedTokens = AISafetyLimits.systemPromptReservedTokens
+        for (index, page) in pages.enumerated() {
+            let titleLine = page.title.map { " — \($0)" } ?? ""
+            let header = "\(index + 1). \(page.finalURL.absoluteString)\(titleLine)"
+            let body = AIInput.sanitizeSnippet(page.text, maxChars: AISafetyLimits.maxWebTextChars / max(1, pages.count))
+            let block = "\(header)\n\(body)"
+            let blockTokens = AIInput.estimatedTokenCount(for: block)
+            if usedTokens + blockTokens > AISafetyLimits.maxEstimatedPromptTokens { break }
+            usedTokens += blockTokens
+            lines.append(block)
+        }
+        return lines.joined(separator: "\n\n")
+    }
+
+    private static func excerptBlock(context: RAGContext, agent: AgentConfig) -> (String, [UUID]) {
+        var lines: [String] = [
+            "Reference excerpts (supporting evidence only; optional):",
+            ""
+        ]
+        var ids: [UUID] = []
+        var usedTokens = AISafetyLimits.systemPromptReservedTokens
+        let maxSnippet = agent.snippetCharsPerChunk
+        let excerptCap = min(agent.effectiveChunkLimit, AISafetyLimits.maxChatReferenceExcerpts)
+
+        var blockIndex = 0
+        for hit in context.allHits.prefix(excerptCap) {
+            let header = "[chunk:\(hit.id.uuidString)] \(hit.sourcePillTitle)"
             let body = AIInput.sanitizeSnippet(hit.snippet, maxChars: maxSnippet)
-            let block = "\(index + 1). \(header)\n\(body)"
+            blockIndex += 1
+            let block = "\(blockIndex). \(header)\n\(body)"
             let blockTokens = AIInput.estimatedTokenCount(for: block)
             if usedTokens + blockTokens > AISafetyLimits.maxEstimatedPromptTokens { break }
             usedTokens += blockTokens
@@ -134,7 +291,7 @@ struct LiveRAGService: RAGService {
             ids.append(hit.id)
         }
 
-        if context.hits.isEmpty {
+        if ids.isEmpty {
             lines.append("(No matching notes in the local index.)")
         }
 
@@ -145,16 +302,32 @@ struct LiveRAGService: RAGService {
 struct PlaceholderRAGService: RAGService {
     let retrieval: RetrievalService
 
-    func buildContext(query: String, agent: AgentConfig) async throws -> RAGContext {
+    func buildContext(
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment] = [],
+        webPages: [WebPageSnapshot] = []
+    ) async throws -> RAGContext {
         let limit = agent.toolFlags.useVaultRetrieval ? agent.effectiveChunkLimit : 0
         let hits = limit > 0
             ? try await retrieval.search(query: query, limit: limit)
             : []
-        return RAGContext(query: query, hits: hits)
+        return RAGContext(
+            query: query,
+            hits: hits,
+            attachmentHits: ChatAttachmentStore.retrievalHits(from: attachments),
+            webPages: webPages
+        )
     }
 
-    func streamAnswer(context: RAGContext, agent: AgentConfig) -> AsyncThrowingStream<RAGStreamEvent, Error> {
-        AsyncThrowingStream { continuation in
+    func streamAnswer(
+        context: RAGContext,
+        agent: AgentConfig,
+        history: [RAGConversationTurn] = []
+    ) -> AsyncThrowingStream<RAGStreamEvent, Error> {
+        _ = history
+        _ = agent
+        return AsyncThrowingStream { continuation in
             continuation.yield(RAGStreamEvent(kind: .activity(.connecting)))
             continuation.yield(RAGStreamEvent(kind: .citations(context.hits.map(\.id))))
             continuation.yield(RAGStreamEvent(kind: .activity(.streaming)))
@@ -164,8 +337,14 @@ struct PlaceholderRAGService: RAGService {
         }
     }
 
-    func answer(query: String, agent: AgentConfig) async throws -> RAGAnswer {
-        let context = try await buildContext(query: query, agent: agent)
-        return RAGAnswer(text: "", citationChunkIDs: context.hits.map(\.id), hits: context.hits)
+    func answer(
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment] = [],
+        history: [RAGConversationTurn] = []
+    ) async throws -> RAGAnswer {
+        _ = history
+        let context = try await buildContext(query: query, agent: agent, attachments: attachments)
+        return RAGAnswer(text: "", citationChunkIDs: context.allHits.map(\.id), hits: context.allHits)
     }
 }

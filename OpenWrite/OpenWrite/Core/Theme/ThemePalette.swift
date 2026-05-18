@@ -19,8 +19,8 @@ struct ThemePalette: Equatable, Sendable {
     let success: Color
     let warning: Color
 
-    /// Filled window title/toolbar strip — matches elevated surface per theme.
-    var shellChrome: Color { surface }
+    /// Filled window title/toolbar strip — flush with navigation rail.
+    var shellChrome: Color { sidebarBackground }
 
     var borderHairline: Color { borderSubtle.opacity(0.55) }
     var accentMuted: Color { accent.opacity(0.14) }
@@ -44,6 +44,10 @@ struct ThemePalette: Equatable, Sendable {
         case .midnight: return midnight
         case .solarizedWarm: return solarizedWarm
         case .highContrast: return highContrast
+        case .lavenderMist: return lavenderMist
+        case .parchmentStudio: return parchmentStudio
+        case .nordFrost: return nordFrost
+        case .emberDusk: return emberDusk
         }
     }
 
@@ -223,6 +227,82 @@ struct ThemePalette: Equatable, Sendable {
         danger: rgb(0.75, 0.0, 0.0),
         success: rgb(0.0, 0.45, 0.20),
         warning: rgb(0.65, 0.40, 0.0)
+    )
+
+    private static let lavenderMist = ThemePalette(
+        background: rgb(0.98, 0.97, 0.99),
+        sidebarBackground: rgb(0.94, 0.92, 0.97),
+        workbenchChrome: rgb(0.96, 0.95, 0.98),
+        editorCanvas: rgb(1.0, 0.99, 1.0),
+        surface: rgb(0.95, 0.93, 0.97),
+        surfaceElevated: rgb(1.0, 0.998, 1.0),
+        selectionPill: rgb(1.0, 0.99, 1.0),
+        borderSubtle: rgb(0.88, 0.86, 0.92),
+        textPrimary: rgb(0.16, 0.14, 0.20),
+        textSecondary: rgb(0.48, 0.44, 0.54),
+        textTertiary: rgb(0.62, 0.58, 0.66),
+        accent: rgb(0.52, 0.38, 0.78),
+        separator: rgb(0.86, 0.84, 0.90),
+        danger: rgb(0.82, 0.26, 0.32),
+        success: rgb(0.28, 0.58, 0.42),
+        warning: rgb(0.78, 0.52, 0.18)
+    )
+
+    private static let parchmentStudio = ThemePalette(
+        background: rgb(0.98, 0.96, 0.92),
+        sidebarBackground: rgb(0.94, 0.90, 0.84),
+        workbenchChrome: rgb(0.96, 0.93, 0.88),
+        editorCanvas: rgb(1.0, 0.98, 0.94),
+        surface: rgb(0.94, 0.90, 0.84),
+        surfaceElevated: rgb(1.0, 0.98, 0.95),
+        selectionPill: rgb(1.0, 0.97, 0.92),
+        borderSubtle: rgb(0.86, 0.80, 0.72),
+        textPrimary: rgb(0.18, 0.14, 0.10),
+        textSecondary: rgb(0.48, 0.42, 0.36),
+        textTertiary: rgb(0.62, 0.54, 0.46),
+        accent: rgb(0.78, 0.42, 0.28),
+        separator: rgb(0.84, 0.78, 0.70),
+        danger: rgb(0.80, 0.24, 0.22),
+        success: rgb(0.32, 0.55, 0.32),
+        warning: rgb(0.82, 0.58, 0.18)
+    )
+
+    private static let nordFrost = ThemePalette(
+        background: rgb(0.10, 0.13, 0.18),
+        sidebarBackground: rgb(0.12, 0.16, 0.22),
+        workbenchChrome: rgb(0.08, 0.11, 0.15),
+        editorCanvas: rgb(0.14, 0.18, 0.24),
+        surface: rgb(0.15, 0.19, 0.26),
+        surfaceElevated: rgb(0.18, 0.23, 0.30),
+        selectionPill: rgb(0.22, 0.28, 0.36),
+        borderSubtle: rgb(0.28, 0.34, 0.44),
+        textPrimary: rgb(0.92, 0.95, 0.98),
+        textSecondary: rgb(0.62, 0.70, 0.80),
+        textTertiary: rgb(0.48, 0.56, 0.66),
+        accent: rgb(0.42, 0.72, 0.92),
+        separator: rgb(0.32, 0.38, 0.48),
+        danger: rgb(0.95, 0.40, 0.42),
+        success: rgb(0.42, 0.78, 0.62),
+        warning: rgb(0.94, 0.74, 0.32)
+    )
+
+    private static let emberDusk = ThemePalette(
+        background: rgb(0.14, 0.10, 0.14),
+        sidebarBackground: rgb(0.18, 0.12, 0.16),
+        workbenchChrome: rgb(0.11, 0.08, 0.11),
+        editorCanvas: rgb(0.20, 0.14, 0.18),
+        surface: rgb(0.22, 0.16, 0.20),
+        surfaceElevated: rgb(0.26, 0.19, 0.24),
+        selectionPill: rgb(0.30, 0.22, 0.28),
+        borderSubtle: rgb(0.38, 0.28, 0.34),
+        textPrimary: rgb(0.96, 0.92, 0.94),
+        textSecondary: rgb(0.70, 0.62, 0.66),
+        textTertiary: rgb(0.54, 0.46, 0.50),
+        accent: rgb(0.95, 0.52, 0.28),
+        separator: rgb(0.34, 0.26, 0.30),
+        danger: rgb(0.96, 0.38, 0.40),
+        success: rgb(0.48, 0.72, 0.48),
+        warning: rgb(0.96, 0.72, 0.32)
     )
 
     private static func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat) -> Color {

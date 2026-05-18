@@ -4,6 +4,8 @@ import SwiftUI
 struct RAGSourcePillsView: View {
     let hits: [RetrievalHit]
     var onOpenDocument: ((UUID) -> Void)?
+    /// Inline chips for chat bubbles — no section title, tighter padding.
+    var compact: Bool = false
 
     private var documentSources: [RetrievalHit] {
         hits.uniqueDocumentSources()
@@ -11,14 +13,24 @@ struct RAGSourcePillsView: View {
 
     var body: some View {
         if !documentSources.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Sources")
-                    .font(OWTypography.captionEmphasis)
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
+            Group {
+                if compact {
+                    FlowLayout(spacing: 4) {
+                        ForEach(documentSources) { hit in
+                            sourcePill(hit)
+                        }
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Sources")
+                            .font(OWTypography.captionEmphasis)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
 
-                FlowLayout(spacing: 6) {
-                    ForEach(documentSources) { hit in
-                        sourcePill(hit)
+                        FlowLayout(spacing: 6) {
+                            ForEach(documentSources) { hit in
+                                sourcePill(hit)
+                            }
+                        }
                     }
                 }
             }
@@ -44,15 +56,24 @@ struct RAGSourcePillsView: View {
 
     private func pillLabel(_ title: String) -> some View {
         Text(title)
-            .font(OWTypography.caption)
-            .foregroundStyle(DesignTokens.Color.textPrimary)
+            .font(compact ? OWTypography.caption2 : OWTypography.caption)
+            .foregroundStyle(compact ? DesignTokens.Color.textSecondary : DesignTokens.Color.textPrimary)
             .lineLimit(1)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(DesignTokens.Color.surface, in: Capsule())
+            .truncationMode(.tail)
+            .frame(maxWidth: compact ? 140 : 168, alignment: .leading)
+            .padding(.horizontal, compact ? 7 : 10)
+            .padding(.vertical, compact ? 3 : 5)
+            .background(
+                compact
+                    ? DesignTokens.Color.background.opacity(0.55)
+                    : DesignTokens.Color.surface.opacity(0.95),
+                in: Capsule()
+            )
             .overlay {
-                Capsule()
-                    .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+                if !compact {
+                    Capsule()
+                        .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+                }
             }
     }
 }

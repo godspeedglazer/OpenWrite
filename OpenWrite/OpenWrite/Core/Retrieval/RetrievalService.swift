@@ -20,6 +20,18 @@ struct RetrievalHit: Identifiable, Hashable, Sendable {
         self.score = score
         self.snippet = AIInput.sanitizeSnippet(chunk.text, maxChars: AISafetyLimits.maxSnippetCharsPerChunk)
     }
+
+    /// Synthetic hit for a chat file attachment (not in the vector index).
+    init(attachmentID: UUID, filename: String, snippet: String) {
+        self.id = attachmentID
+        self.documentID = attachmentID
+        self.documentTitle = filename
+        self.sourceFilename = filename
+        self.blockID = nil
+        self.chunkIndex = 0
+        self.score = 1.0
+        self.snippet = snippet
+    }
 }
 
 /// Orchestrates hybrid search over indexed vault content.

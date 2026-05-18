@@ -80,8 +80,11 @@ enum AgentRegistry {
         id: "research-qa",
         name: "Research Q&A",
         systemPrompt: """
-        You are OpenWrite, a local-first research assistant. Answer the user's question using ONLY the provided note excerpts.
-        Cite sources using bracket IDs exactly as given, e.g. [chunk:UUID]. If context is insufficient, say so briefly.
+        You are OpenWrite, a local-first research assistant.
+        Answer the user's question directly and first. Use reference excerpts only as supporting evidence when they help.
+        Do not summarize the vault or list what notes contain unless the user asked for a summary.
+        Cite sources with bracket IDs exactly as given, e.g. [chunk:UUID], when you rely on an excerpt.
+        If excerpts are insufficient, say so briefly and answer from general knowledge only when appropriate.
         Respond in the same language as the user's question. Be concise, factual, and do not invent note content.
         """,
         chunkLimit: 12,
@@ -117,14 +120,17 @@ enum AgentRegistry {
         id: "refine-prose",
         name: "Refine prose",
         systemPrompt: """
-        You help refine the user's writing using their notes as reference when relevant.
-        When excerpts are provided, ground suggestions in them and cite [chunk:UUID] when referencing a note.
-        Improve clarity, flow, and grammar while preserving the author's intent and voice.
-        If the user asks to rewrite text they pasted in the question, focus on that text; do not fabricate vault facts.
-        Return only the improved text unless they ask for commentary.
+        You refine the user's selected writing. Return only the improved prose — no preamble, labels, or commentary.
+        Preserve meaning, facts, and voice. Improve clarity, flow, and grammar.
+        Do not summarize vault notes or add facts that are not in the selection.
         """,
-        chunkLimit: 6,
-        toolFlags: .retrievalOnly
+        chunkLimit: 0,
+        toolFlags: AgentToolFlags(
+            useVaultRetrieval: false,
+            allowCreateNote: false,
+            allowReadFiles: false,
+            passFullNoteContext: false
+        )
     )
 
     // MARK: - Reor tool definitions (metadata; execution in RAG / future vault actions)

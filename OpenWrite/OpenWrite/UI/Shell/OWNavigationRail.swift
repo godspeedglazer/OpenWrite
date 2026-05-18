@@ -55,8 +55,8 @@ struct OWRailSearchField: View {
         .padding(.horizontal, DesignTokens.Spacing.spacing2)
         .padding(.vertical, DesignTokens.Spacing.spacing2)
         .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-                .fill(DesignTokens.Color.surface.opacity(isFocused ? 0.95 : 0.72))
+            DesignTokens.Color.surface,
+            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
@@ -114,6 +114,7 @@ struct OWNavigationRail: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                    navigationRailBrandHeader
                     spaceSwitcherStub
                     OWRailSearchField(text: $searchQuery)
                     objectsSection
@@ -163,10 +164,19 @@ struct OWNavigationRail: View {
         }
     }
 
+    private var navigationRailBrandHeader: some View {
+        Text("OpenWrite")
+            .font(OWTypography.bodyEmphasis)
+            .foregroundStyle(DesignTokens.Color.textPrimary)
+            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     /// Vault switcher — logical spaces (primary + demo) with per-vault object filters.
     private var spaceSwitcherStub: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
-            HStack(spacing: DesignTokens.Spacing.spacing2) {
+            HStack(spacing: DesignTokens.Spacing.spacing1) {
                 Button {
                     withAnimation(DesignTokens.Motion.animationStandard) {
                         spaceSwitcherExpanded.toggle()
@@ -180,11 +190,9 @@ struct OWNavigationRail: View {
                 .buttonStyle(.plain)
                 .help(spaceSwitcherExpanded ? "Collapse vault menu" : "Expand vault menu")
 
-                OWUnicodePageTypeIconWell(icon: .notes, size: 22)
-
                 VStack(alignment: .leading, spacing: 2) {
                     Text(vaultStore.activeVault.name)
-                        .font(OWTypography.bodyEmphasis)
+                        .font(OWTypography.sidebarItemEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
                     Text(vaultStore.activeVault.subtitle)
                         .font(OWTypography.caption)
@@ -192,6 +200,8 @@ struct OWNavigationRail: View {
                 }
 
                 Spacer(minLength: 0)
+
+                OWUnicodePageTypeIconWell(icon: .notes, size: 20)
 
                 Button {
                     showNewPageSheet = true
@@ -202,7 +212,7 @@ struct OWNavigationRail: View {
                 .foregroundStyle(DesignTokens.Color.accent)
                 .help("New page")
             }
-            .padding(.horizontal, DesignTokens.Spacing.spacing1)
+            .padding(.horizontal, DesignTokens.Spacing.spacing2)
             .padding(.vertical, DesignTokens.Spacing.spacing1)
             .background(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
@@ -470,7 +480,7 @@ struct OWNavigationRail: View {
 
     private var ingestionRailFooter: some View {
         let health = aiServices.ingestionHealth.health
-        return OWRoundedRect(style: .sidebarCard, padding: DesignTokens.Spacing.spacing2) {
+        return OWRoundedRect(style: .surface, padding: DesignTokens.Spacing.spacing2) {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
                 HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Spacing.spacing2) {
                     Text("Ingestion")
@@ -502,7 +512,7 @@ struct OWNavigationRail: View {
                         .controlSize(.small)
                         .tint(palette.accent)
                 } else {
-                    Text("\(aiServices.indexedChunkCount) chunks indexed")
+                    Text("\(aiServices.indexedChunkCount) passages indexed")
                         .font(OWTypography.caption)
                         .foregroundStyle(palette.textSecondary)
                 }
@@ -517,7 +527,7 @@ struct OWNavigationRail: View {
         if health.isActive, let summary = health.progressSummary {
             parts.append(summary)
         } else {
-            parts.append("\(aiServices.indexedChunkCount) chunks indexed")
+            parts.append("\(aiServices.indexedChunkCount) passages indexed")
         }
         if let error = health.lastError, !error.isEmpty {
             parts.append(error)

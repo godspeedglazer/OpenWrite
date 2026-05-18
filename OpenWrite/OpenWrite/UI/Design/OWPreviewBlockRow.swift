@@ -11,6 +11,7 @@ struct OWPreviewBlockRow: View {
     var checked: Binding<Bool>? = nil
     var language: Binding<String>? = nil
     var calloutType: Binding<String>? = nil
+    var onSelectionChange: ((String?) -> Void)? = nil
 
     @Environment(\.openWritePalette) private var palette
     @Environment(\.blockFormatting) private var blockFormatting
@@ -54,7 +55,7 @@ struct OWPreviewBlockRow: View {
             foreground: DesignTokens.Color.textPrimary
         )
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DesignTokens.Spacing.spacing3)
+            .owBlockCardPadding()
             .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
@@ -65,7 +66,7 @@ struct OWPreviewBlockRow: View {
             foreground: DesignTokens.Color.textPrimary
         )
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DesignTokens.Spacing.spacing3)
+            .owBlockCardPadding()
             .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
@@ -81,7 +82,7 @@ struct OWPreviewBlockRow: View {
             )
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DesignTokens.Spacing.spacing3)
+        .owBlockCardPadding()
         .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
@@ -96,7 +97,7 @@ struct OWPreviewBlockRow: View {
             .strikethrough(isTodoChecked && !isEditing)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DesignTokens.Spacing.spacing3)
+        .owBlockCardPadding()
         .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
@@ -134,8 +135,9 @@ struct OWPreviewBlockRow: View {
     }
 
     private var calloutRow: some View {
-        HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
+        HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing1) {
             calloutLeading
+                .frame(width: DesignTokens.Layout.calloutLeadingGutter, alignment: .leading)
             inlineText(
                 font: DesignTokens.Typography.body,
                 lineSpacing: DesignTokens.Typography.bodyLineSpacing,
@@ -143,7 +145,7 @@ struct OWPreviewBlockRow: View {
             )
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DesignTokens.Spacing.spacing3)
+        .owBlockCardPadding()
         .background(calloutFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
@@ -154,16 +156,16 @@ struct OWPreviewBlockRow: View {
     @ViewBuilder
     private var calloutLeading: some View {
         if let calloutType, isEditing {
-            Menu {
-                ForEach(Self.calloutVariants, id: \.self) { variant in
-                    Button(variant.capitalized) {
-                        calloutType.wrappedValue = variant
-                    }
-                }
-            } label: {
-                OWUnicodeIconView(icon: calloutIcon, size: 16, color: calloutAccent)
-            }
-            .menuStyle(.borderlessButton)
+            OWThemedDropdown(
+                accessibilityLabel: "Callout type",
+                selection: calloutType,
+                options: Self.calloutVariants,
+                optionTitle: { $0.capitalized },
+                compact: true,
+                leadingIcon: calloutIcon,
+                leadingIconColor: calloutAccent,
+                iconOnly: true
+            )
             .padding(.top, 2)
         } else {
             OWUnicodeIconView(icon: calloutIcon, size: 16, color: calloutAccent)
@@ -182,7 +184,7 @@ struct OWPreviewBlockRow: View {
                 .italic(!isEditing)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DesignTokens.Spacing.spacing3)
+        .owBlockCardPadding()
         .background(blockFill.opacity(0.85), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
@@ -222,7 +224,7 @@ struct OWPreviewBlockRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DesignTokens.Spacing.spacing3)
+        .owBlockCardPadding()
         .background(DesignTokens.Color.codeBackground, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
@@ -249,7 +251,7 @@ struct OWPreviewBlockRow: View {
                     .foregroundStyle(DesignTokens.Color.wikilink)
             }
         }
-        .padding(DesignTokens.Spacing.spacing3)
+        .owBlockCardPadding()
         .background(DesignTokens.Color.wikilink.opacity(0.08), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
@@ -282,7 +284,7 @@ struct OWPreviewBlockRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(DesignTokens.Spacing.spacing3)
+        .owBlockCardPadding()
         .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
         .accessibilityLabel(block.text.isEmpty ? "Image" : block.text)
     }
@@ -296,7 +298,7 @@ struct OWPreviewBlockRow: View {
                 .font(DesignTokens.Typography.caption)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
         }
-        .padding(.horizontal, DesignTokens.Spacing.spacing3)
+        .padding(.trailing, DesignTokens.Spacing.spacing3)
         .padding(.vertical, DesignTokens.Spacing.spacing2)
         .background(DesignTokens.Color.surfaceElevated, in: Capsule())
     }
@@ -309,12 +311,14 @@ struct OWPreviewBlockRow: View {
                 blockAttributes: blockAttributes,
                 blockID: block.id,
                 baseSwiftUIFont: font,
+                basePointSize: inlineBasePointSize(for: font),
                 textColor: foreground,
                 selectionHighlight: palette.selectionHighlight,
                 selectionForeground: palette.textPrimary,
-                formatting: blockFormatting
+                formatting: blockFormatting,
+                onSelectionChange: onSelectionChange
             )
-            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             Text(formattedPreview)
                 .font(font)
@@ -338,7 +342,7 @@ struct OWPreviewBlockRow: View {
     }
 
     private var blockFill: Color {
-        DesignTokens.Color.surfaceElevated.opacity(0.92)
+        DesignTokens.Color.surface
     }
 
     private var calloutVariant: String {
@@ -390,6 +394,26 @@ struct OWPreviewBlockRow: View {
         case .heading3: return DesignTokens.Typography.heading3LineSpacing
         default: return 0
         }
+    }
+
+    private func inlineBasePointSize(for font: Font) -> CGFloat {
+        switch block.kind {
+        case .heading1: return OWTypography.Scale.heading1
+        case .heading2: return OWTypography.Scale.heading2
+        case .heading3: return OWTypography.Scale.heading3
+        default: return OWTypography.Scale.body
+        }
+    }
+}
+
+// MARK: - Block card padding
+
+private extension View {
+    /// Inner card breathing room; leading edge comes from `editorContentLeadingInset` on the block list.
+    func owBlockCardPadding() -> some View {
+        padding(.top, DesignTokens.Spacing.spacing3)
+            .padding(.bottom, DesignTokens.Spacing.spacing3)
+            .padding(.trailing, DesignTokens.Spacing.spacing3)
     }
 }
 

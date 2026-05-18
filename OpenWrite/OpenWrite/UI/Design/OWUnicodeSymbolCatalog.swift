@@ -22,10 +22,16 @@ enum OWUnicodeSymbolCatalog {
 
     // MARK: Emoji (slim quick-pick)
 
+    /// Curated emoji — Text-only rendering (no UIImage / asset generation).
     static let emojiQuickPick: [String] = [
         "📝", "✅", "📁", "📚", "🔖", "💡", "🎯", "⭐",
         "🌐", "📓", "🗂️", "📄", "🧠", "🔥", "❤️", "🎨",
-        "📌", "🔗", "📊", "🗓️", "✨", "🚀", "🔔", "🏷️"
+        "📌", "🔗", "📊", "🗓️", "✨", "🚀", "🔔", "🏷️",
+        "📎", "🗃️", "📋", "🧩", "🛠️", "⚙️", "🔒", "🔑",
+        "🪄", "🤖", "🧬", "🫧", "💬", "📣", "🎧", "🎬",
+        "📷", "🖼️", "🗺️", "🧭",
+        "☀️", "🌙", "🌧️", "🌱", "🍀", "🐾", "☕", "🍎",
+        "🏠", "🏢", "✈️", "🚗", "⚡", "💎", "🎁", "🏆"
     ]
 
     // MARK: Symbol sections

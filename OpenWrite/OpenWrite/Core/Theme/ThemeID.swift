@@ -11,6 +11,10 @@ enum ThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
     case midnight
     case solarizedWarm
     case highContrast
+    case lavenderMist
+    case parchmentStudio
+    case nordFrost
+    case emberDusk
 
     var id: String { rawValue }
 
@@ -25,6 +29,10 @@ enum ThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
         case .midnight: return "Midnight"
         case .solarizedWarm: return "Solarized Warm"
         case .highContrast: return "High Contrast"
+        case .lavenderMist: return "Lavender Mist"
+        case .parchmentStudio: return "Parchment Studio"
+        case .nordFrost: return "Nord Frost"
+        case .emberDusk: return "Ember Dusk"
         }
     }
 
@@ -48,15 +56,23 @@ enum ThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
             return "Solarized cream canvas with warm orange accents."
         case .highContrast:
             return "Maximum legibility for low-vision and bright rooms."
+        case .lavenderMist:
+            return "Soft lilac rail with muted violet accents."
+        case .parchmentStudio:
+            return "Warm editorial paper with terracotta highlights."
+        case .nordFrost:
+            return "Cool polar night with ice-blue links."
+        case .emberDusk:
+            return "Smoky plum canvas with ember orange accents."
         }
     }
 
     /// Drives system control chrome where themes are predominantly dark.
     var prefersDarkAppearance: Bool {
         switch self {
-        case .openWriteLight, .anytypeCalm, .solarizedWarm, .highContrast:
+        case .openWriteLight, .anytypeCalm, .solarizedWarm, .highContrast, .lavenderMist, .parchmentStudio:
             return false
-        case .openWriteDark, .reorSlate, .logseqInk, .massCodeMono, .midnight:
+        case .openWriteDark, .reorSlate, .logseqInk, .massCodeMono, .midnight, .nordFrost, .emberDusk:
             return true
         }
     }

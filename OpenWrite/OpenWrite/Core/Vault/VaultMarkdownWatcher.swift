@@ -15,7 +15,7 @@ final class VaultMarkdownWatcher: ObservableObject {
             _ = try? VaultLocationPreferences.ensureDefaultVaultLayout()
             await self.scanAndNotifyIfNeeded(force: true)
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
                 await self.scanAndNotifyIfNeeded(force: false)
             }
         }
@@ -32,12 +32,15 @@ final class VaultMarkdownWatcher: ObservableObject {
 
     private func scanAndNotifyIfNeeded(force: Bool) async {
         let root = VaultLocationPreferences.resolvedVaultRootURL()
-        let files = VaultMarkdownCatalog.scan(vaultRoot: root)
-        var snapshot: [String: Date] = [:]
-        snapshot.reserveCapacity(files.count)
-        for file in files {
-            snapshot[file.relativePath] = file.modifiedAt
-        }
+        let snapshot = await Task.detached(priority: .utility) {
+            let files = VaultMarkdownCatalog.scan(vaultRoot: root)
+            var snapshot: [String: Date] = [:]
+            snapshot.reserveCapacity(files.count)
+            for file in files {
+                snapshot[file.relativePath] = file.modifiedAt
+            }
+            return snapshot
+        }.value
         let changed = force || snapshot != lastSnapshot
         lastSnapshot = snapshot
         if changed {

@@ -28,6 +28,7 @@ enum OWUnicodeIcon: String, CaseIterable, Sendable {
   case pastWrites
   case sparkles
   case send
+  case stop
   case mic
   case micActive
   case link
@@ -80,6 +81,7 @@ enum OWUnicodeIcon: String, CaseIterable, Sendable {
     case .pastWrites: return "⟲"
     case .sparkles: return "✦"
     case .send: return "↑"
+    case .stop: return "■"
     case .mic: return "◌"
     case .micActive: return "●"
     case .link: return "⧉"
@@ -132,6 +134,7 @@ enum OWUnicodeIcon: String, CaseIterable, Sendable {
     case .pastWrites: return "Past writes"
     case .sparkles: return "AI"
     case .send: return "Send"
+    case .stop: return "Stop"
     case .mic: return "Microphone"
     case .micActive: return "Recording"
     case .link: return "Link"

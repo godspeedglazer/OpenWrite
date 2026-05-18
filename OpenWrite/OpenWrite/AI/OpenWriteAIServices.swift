@@ -22,6 +22,7 @@ final class OpenWriteAIServices: ObservableObject {
     private(set) var indexer: IndexerService
     private(set) var retrieval: RetrievalService
     private(set) var rag: RAGService
+    let webFetch = WebFetchService()
 
     private var ingestionPipeline: IngestionPipeline?
     private var indexingTask: Task<Void, Never>?
@@ -58,6 +59,15 @@ final class OpenWriteAIServices: ObservableObject {
         lmConfig = config
         LMStudioConfigPersistence.save(config)
         rebuildPipeline()
+    }
+
+    func applyBackendPreset(_ preset: AIBackendPreset) {
+        var config = lmConfig
+        config.backendPreset = preset
+        if preset != .custom {
+            config.baseURL = preset.defaultBaseURL
+        }
+        applyConfig(config)
     }
 
     func updateChatModel(_ modelID: String) {
@@ -116,9 +126,20 @@ final class OpenWriteAIServices: ObservableObject {
         do {
             let models = try await lmClient.listModels()
             availableModels = models
-            if !models.isEmpty, lmConfig.chatModel == "local-model" || lmConfig.chatModel.isEmpty {
-                lmConfig.chatModel = models[0].id
-                rebuildPipeline()
+            if !models.isEmpty {
+                let chat = lmConfig.chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
+                let needsDefault = chat.isEmpty || chat == "local-model"
+                let preferred = models.first { $0.id.localizedCaseInsensitiveContains("gemma") }
+                if needsDefault {
+                    lmConfig.chatModel = preferred?.id ?? models[0].id
+                    LMStudioConfigPersistence.save(lmConfig)
+                    rebuildPipeline()
+                } else if !models.contains(where: { $0.id == lmConfig.chatModel }),
+                          let preferred {
+                    lmConfig.chatModel = preferred.id
+                    LMStudioConfigPersistence.save(lmConfig)
+                    rebuildPipeline()
+                }
             }
             lmStatus = models.isEmpty ? "Connected (no models)" : "Connected · \(models.count) models"
             setActivity(.idle)
@@ -252,6 +273,28 @@ final class OpenWriteAIServices: ObservableObject {
             watchRoots = [VaultLocationPreferences.resolvedVaultRootURL()]
         }
         await ingestionPipeline?.startFilesystemWatch(roots: watchRoots)
+    }
+
+    /// Single assistant bubble copy for chat failures (title + short reason).
+    static func chatFailureBubble(_ error: Error, config: LMStudioConfig) -> String {
+        "Response failed\n\(shortChatFailureReason(error, config: config))"
+    }
+
+    static func chatFailureBubble(message: String) -> String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Response failed\nUnknown error." }
+        if trimmed.lowercased().hasPrefix("response failed") { return trimmed }
+        return "Response failed\n\(trimmed)"
+    }
+
+    static func shortChatFailureReason(_ error: Error, config: LMStudioConfig) -> String {
+        let full = actionableChatError(error, config: config)
+        if let first = full.split(separator: "\n").first {
+            let line = String(first)
+            if line.count <= 200 { return line }
+            return String(line.prefix(197)) + "…"
+        }
+        return String(full.prefix(200))
     }
 
     static func actionableChatError(_ error: Error, config: LMStudioConfig) -> String {

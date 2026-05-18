@@ -5,6 +5,7 @@ import SwiftUI
 /// Selection snapshot for inline refine; safe to pass across actors.
 struct InlineSelectionSnapshot: Sendable, Equatable {
     let documentID: UUID
+    let blockID: UUID?
     let selectedText: String
     let selectedRange: NSRange
 }
@@ -34,6 +35,7 @@ final class InlineAssistController: ObservableObject {
     private var refineTask: Task<Void, Never>?
 
     private var pendingDocumentID: UUID?
+    private var pendingBlockID: UUID?
     private var pendingFullText: String = ""
     private var pendingRange: NSRange?
 
@@ -45,12 +47,35 @@ final class InlineAssistController: ObservableObject {
     func scheduleSelectionCapture(
         documentID: UUID,
         fullText: String,
-        selectedRange: NSRange?
+        selectedRange: NSRange?,
+        blockID: UUID? = nil
     ) {
         pendingDocumentID = documentID
+        pendingBlockID = blockID
         pendingFullText = fullText
         pendingRange = selectedRange
+        pendingSelectedText = nil
+        scheduleDebouncedCapture()
+    }
 
+    /// Block-editor path: selection text is already extracted from the active field.
+    func scheduleSelectionCapture(
+        documentID: UUID,
+        blockID: UUID?,
+        selectedText: String?
+    ) {
+        pendingDocumentID = documentID
+        pendingBlockID = blockID
+        pendingFullText = ""
+        pendingRange = nil
+        pendingSelectedText = selectedText
+
+        scheduleDebouncedCapture()
+    }
+
+    private var pendingSelectedText: String?
+
+    private func scheduleDebouncedCapture() {
         debounceTask?.cancel()
         debounceTask = Task {
             let delay = UInt64(AISafetyLimits.inlineSelectionDebounceSeconds * 1_000_000_000)
@@ -61,36 +86,80 @@ final class InlineAssistController: ObservableObject {
     }
 
     private func applyPendingCapture() {
-        guard let documentID = pendingDocumentID,
-              let range = pendingRange,
-              range.length > 0,
-              NSMaxRange(range) <= (pendingFullText as NSString).length
-        else {
+        guard let documentID = pendingDocumentID else {
             latestSnapshot = nil
             if case .capturing = phase { phase = .idle }
             return
         }
 
-        let nsText = pendingFullText as NSString
-        var selected = nsText.substring(with: range)
-        if selected.count > AISafetyLimits.maxInlineSelectionChars {
-            selected = String(selected.prefix(AISafetyLimits.maxInlineSelectionChars))
+        let selected: String?
+        if let direct = pendingSelectedText?.trimmingCharacters(in: .whitespacesAndNewlines), !direct.isEmpty {
+            selected = direct
+        } else if let range = pendingRange,
+                  range.length > 0,
+                  NSMaxRange(range) <= (pendingFullText as NSString).length {
+            selected = (pendingFullText as NSString).substring(with: range)
+        } else {
+            selected = nil
         }
-        guard let sanitized = AIInput.sanitizeQuery(selected) else {
+
+        pendingSelectedText = nil
+
+        guard var raw = selected, !raw.isEmpty else {
+            latestSnapshot = nil
+            if case .capturing = phase { phase = .idle }
+            return
+        }
+        if raw.count > AISafetyLimits.maxInlineSelectionChars {
+            raw = String(raw.prefix(AISafetyLimits.maxInlineSelectionChars))
+        }
+        guard let sanitized = AIInput.sanitizeQuery(raw) else {
             latestSnapshot = nil
             return
         }
 
+        let range = pendingRange ?? NSRange(location: 0, length: (sanitized as NSString).length)
         latestSnapshot = InlineSelectionSnapshot(
             documentID: documentID,
+            blockID: pendingBlockID,
             selectedText: sanitized,
             selectedRange: range
         )
         phase = .idle
     }
 
+    /// Replaces the captured selection in `blocks` with refined prose and returns whether a block was updated.
+    static func applyRefinement(
+        _ refinedText: String,
+        snapshot: InlineSelectionSnapshot,
+        blocks: inout [NoteBlock],
+        fallbackBlockID: UUID? = nil
+    ) -> Bool {
+        let trimmed = refinedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        let targetID = snapshot.blockID ?? fallbackBlockID
+        guard let blockID = targetID,
+              let index = blocks.firstIndex(where: { $0.id == blockID }) else { return false }
+
+        var blockText = blocks[index].text
+        if let range = blockText.range(of: snapshot.selectedText) {
+            blockText.replaceSubrange(range, with: trimmed)
+        } else {
+            blockText = trimmed
+        }
+        blocks[index].text = blockText
+        return true
+    }
+
     var canRefineSelection: Bool {
         latestSnapshot != nil && !isRefining
+    }
+
+    var canApplyRefinement: Bool {
+        guard latestSnapshot != nil else { return false }
+        if case .ready = phase { return true }
+        return false
     }
 
     var isRefining: Bool {
@@ -116,7 +185,8 @@ final class InlineAssistController: ObservableObject {
                 )
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    phase = .ready(answer.text, sourceHits: answer.hits)
+                    let display = AIInput.stripChunkReferences(answer.text)
+                    phase = .ready(display, sourceHits: answer.hits)
                 }
             } catch {
                 guard !Task.isCancelled else { return }
@@ -157,7 +227,7 @@ final class InlineAssistController: ObservableObject {
             Self.assistQueue.async {
                 Task {
                     do {
-                        let answer = try await rag.answer(query: query, agent: agent)
+                        let answer = try await rag.answer(query: query, agent: agent, attachments: [])
                         let trimmed = answer.text.trimmingCharacters(in: .whitespacesAndNewlines)
                         if trimmed.isEmpty {
                             continuation.resume(throwing: LMStudioError.emptyResponse)
@@ -311,6 +381,10 @@ final class BlockEditorPasteCaptureView: NSControl {
     var onPasteImage: (() -> Void)?
     let hostedView: NSView
 
+    private var cachedMeasureWidth: CGFloat = 0
+    private var cachedMeasureHeight: CGFloat = 1
+    private var isApplyingLayout = false
+
     init(hostedView: NSView) {
         self.hostedView = hostedView
         super.init(frame: .zero)
@@ -324,44 +398,61 @@ final class BlockEditorPasteCaptureView: NSControl {
 
     override var acceptsFirstResponder: Bool { true }
 
-    /// Read-only measure for SwiftUI `sizeThatFits` — must not force AppKit layout (re-enters AttributeGraph).
+    func invalidateMeasurementCache() {
+        cachedMeasureWidth = 0
+        cachedMeasureHeight = 1
+    }
+
+    /// Read-only measure for SwiftUI `sizeThatFits` — must not invalidate intrinsic size or relayout AppKit.
     func measureDocumentSize(width: CGFloat) -> CGSize {
         let safeWidth = max(width, 320)
-        if hostedView.frame.width != safeWidth {
+        if abs(cachedMeasureWidth - safeWidth) < 0.5, cachedMeasureHeight > 0 {
+            return CGSize(width: safeWidth, height: cachedMeasureHeight)
+        }
+        if abs(hostedView.frame.width - safeWidth) > 0.5 {
             hostedView.frame.size.width = safeWidth
         }
         let contentHeight = max(hostedView.fittingSize.height, 1)
+        cachedMeasureWidth = safeWidth
+        cachedMeasureHeight = contentHeight
         return CGSize(width: safeWidth, height: contentHeight)
     }
 
-    /// Applies width + height after sizing is known (AppKit layout or deferred from `updateNSView`).
+    /// Applies width + height when width or hosted content changed; skips work when size is unchanged.
     func applyDocumentLayout(width: CGFloat) {
+        guard !isApplyingLayout else { return }
         let safeWidth = max(width, 320)
-        hostedView.frame.size.width = safeWidth
-        hostedView.needsLayout = true
-        hostedView.layoutSubtreeIfNeeded()
-        let contentHeight = max(hostedView.fittingSize.height, 1)
-        hostedView.frame = CGRect(origin: .zero, size: CGSize(width: safeWidth, height: contentHeight))
-        frame.size = NSSize(width: safeWidth, height: contentHeight)
+        let measured = measureDocumentSize(width: safeWidth)
+        let target = CGSize(width: measured.width, height: measured.height)
+        let frameUnchanged =
+            abs(frame.width - target.width) < 0.5
+            && abs(frame.height - target.height) < 0.5
+            && abs(hostedView.frame.width - target.width) < 0.5
+            && abs(hostedView.frame.height - target.height) < 0.5
+        if frameUnchanged { return }
+
+        isApplyingLayout = true
+        defer { isApplyingLayout = false }
+
+        hostedView.frame = CGRect(origin: .zero, size: target)
+        frame.size = NSSize(width: target.width, height: target.height)
         invalidateIntrinsicContentSize()
     }
 
     override var intrinsicContentSize: NSSize {
+        if cachedMeasureWidth > 0, cachedMeasureHeight > 0 {
+            return NSSize(width: cachedMeasureWidth, height: cachedMeasureHeight)
+        }
         let size = measureDocumentSize(width: max(bounds.width, 320))
         return NSSize(width: size.width, height: size.height)
     }
 
     override func layout() {
         super.layout()
-        if bounds.width > 1 {
-            applyDocumentLayout(width: bounds.width)
-        }
-    }
-
-    override func resize(withOldSuperviewSize oldSize: NSSize) {
-        super.resize(withOldSuperviewSize: oldSize)
-        if bounds.width > 1 {
-            applyDocumentLayout(width: bounds.width)
+        guard bounds.width > 1, !isApplyingLayout else { return }
+        let safeWidth = bounds.width
+        if abs(hostedView.frame.width - safeWidth) > 0.5 {
+            hostedView.frame.size.width = safeWidth
         }
     }
 

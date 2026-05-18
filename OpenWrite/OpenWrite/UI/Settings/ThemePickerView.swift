@@ -3,6 +3,7 @@ import SwiftUI
 /// Compact cycle control for the sidebar gear sheet and Settings header.
 struct ThemeQuickToggle: View {
     @Environment(ThemeManager.self) private var themeManager
+    @State private var pickerTheme: ThemeID = .openWriteLight
 
     var body: some View {
         HStack(spacing: DesignTokens.Spacing.spacing3) {
@@ -26,26 +27,23 @@ struct ThemeQuickToggle: View {
 
             Spacer()
 
-            Menu {
-                ForEach(ThemeID.allCases) { theme in
-                    Button {
-                        themeManager.select(theme)
-                    } label: {
-                        HStack {
-                            Text(theme.displayName)
-                            if themeManager.selectedTheme == theme {
-                                Spacer(minLength: 8)
-                                OWUnicodeIconView(icon: .checkmark, size: 12, color: DesignTokens.Color.accent)
-                            }
-                        }
-                    }
-                }
-            } label: {
-                OWUnicodeIconView(icon: .sliders, size: 16, color: DesignTokens.Color.textSecondary)
-                    .frame(width: 32, height: 32)
-                    .background(DesignTokens.Color.selectionPill.opacity(0.9), in: Circle())
+            OWThemedDropdown(
+                accessibilityLabel: "Choose theme",
+                selection: $pickerTheme,
+                options: Array(ThemeID.allCases),
+                optionTitle: { $0.displayName },
+                minWidth: 44,
+                compact: true,
+                leadingIcon: .sliders,
+                iconOnly: true
+            )
+            .onAppear { pickerTheme = themeManager.selectedTheme }
+            .onChange(of: pickerTheme) { _, theme in
+                themeManager.select(theme)
             }
-            .menuStyle(.borderlessButton)
+            .onChange(of: themeManager.selectedTheme) { _, theme in
+                pickerTheme = theme
+            }
             .help("Choose theme")
         }
         .padding(DesignTokens.Spacing.spacing3)
@@ -79,12 +77,13 @@ struct ThemePickerView: View {
     ]
 
     var body: some View {
+        let activeTheme = themeManager.selectedTheme
         LazyVGrid(columns: columns, spacing: DesignTokens.Spacing.spacing3) {
             ForEach(ThemeID.allCases) { theme in
                 ThemePreviewCard(
                     theme: theme,
                     palette: ThemePalette.palette(for: theme),
-                    isSelected: themeManager.selectedTheme == theme
+                    isSelected: activeTheme == theme
                 ) {
                     themeManager.select(theme)
                 }
@@ -130,6 +129,7 @@ private struct ThemePreviewCard: View {
             }
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
         .accessibilityLabel("\(theme.displayName) theme")
     }

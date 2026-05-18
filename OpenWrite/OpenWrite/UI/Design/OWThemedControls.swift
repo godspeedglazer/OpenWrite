@@ -67,6 +67,77 @@ struct OWSecondaryRectButtonStyle: ButtonStyle {
     }
 }
 
+/// Composer attach / secondary actions — matches `OWThemedComposerField` height.
+struct OWComposerIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: DesignTokens.Layout.composerActionSize, height: DesignTokens.Layout.composerActionSize)
+            .background(
+                DesignTokens.Color.surface.opacity(configuration.isPressed ? 0.85 : 1),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                    .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+            }
+    }
+}
+
+/// Primary send — accent fill, up-arrow glyph.
+struct OWComposerSendButtonStyle: ButtonStyle {
+    var isEnabled: Bool = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: DesignTokens.Layout.composerActionSize, height: DesignTokens.Layout.composerActionSize)
+            .background(
+                DesignTokens.Color.accent.opacity(
+                    !isEnabled ? 0.35 : (configuration.isPressed ? 0.82 : 1)
+                ),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+            )
+    }
+}
+
+/// Stop in-flight chat stream — muted surface, same footprint as send.
+struct OWComposerStopButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: DesignTokens.Layout.composerActionSize, height: DesignTokens.Layout.composerActionSize)
+            .background(
+                DesignTokens.Color.surfaceElevated.opacity(configuration.isPressed ? 0.8 : 0.95),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                    .strokeBorder(DesignTokens.Color.warning.opacity(0.45), lineWidth: DesignTokens.Layout.borderWidth)
+            }
+    }
+}
+
+/// Compact icon action for chat composer / panel chrome (surface, not system white).
+struct OWThemedIconButtonStyle: ButtonStyle {
+    var isProminent: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(6)
+            .background(
+                isProminent
+                    ? DesignTokens.Color.accentMuted.opacity(configuration.isPressed ? 0.7 : 1)
+                    : DesignTokens.Color.surface.opacity(configuration.isPressed ? 0.85 : 1),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                    .strokeBorder(
+                        isProminent ? DesignTokens.Color.accent.opacity(0.35) : DesignTokens.Color.borderSubtle,
+                        lineWidth: DesignTokens.Layout.borderWidth
+                    )
+            }
+    }
+}
+
 // MARK: - Text field
 
 struct OWThemedTextField: View {
@@ -82,12 +153,47 @@ struct OWThemedTextField: View {
             .padding(.horizontal, DesignTokens.Spacing.spacing3)
             .padding(.vertical, DesignTokens.Spacing.spacing2)
             .background(
-                DesignTokens.Color.surfaceElevated,
+                DesignTokens.Color.surface,
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                     .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+            }
+            .onSubmit { onSubmit?() }
+    }
+}
+
+/// Multiline chat composer with themed accent focus ring (no system blue flash).
+struct OWThemedComposerField: View {
+    let placeholder: String
+    @Binding var text: String
+    var lineLimit: ClosedRange<Int> = 1 ... 4
+    var onSubmit: (() -> Void)?
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        TextField(placeholder, text: $text, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(OWTypography.body)
+            .foregroundStyle(DesignTokens.Color.textPrimary)
+            .lineLimit(lineLimit)
+            .focused($isFocused)
+            .focusEffectDisabled()
+            .frame(minHeight: DesignTokens.Layout.composerActionSize)
+            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+            .padding(.vertical, DesignTokens.Spacing.spacing2)
+            .background(
+                DesignTokens.Color.surface,
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                    .strokeBorder(
+                        isFocused ? DesignTokens.Color.accent.opacity(0.45) : DesignTokens.Color.borderSubtle,
+                        lineWidth: isFocused ? DesignTokens.Layout.focusRingWidth : DesignTokens.Layout.borderWidth
+                    )
             }
             .onSubmit { onSubmit?() }
     }
@@ -103,37 +209,61 @@ struct OWThemedDropdown<Option: Hashable>: View {
     var minWidth: CGFloat = 120
     var compact: Bool = false
     var leadingIcon: OWIcon?
+    var leadingIconColor: Color?
+    /// Icon (+ chevron) trigger without title text — for callout type, narrow rails, etc.
+    var iconOnly: Bool = false
 
     @State private var isOpen = false
+
+    private var resolvedLeadingIconColor: Color {
+        leadingIconColor ?? DesignTokens.Color.accent
+    }
 
     var body: some View {
         Button {
             isOpen.toggle()
         } label: {
-            HStack(spacing: DesignTokens.Spacing.spacing1) {
-                if let leadingIcon {
-                    OWUnicodeIconView(
-                        icon: leadingIcon,
-                        size: compact ? 12 : 14,
-                        color: DesignTokens.Color.accent
+            Group {
+                if iconOnly {
+                    ZStack(alignment: .bottomTrailing) {
+                        if let leadingIcon {
+                            OWUnicodeIconView(
+                                icon: leadingIcon,
+                                size: compact ? 14 : 16,
+                                color: resolvedLeadingIconColor
+                            )
+                        }
+                        OWUnicodeIconView(icon: .chevronDown, size: 7, color: DesignTokens.Color.textTertiary)
+                            .offset(x: 3, y: 2)
+                    }
+                    .frame(width: DesignTokens.Layout.calloutLeadingGutter, height: 18, alignment: .center)
+                } else {
+                    HStack(spacing: DesignTokens.Spacing.spacing1) {
+                        if let leadingIcon {
+                            OWUnicodeIconView(
+                                icon: leadingIcon,
+                                size: compact ? 12 : 14,
+                                color: resolvedLeadingIconColor
+                            )
+                        }
+                        Text(optionTitle(selection))
+                            .font(compact ? OWTypography.captionEmphasis : DesignTokens.Typography.captionEmphasis)
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .lineLimit(1)
+                        OWUnicodeIconView(icon: .chevronDown, size: compact ? 8 : 10, color: DesignTokens.Color.textTertiary)
+                    }
+                    .padding(.horizontal, compact ? DesignTokens.Spacing.spacing2 : DesignTokens.Spacing.spacing3)
+                    .padding(.vertical, compact ? 4 : DesignTokens.Spacing.spacing2)
+                    .frame(minWidth: minWidth, alignment: .leading)
+                    .background(
+                        DesignTokens.Color.surface,
+                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                     )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                            .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+                    }
                 }
-                Text(optionTitle(selection))
-                    .font(compact ? OWTypography.captionEmphasis : DesignTokens.Typography.captionEmphasis)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                    .lineLimit(1)
-                OWUnicodeIconView(icon: .chevronDown, size: compact ? 8 : 10, color: DesignTokens.Color.textTertiary)
-            }
-            .padding(.horizontal, compact ? DesignTokens.Spacing.spacing2 : DesignTokens.Spacing.spacing3)
-            .padding(.vertical, compact ? 4 : DesignTokens.Spacing.spacing2)
-            .frame(minWidth: minWidth, alignment: .leading)
-            .background(
-                DesignTokens.Color.surfaceElevated.opacity(0.95),
-                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
-                    .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
             }
         }
         .buttonStyle(.plain)
@@ -141,6 +271,13 @@ struct OWThemedDropdown<Option: Hashable>: View {
         .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
             dropdownList
                 .padding(DesignTokens.Spacing.spacing2)
+                .background(DesignTokens.Color.surfaceElevated)
+                .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                        .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+                }
+                .presentationBackground(DesignTokens.Color.surfaceElevated)
         }
     }
 
@@ -153,7 +290,6 @@ struct OWThemedDropdown<Option: Hashable>: View {
             }
         }
         .frame(minWidth: max(minWidth, 160), maxHeight: 280)
-        .background(DesignTokens.Color.surfaceElevated)
     }
 
     private func dropdownRow(_ option: Option) -> some View {
@@ -238,11 +374,12 @@ struct OWThemedSegmentedControl<Option: Hashable>: View {
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity)
             .background(
-                isSelected ? DesignTokens.Color.selectionPill : Color.clear,
+                isSelected ? DesignTokens.Color.background : Color.clear,
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
             )
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .accessibilityLabel(title(option))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

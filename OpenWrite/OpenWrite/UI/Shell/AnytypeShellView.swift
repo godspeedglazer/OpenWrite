@@ -19,13 +19,15 @@ struct AnytypeShellView: View {
     @State private var searchQuery: String = ""
     @State private var navigationRailWidth: CGFloat = ShellChromePreferences.navigationRailWidth
     @State private var assistStripWidth: CGFloat = ShellChromePreferences.assistStripWidth
+    @State private var editorLayoutEpoch: UInt = 0
 
     var body: some View {
         VStack(spacing: 0) {
             OWShellTitleBar(
                 tabs: centerTabBarItems,
                 selectedTab: workbench.centerTab,
-                onSelectTab: selectCenterTab
+                onSelectTab: selectCenterTab,
+                brandAlignsWithNavigationRail: workbench.sidebarVisible && !workbench.navigationRailCollapsed
             )
 
             shellBody
@@ -34,7 +36,7 @@ struct AnytypeShellView: View {
         .animation(DesignTokens.Motion.animationStandard, value: workbench.sidebarVisible)
         .animation(DesignTokens.Motion.animationStandard, value: workbench.aiAssistExpanded)
         .animation(DesignTokens.Motion.animationStandard, value: workbench.navigationRailCollapsed)
-        .background(palette.background)
+        .background(palette.shellChrome)
         .onChange(of: workbench.sidebarVisible) { _, _ in workbench.persistChromePreferences() }
         .onChange(of: workbench.aiAssistExpanded) { _, _ in workbench.persistChromePreferences() }
         .onChange(of: workbench.navigationRailCollapsed) { _, collapsed in
@@ -44,6 +46,10 @@ struct AnytypeShellView: View {
             } else {
                 navigationRailWidth = ShellChromePreferences.navigationRailWidth
             }
+            reconcileWorkbenchChromeLayout()
+        }
+        .onChange(of: workbench.sidebarVisible) { _, _ in
+            reconcileWorkbenchChromeLayout()
         }
         .onAppear {
             if workbench.navigationRailCollapsed {
@@ -59,29 +65,27 @@ struct AnytypeShellView: View {
     }
 
     private var shellBody: some View {
-        GeometryReader { geometry in
-            Group {
-                if workbench.sidebarVisible {
-                    OWResizableColumnSplit(
-                        fixedWidth: $navigationRailWidth,
-                        minWidth: navigationRailMinWidth,
-                        maxWidth: navigationRailMaxWidth,
-                        isResizable: !workbench.navigationRailCollapsed,
-                        flexibleMinWidth: DesignTokens.Layout.editorMinWidth
-                            + DesignTokens.Layout.centerCardOuterPadding * 2,
-                        onCommitWidth: { ShellChromePreferences.navigationRailWidth = $0 }
-                    ) {
-                        navigationRailColumn
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-                    } trailing: {
-                        centerWorkbench
-                    }
-                } else {
+        Group {
+            if workbench.sidebarVisible {
+                OWResizableColumnSplit(
+                    fixedWidth: $navigationRailWidth,
+                    minWidth: navigationRailMinWidth,
+                    maxWidth: navigationRailMaxWidth,
+                    isResizable: !workbench.navigationRailCollapsed,
+                    flexibleMinWidth: DesignTokens.Layout.editorMinWidth
+                        + DesignTokens.Layout.centerCardOuterPadding * 2,
+                    onCommitWidth: { ShellChromePreferences.navigationRailWidth = $0 }
+                ) {
+                    navigationRailColumn
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                } trailing: {
                     centerWorkbench
                 }
+            } else {
+                centerWorkbench
             }
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var navigationRailMinWidth: CGFloat {
@@ -132,8 +136,11 @@ struct AnytypeShellView: View {
 
     private var centerWorkbench: some View {
         GeometryReader { geometry in
-            let centerWidth = geometry.size.width
-            let editorMin = OWShellLayout.editorMinimum(forCenterWidth: centerWidth)
+            let paddedWidth = max(
+                0,
+                geometry.size.width - DesignTokens.Layout.centerCardOuterPadding * 2
+            )
+            let editorMin = OWShellLayout.editorMinimum(forCenterWidth: paddedWidth)
 
             Group {
                 if workbench.aiAssistExpanded {
@@ -172,21 +179,27 @@ struct AnytypeShellView: View {
                         )
                 }
             }
-            .frame(width: centerWidth, height: geometry.size.height, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .padding(DesignTokens.Layout.centerCardOuterPadding)
             .onAppear {
-                reconcileCenterWorkbenchLayout(centerWidth: centerWidth)
+                reconcileCenterWorkbenchLayout(centerWidth: paddedWidth)
             }
-            .onChange(of: centerWidth) { _, newWidth in
+            .onChange(of: paddedWidth) { _, newWidth in
                 reconcileCenterWorkbenchLayout(centerWidth: newWidth)
             }
-            .onChange(of: workbench.aiAssistExpanded) { _, expanded in
-                if expanded {
-                    reconcileCenterWorkbenchLayout(centerWidth: centerWidth)
-                }
+            .onChange(of: workbench.aiAssistExpanded) { _, _ in
+                reconcileWorkbenchChromeLayout(centerWidth: paddedWidth)
             }
         }
-        .padding(DesignTokens.Layout.centerCardOuterPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(palette.workbenchChrome)
+    }
+
+    private func reconcileWorkbenchChromeLayout(centerWidth: CGFloat? = nil) {
+        if let centerWidth {
+            reconcileCenterWorkbenchLayout(centerWidth: centerWidth)
+        }
+        editorLayoutEpoch &+= 1
     }
 
     private func reconcileCenterWorkbenchLayout(centerWidth: CGFloat) {
@@ -262,6 +275,7 @@ struct AnytypeShellView: View {
                     databaseCenter(database)
                 case .graph:
                     GraphView(
+                        vaultID: vaultStore.activeVaultID,
                         documents: vaultStore.documentsInActiveVault,
                         backlinkIndex: backlinkIndex,
                         selectedDocumentID: vaultStore.selectedDocumentID,
@@ -272,6 +286,7 @@ struct AnytypeShellView: View {
                             }
                         }
                     )
+                    .id(vaultStore.activeVaultID)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -301,6 +316,7 @@ struct AnytypeShellView: View {
     private var editorCenter: some View {
         if let doc = vaultStore.selectedDocument {
             EditorView(documentID: doc.id)
+                .id(editorLayoutEpoch)
         } else {
             emptyEditorState
         }

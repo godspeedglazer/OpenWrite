@@ -7,6 +7,8 @@ enum AISafetyLimits {
     static let prefilterCandidateCount = 32
     static let rerankCandidateCount = 24
     static let maxContextChunks = 12
+    /// Hard cap on vault excerpts in chat system context (reduces RAG dominance).
+    static let maxChatReferenceExcerpts = 6
     static let maxSnippetCharsPerChunk = 400
     static let maxEstimatedPromptTokens = 3000
     static let charsPerTokenEstimate = 4
@@ -24,6 +26,13 @@ enum AISafetyLimits {
     static let indexChunkOverlap = 20
     static let embeddingDimensions = 384
     static let maxEmbeddingInputChars = 2000
+
+    /// Safe web lookup (server-side fetch in app, not in-page JS).
+    static let maxWebFetchBytes = 512 * 1024
+    static let webFetchTimeoutSeconds: TimeInterval = 10
+    static let webFetchMaxRedirects = 3
+    static let maxWebURLsPerMessage = 2
+    static let maxWebTextChars = 12_000
 }
 
 enum AIInput {
@@ -51,5 +60,31 @@ enum AIInput {
 
     static func estimatedTokenCount(for text: String) -> Int {
         max(1, (text.count + AISafetyLimits.charsPerTokenEstimate - 1) / AISafetyLimits.charsPerTokenEstimate)
+    }
+
+    /// Removes model citation markers from text shown in the chat UI (including partial stream tokens).
+    static func stripChunkReferences(_ text: String) -> String {
+        let patterns = [
+            #"\[chunk:\s*[^\]]*\]?"#,
+            #"\[chunk:[^\]\n]*"#,
+            #"\bchunk:\s*[0-9a-fA-F-]{8,}(?:-[0-9a-fA-F-]+)*\b"#
+        ]
+        var result = text
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+            let range = NSRange(result.startIndex..., in: result)
+            result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: "")
+        }
+        if let trailing = try? NSRegularExpression(pattern: #"\[chunk:[^\]]*$"#, options: [.caseInsensitive]),
+           let match = trailing.firstMatch(in: result, range: NSRange(result.startIndex..., in: result)),
+           let range = Range(match.range, in: result) {
+            result.removeSubrange(range)
+        }
+        return result
+            .replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

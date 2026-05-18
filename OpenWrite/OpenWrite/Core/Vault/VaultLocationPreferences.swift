@@ -35,6 +35,7 @@ enum VaultLocationPreferences {
         let root = resolvedVaultRootURL()
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try VaultAttachmentStore.ensureVaultAssetsDirectory(vaultRoot: root)
+        try VaultCoverStore.ensureCoversDirectory(vaultRoot: root)
         try seedWelcomeMarkdownIfNeeded(at: root)
         return root
     }

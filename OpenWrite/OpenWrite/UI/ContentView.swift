@@ -11,6 +11,7 @@ struct ContentView: View {
     @State private var showCreateDatabaseSheet = false
     @State private var backlinkIndex = BacklinkIndex()
     @StateObject private var markdownVaultWatcher = VaultMarkdownWatcher()
+    @State private var reindexDebounceTask: Task<Void, Never>?
 
     var body: some View {
         let _ = themeManager.selectedTheme
@@ -49,7 +50,7 @@ struct ContentView: View {
             _ = try? VaultLocationPreferences.ensureDefaultVaultLayout()
             await aiServices.startFilesystemIngestionWatch()
             markdownVaultWatcher.start {
-                Task { await aiServices.reindex(documents: vaultStore.documents) }
+                scheduleDebouncedReindex()
             }
             await aiServices.reindex(documents: vaultStore.documents)
         }
@@ -63,16 +64,39 @@ struct ContentView: View {
             workbench.applyVaultContext(newVaultID)
             rebuildBacklinkIndex()
         }
+        .onChange(of: activeVaultDocumentSignature) { _, _ in
+            rebuildBacklinkIndex()
+        }
         .onAppear {
             workbench.applyVaultContext(vaultStore.activeVaultID)
             rebuildBacklinkIndex()
         }
     }
 
+    /// Changes when the active vault or its member pages change (vault switch does not mutate `documents`).
+    private var activeVaultDocumentSignature: Int {
+        var hasher = Hasher()
+        hasher.combine(vaultStore.activeVaultID)
+        for document in vaultStore.documentsInActiveVault {
+            hasher.combine(document.id)
+            hasher.combine(document.updatedAt)
+        }
+        return hasher.finalize()
+    }
+
     private func rebuildBacklinkIndex() {
         let scoped = vaultStore.documentsInActiveVault
         backlinkIndex = BacklinkIndex.build(from: scoped)
-        Task { await aiServices.reindex(documents: vaultStore.documents) }
+        scheduleDebouncedReindex()
+    }
+
+    private func scheduleDebouncedReindex() {
+        reindexDebounceTask?.cancel()
+        reindexDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 750_000_000)
+            guard !Task.isCancelled else { return }
+            await aiServices.reindex(documents: vaultStore.documents)
+        }
     }
 
     private var newPageSheet: some View {

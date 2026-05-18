@@ -6,6 +6,7 @@ import SwiftUI
 /// Stacked WYSIWYG block editor — each NDL block is a filled card with inline editing.
 struct OWBlockEditorView: View {
     @Binding var blocks: [NoteBlock]
+    var onSelectionChange: ((String?) -> Void)? = nil
 
     var body: some View {
         BlockEditorPasteHost(blocks: $blocks) {
@@ -32,27 +33,31 @@ struct OWBlockEditorView: View {
                 checked: Binding(
                     get: { block.wrappedValue.isChecked },
                     set: { block.wrappedValue.isChecked = $0 }
-                )
+                ),
+                onSelectionChange: onSelectionChange
             )
         case .callout:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
                 text: editableText,
                 blockAttributes: attributesBinding(block),
-                calloutType: attributeBinding(block, key: "callout")
+                calloutType: attributeBinding(block, key: "callout"),
+                onSelectionChange: onSelectionChange
             )
         case .code:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
                 text: editableText,
                 blockAttributes: attributesBinding(block),
-                language: attributeBinding(block, key: "language")
+                language: attributeBinding(block, key: "language"),
+                onSelectionChange: onSelectionChange
             )
         case .heading1, .heading2, .heading3, .paragraph, .bullet, .quote, .wikilink:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
                 text: editableText,
-                blockAttributes: attributesBinding(block)
+                blockAttributes: attributesBinding(block),
+                onSelectionChange: onSelectionChange
             )
         case .image:
             OWPreviewBlockRow(
@@ -117,7 +122,18 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
             context.coordinator.ingestPastedImage()
         }
         hosting.rootView = content
+
         let layoutWidth = max(context.coordinator.lastProposedWidth ?? host.bounds.width, 320)
+        let revision = context.coordinator.blocksRevision(blocks)
+        let widthChanged = abs((context.coordinator.lastAppliedWidth ?? 0) - layoutWidth) > 0.5
+        let contentChanged = revision != context.coordinator.lastBlocksRevision
+        guard widthChanged || contentChanged else { return }
+
+        if contentChanged || widthChanged {
+            host.invalidateMeasurementCache()
+        }
+        context.coordinator.lastBlocksRevision = revision
+        context.coordinator.lastAppliedWidth = layoutWidth
         context.coordinator.scheduleLayout(on: host, width: layoutWidth)
     }
 
@@ -130,6 +146,8 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
     final class Coordinator {
         var blocks: Binding<[NoteBlock]>
         var lastProposedWidth: CGFloat?
+        var lastAppliedWidth: CGFloat?
+        var lastBlocksRevision: UInt64 = 0
         private var layoutGeneration = 0
 
         init(blocks: Binding<[NoteBlock]>) {
@@ -164,6 +182,17 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
                     }
                 }
             }
+        }
+
+        func blocksRevision(_ blocks: [NoteBlock]) -> UInt64 {
+            var hasher = Hasher()
+            hasher.combine(blocks.count)
+            for block in blocks {
+                hasher.combine(block.id)
+                hasher.combine(block.kind)
+                hasher.combine(block.text)
+            }
+            return UInt64(bitPattern: Int64(hasher.finalize()))
         }
 
         func scheduleLayout(on host: BlockEditorPasteCaptureView, width: CGFloat) {

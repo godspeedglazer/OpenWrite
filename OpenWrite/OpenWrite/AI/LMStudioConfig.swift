@@ -1,5 +1,48 @@
 import Foundation
 
+/// OpenAI-compatible local server preset (LM Studio, Ollama, or custom URL).
+enum AIBackendPreset: String, Codable, CaseIterable, Identifiable, Sendable {
+    case lmStudio
+    case ollama
+    case custom
+
+    var id: String { rawValue }
+
+    var menuTitle: String {
+        switch self {
+        case .lmStudio:
+            return "LM Studio"
+        case .ollama:
+            return "Ollama"
+        case .custom:
+            return "Custom URL"
+        }
+    }
+
+    var defaultBaseURL: URL {
+        switch self {
+        case .lmStudio:
+            return URL(string: "http://127.0.0.1:1234")!
+        case .ollama:
+            return URL(string: "http://127.0.0.1:11434")!
+        case .custom:
+            return URL(string: "http://127.0.0.1:1234")!
+        }
+    }
+
+    static func infer(from baseURL: URL) -> AIBackendPreset {
+        let host = baseURL.host?.lowercased() ?? ""
+        let port = baseURL.port ?? (baseURL.scheme == "https" ? 443 : 80)
+        if (host == "127.0.0.1" || host == "localhost") && port == 11434 {
+            return .ollama
+        }
+        if (host == "127.0.0.1" || host == "localhost") && port == 1234 {
+            return .lmStudio
+        }
+        return .custom
+    }
+}
+
 /// Recommended embedding models for LM Studio (user downloads separately).
 enum EmbeddingModelPreset: String, CaseIterable, Identifiable, Sendable {
     case uaeLargeV1 = "WhereIsAI/UAE-Large-V1"
@@ -22,8 +65,9 @@ enum EmbeddingModelPreset: String, CaseIterable, Identifiable, Sendable {
     static var defaultPreset: EmbeddingModelPreset { .uaeLargeV1 }
 }
 
-/// User-configurable LM Studio (OpenAI-compatible) endpoint.
+/// User-configurable OpenAI-compatible endpoint (LM Studio, Ollama, or custom).
 struct LMStudioConfig: Codable, Hashable, Sendable {
+    var backendPreset: AIBackendPreset
     var baseURL: URL
     var chatModel: String
     var embeddingModel: String
@@ -31,14 +75,19 @@ struct LMStudioConfig: Codable, Hashable, Sendable {
     var timeoutSeconds: TimeInterval
     var streamingEnabled: Bool
 
+    /// Default chat model id when nothing is saved yet (LM Studio local id; override in Settings).
+    static let defaultChatModelID = "gemma-4-e4b"
+
     init(
+        backendPreset: AIBackendPreset = .lmStudio,
         baseURL: URL = URL(string: "http://127.0.0.1:1234")!,
-        chatModel: String = "local-model",
+        chatModel: String = LMStudioConfig.defaultChatModelID,
         embeddingModel: String = EmbeddingModelPreset.defaultPreset.rawValue,
         apiKey: String? = nil,
         timeoutSeconds: TimeInterval = 60,
         streamingEnabled: Bool = true
     ) {
+        self.backendPreset = backendPreset
         self.baseURL = baseURL
         self.chatModel = chatModel
         self.embeddingModel = embeddingModel
@@ -48,6 +97,32 @@ struct LMStudioConfig: Codable, Hashable, Sendable {
     }
 
     static let `default` = LMStudioConfig()
+
+    enum CodingKeys: String, CodingKey {
+        case backendPreset
+        case baseURL
+        case chatModel
+        case embeddingModel
+        case apiKey
+        case timeoutSeconds
+        case streamingEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        baseURL = try container.decode(URL.self, forKey: .baseURL)
+        backendPreset = try container.decodeIfPresent(AIBackendPreset.self, forKey: .backendPreset)
+            ?? AIBackendPreset.infer(from: baseURL)
+        chatModel = try container.decode(String.self, forKey: .chatModel)
+        embeddingModel = try container.decode(String.self, forKey: .embeddingModel)
+        apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey)
+        timeoutSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .timeoutSeconds) ?? 60
+        streamingEnabled = try container.decodeIfPresent(Bool.self, forKey: .streamingEnabled) ?? true
+    }
+
+    var backendDisplayName: String {
+        backendPreset.menuTitle
+    }
 
     /// Default embedding model id (Reor-style UAE-Large-V1 via LM Studio).
     static let defaultEmbeddingModelID = EmbeddingModelPreset.defaultPreset.rawValue
@@ -101,6 +176,7 @@ enum AIActivityState: Equatable, Sendable {
     case connecting
     case indexing
     case retrieving
+    case fetchingWeb
     case streaming
     case error(String)
 
@@ -108,7 +184,7 @@ enum AIActivityState: Equatable, Sendable {
         switch self {
         case .idle, .error:
             return false
-        case .connecting, .indexing, .retrieving, .streaming:
+        case .connecting, .indexing, .retrieving, .fetchingWeb, .streaming:
             return true
         }
     }
@@ -118,16 +194,27 @@ enum AIActivityState: Equatable, Sendable {
         case .idle:
             return nil
         case .connecting:
-            return "Connecting to LM Studio…"
+            return "Connecting to chat model…"
         case .indexing:
             return "Indexing vault…"
         case .retrieving:
             return "Searching vault…"
+        case .fetchingWeb:
+            return "Fetching page…"
         case .streaming:
-            return "Calling chat model…"
+            return "Responding…"
         case .error(let message):
             return message
         }
+    }
+
+    /// Timeline copy when the chat model endpoint is ready (includes model id when known).
+    func connectedStatus(modelDisplay: String) -> String {
+        let trimmed = modelDisplay.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "Not set" {
+            return "Chat model reached"
+        }
+        return "Connected to \(trimmed)"
     }
 
     var shortLabel: String {
@@ -136,6 +223,7 @@ enum AIActivityState: Equatable, Sendable {
         case .connecting: return "Connecting"
         case .indexing: return "Indexing"
         case .retrieving: return "Retrieving"
+        case .fetchingWeb: return "Fetching web"
         case .streaming: return "Streaming"
         case .error: return "Error"
         }

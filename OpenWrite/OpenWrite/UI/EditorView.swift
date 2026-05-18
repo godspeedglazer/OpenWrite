@@ -13,6 +13,7 @@ struct EditorView: View {
     @State private var headerTitle: String = ""
     @State private var headerPageIcon: String = ""
     @State private var headerCoverStyle: CoverStyle?
+    @State private var headerCoverImagePath: String?
     @State private var headerIconOffsetX: CGFloat = 0
     @State private var headerIconOffsetY: CGFloat = 0
     @State private var appliedEditorPresentation = false
@@ -85,6 +86,7 @@ struct EditorView: View {
                 title: $headerTitle,
                 pageIcon: $headerPageIcon,
                 coverStyle: $headerCoverStyle,
+                coverImagePath: $headerCoverImagePath,
                 pageIconOffsetX: $headerIconOffsetX,
                 pageIconOffsetY: $headerIconOffsetY
             ) {
@@ -96,7 +98,7 @@ struct EditorView: View {
                     PropertyInspectorView(documentID: document.id)
                 }
                 .openWriteEditorContentWidth()
-                .padding(.horizontal, DesignTokens.Spacing.spacing3)
+                .openWriteEditorLeadingInset()
                 .padding(.bottom, DesignTokens.Spacing.spacing2)
             }
         }
@@ -149,7 +151,7 @@ struct EditorView: View {
                 welcomeBodyHint
             }
         }
-        .padding(.horizontal, DesignTokens.Spacing.spacing3)
+        .openWriteEditorLeadingInset()
         .padding(.bottom, DesignTokens.Spacing.spacing1)
     }
 
@@ -181,7 +183,7 @@ struct EditorView: View {
             blockAttributes: focusedBlockAttributesBinding
         )
         .openWriteEditorContentWidth()
-        .padding(.horizontal, DesignTokens.Spacing.spacing3)
+        .openWriteEditorLeadingInset()
         .padding(.top, DesignTokens.Spacing.spacing1)
         .padding(.bottom, DesignTokens.Spacing.spacing2)
     }
@@ -216,11 +218,15 @@ struct EditorView: View {
                 }
             }
             .buttonStyle(OWToolbarActionButtonStyle(isEnabled: inlineAssist.canRefineSelection))
-            .disabled(!inlineAssist.canRefineSelection)
-            .help("Improve selected text with local AI (select text in a future block selection pass)")
+            .disabled(!inlineAssist.canRefineSelection || inlineAssist.isRefining)
+            .help(
+                inlineAssist.canRefineSelection
+                    ? "Improve selected text with local AI and vault context"
+                    : "Select text in the note to refine"
+            )
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, DesignTokens.Spacing.spacing3)
+        .openWriteEditorLeadingInset()
         .padding(.vertical, DesignTokens.Spacing.spacing1)
     }
 
@@ -236,14 +242,20 @@ struct EditorView: View {
                 editorActionBar(document)
                     .padding(.top, DesignTokens.Spacing.spacing2)
 
-                OWBlockEditorView(blocks: $editingBlocks)
+                OWBlockEditorView(blocks: $editingBlocks) { selectedText in
+                    inlineAssist.scheduleSelectionCapture(
+                        documentID: document.id,
+                        blockID: blockFormatting.focusedBlockID,
+                        selectedText: selectedText
+                    )
+                }
+                    .openWriteEditorLeadingInset()
                     .padding(.top, DesignTokens.Layout.editorHeaderToBodySpacing)
                     .onChange(of: editingBlocks) { _, newBlocks in
                         commitBlocks(document: document, blocks: newBlocks)
                     }
             }
             .openWriteEditorContentWidth()
-            .padding(.horizontal, DesignTokens.Spacing.spacing3)
             .padding(.bottom, DesignTokens.Spacing.spacing6)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -269,6 +281,7 @@ struct EditorView: View {
         headerTitle = document.displayTitle
         headerPageIcon = document.pageIcon
         headerCoverStyle = document.coverStyle
+        headerCoverImagePath = document.coverImagePath
         headerIconOffsetX = document.pageIconOffsetX
         headerIconOffsetY = document.pageIconOffsetY
     }
@@ -294,11 +307,18 @@ struct EditorView: View {
                                     vaultStore.selectedDocumentID = documentID
                                 }
                             }
-                            Text(text)
+                            Text(AIInput.stripChunkReferences(text))
                                 .font(OWTypography.body)
                                 .lineSpacing(OWTypography.bodyLineSpacing)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                            if inlineAssist.canApplyRefinement {
+                                Button("Apply to selection") {
+                                    applyRefinementToDocument()
+                                }
+                                .buttonStyle(OWAccentCapsuleButtonStyle())
+                            }
                         }
                         .padding()
                     }
@@ -318,10 +338,34 @@ struct EditorView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { inlineAssist.dismissRefine() }
+                        .buttonStyle(OWSecondaryRectButtonStyle())
+                }
+                if inlineAssist.canApplyRefinement {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Apply") { applyRefinementToDocument() }
+                            .buttonStyle(OWAccentCapsuleButtonStyle())
+                    }
                 }
             }
         }
         .frame(minWidth: 420, minHeight: 280)
+    }
+
+    private func applyRefinementToDocument() {
+        guard let document,
+              let snapshot = inlineAssist.latestSnapshot,
+              case .ready(let refined, _) = inlineAssist.phase else { return }
+
+        let applied = InlineAssistController.applyRefinement(
+            refined,
+            snapshot: snapshot,
+            blocks: &editingBlocks,
+            fallbackBlockID: blockFormatting.focusedBlockID
+        )
+        guard applied else { return }
+
+        commitBlocks(document: document, blocks: editingBlocks)
+        inlineAssist.dismissRefine()
     }
 
     private func commitBlocks(document: VaultDocument, blocks: [NoteBlock]) {

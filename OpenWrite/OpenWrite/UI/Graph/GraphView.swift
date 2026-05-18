@@ -1,16 +1,27 @@
+import AppKit
 import SwiftUI
 
-/// Anytype-inspired global graph — read-only wikilink canvas (local-only).
+/// Anytype-inspired global graph — wikilink canvas with drag, curved edges, persisted layout.
 struct GraphView: View {
+    let vaultID: UUID
     let documents: [VaultDocument]
     let backlinkIndex: BacklinkIndex
     let selectedDocumentID: UUID?
     var onSelectDocument: (UUID) -> Void
 
     @State private var canvasSize: CGSize = .zero
+    @State private var layoutCanvasSize: CGSize = CGSize(width: 640, height: 480)
+    @State private var snapshot: GraphSnapshot = .empty
+    @State private var edgeRoutes: [String: GraphEdgeRoute] = [:]
+    @State private var layoutTask: Task<Void, Never>?
+    @State private var canvasResizeDebounceTask: Task<Void, Never>?
     @State private var panOffset: CGSize = .zero
     @GestureState private var dragTranslation: CGSize = .zero
     @State private var zoom: CGFloat = 1
+    @State private var nodePositions: [UUID: CGPoint] = [:]
+    @State private var usesManualLayout = false
+    @State private var draggingNodeID: UUID?
+    @State private var nodeDragTranslation: CGSize = .zero
 
     private var effectivePan: CGSize {
         CGSize(
@@ -19,13 +30,19 @@ struct GraphView: View {
         )
     }
 
-    private var snapshot: GraphSnapshot {
-        GraphViewModel.makeSnapshot(
-            documents: documents,
-            index: backlinkIndex,
-            selectedDocumentID: selectedDocumentID,
-            canvasSize: canvasSize == .zero ? CGSize(width: 640, height: 480) : canvasSize
-        )
+    private var documentIDs: [UUID] {
+        documents.map(\.id)
+    }
+
+    private var backlinkSignature: Int {
+        var hasher = Hasher()
+        for document in documents {
+            hasher.combine(document.id)
+            for targetID in backlinkIndex.outlinks(from: document.id) {
+                hasher.combine(targetID)
+            }
+        }
+        return hasher.finalize()
     }
 
     var body: some View {
@@ -39,20 +56,40 @@ struct GraphView: View {
                     emptyVaultState(in: size)
                 } else {
                     graphCanvas(snapshot: snapshot)
-                    if snapshot.edges.isEmpty {
+                    if shouldShowLinklessOverlay(snapshot: snapshot) {
                         emptyGraphOverlay(in: size)
-                    } else {
-                        graphNodeCards(snapshot: snapshot)
                     }
+                    graphNodeCards(snapshot: snapshot)
                 }
 
                 graphChrome(snapshot: snapshot)
             }
-            .onAppear { canvasSize = size }
-            .onChange(of: size) { _, newSize in canvasSize = newSize }
-            .onChange(of: documents.count) { _, _ in
-                panOffset = .zero
-                zoom = 1
+            .background(OWDisablesWindowDrag())
+            .modifier(GraphWindowDragPolicyModifier())
+            .onAppear {
+                canvasSize = size
+                layoutCanvasSize = resolvedLayoutCanvasSize(size)
+                loadPersistedLayout()
+                rebuildSnapshot()
+            }
+            .onChange(of: size) { _, newSize in
+                canvasSize = newSize
+                scheduleSnapshotRebuildForCanvasResize(newSize)
+            }
+            .onChange(of: vaultID) { _, _ in
+                resetViewTransform()
+                loadPersistedLayout()
+                rebuildSnapshot()
+            }
+            .onChange(of: documentIDs) { _, _ in
+                pruneStalePositions()
+                rebuildSnapshot()
+            }
+            .onChange(of: backlinkSignature) { _, _ in
+                rebuildSnapshot()
+            }
+            .onChange(of: selectedDocumentID) { _, _ in
+                refreshSelectionHighlight()
             }
         }
         .background(DesignTokens.Color.editorCanvas)
@@ -69,58 +106,60 @@ struct GraphView: View {
                 .scaledBy(x: zoom, y: zoom)
 
             for edge in snapshot.edges {
-                guard
-                    let source = snapshot.nodes.first(where: { $0.id == edge.sourceID }),
-                    let target = snapshot.nodes.first(where: { $0.id == edge.targetID })
-                else { continue }
+                guard let route = edgeRoutes[edge.id] else { continue }
 
-                let segment = GraphViewModel.edgeSegment(from: source, to: target)
-                var path = Path()
-                path.move(to: segment.start.applying(transform))
-                path.addLine(to: segment.end.applying(transform))
+                var path = GraphViewModel.bezierPath(for: route)
+                path = path.applying(transform)
+
                 context.stroke(
                     path,
                     with: .color(DesignTokens.Color.graphEdge),
                     lineWidth: 1.25 / zoom
                 )
+
+                let transformedRoute = GraphEdgeRoute(
+                    start: route.start.applying(transform),
+                    end: route.end.applying(transform),
+                    control: route.control.applying(transform)
+                )
+                let arrow = GraphViewModel.arrowTangent(at: transformedRoute)
                 drawArrowhead(
                     context: &context,
-                    from: segment.start.applying(transform),
-                    to: segment.end.applying(transform),
+                    tip: arrow.tip,
+                    direction: arrow.direction,
                     zoom: zoom
                 )
             }
         }
-        .gesture(
-            DragGesture()
-                .updating($dragTranslation) { value, state, _ in
-                    state = value.translation
-                }
-                .onEnded { value in
-                    panOffset = CGSize(
-                        width: panOffset.width + value.translation.width,
-                        height: panOffset.height + value.translation.height
-                    )
-                }
-        )
+        .background(OWDisablesWindowDrag())
         .contentShape(Rectangle())
+        .gesture(canvasPanGesture)
+    }
+
+    private var canvasPanGesture: some Gesture {
+        DragGesture()
+            .updating($dragTranslation) { value, state, _ in
+                guard draggingNodeID == nil else { return }
+                state = value.translation
+            }
+            .onEnded { value in
+                guard draggingNodeID == nil else { return }
+                panOffset = CGSize(
+                    width: panOffset.width + value.translation.width,
+                    height: panOffset.height + value.translation.height
+                )
+            }
     }
 
     private func drawArrowhead(
         context: inout GraphicsContext,
-        from start: CGPoint,
-        to end: CGPoint,
+        tip: CGPoint,
+        direction: CGPoint,
         zoom: CGFloat
     ) {
-        let dx = end.x - start.x
-        let dy = end.y - start.y
-        let length = hypot(dx, dy)
-        guard length > 8 else { return }
-
-        let ux = dx / length
-        let uy = dy / length
+        let ux = direction.x
+        let uy = direction.y
         let size: CGFloat = 6 / zoom
-        let tip = end
         let left = CGPoint(x: tip.x - ux * size - uy * size * 0.5, y: tip.y - uy * size + ux * size * 0.5)
         let right = CGPoint(x: tip.x - ux * size + uy * size * 0.5, y: tip.y - uy * size - ux * size * 0.5)
 
@@ -138,12 +177,55 @@ struct GraphView: View {
         ZStack {
             ForEach(snapshot.nodes) { node in
                 graphNodeCard(node: node)
-                    .position(transformed(node.position))
+                    .position(displayPosition(for: node))
                     .scaleEffect(zoom)
-                    .onTapGesture { onSelectDocument(node.id) }
+                    .highPriorityGesture(nodeDragGesture(node: node))
+                    .onTapGesture {
+                        guard draggingNodeID == nil else { return }
+                        onSelectDocument(node.id)
+                    }
             }
         }
         .allowsHitTesting(true)
+    }
+
+    private func displayPosition(for node: GraphSnapshot.Node) -> CGPoint {
+        var base = node.position
+        if draggingNodeID == node.id {
+            base = CGPoint(
+                x: base.x + nodeDragTranslation.width / zoom,
+                y: base.y + nodeDragTranslation.height / zoom
+            )
+        }
+        return transformed(base)
+    }
+
+    private func nodeDragGesture(node: GraphSnapshot.Node) -> some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { value in
+                if draggingNodeID == nil {
+                    draggingNodeID = node.id
+                }
+                guard draggingNodeID == node.id else { return }
+                nodeDragTranslation = value.translation
+            }
+            .onEnded { value in
+                guard draggingNodeID == node.id else { return }
+                let delta = CGSize(
+                    width: value.translation.width / zoom,
+                    height: value.translation.height / zoom
+                )
+                let next = GraphViewModel.snap(CGPoint(
+                    x: node.position.x + delta.width,
+                    y: node.position.y + delta.height
+                ))
+                nodePositions[node.id] = next
+                usesManualLayout = true
+                persistLayout()
+                rebuildSnapshot()
+                draggingNodeID = nil
+                nodeDragTranslation = .zero
+            }
     }
 
     private func graphNodeCard(node: GraphSnapshot.Node) -> some View {
@@ -180,6 +262,8 @@ struct GraphView: View {
             x: 0,
             y: 1
         )
+        .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
+        .background(OWDisablesWindowDrag())
     }
 
     private func transformed(_ point: CGPoint) -> CGPoint {
@@ -187,6 +271,157 @@ struct GraphView: View {
             x: point.x * zoom + effectivePan.width,
             y: point.y * zoom + effectivePan.height
         )
+    }
+
+    // MARK: - Snapshot / layout
+
+    private func resolvedLayoutCanvasSize(_ size: CGSize) -> CGSize {
+        size == .zero ? CGSize(width: 640, height: 480) : size
+    }
+
+    private func applySnapshot(_ newSnapshot: GraphSnapshot) {
+        snapshot = newSnapshot
+        edgeRoutes = GraphViewModel.routeEdges(snapshot: newSnapshot)
+    }
+
+    private func rebuildSnapshot() {
+        layoutTask?.cancel()
+        canvasResizeDebounceTask?.cancel()
+
+        guard !documents.isEmpty else {
+            snapshot = .empty
+            edgeRoutes = [:]
+            return
+        }
+
+        let overrides = usesManualLayout ? nodePositions : nil
+        let allNodesPositioned = overrides.map { positions in
+            !positions.isEmpty && documents.allSatisfy { positions[$0.id] != nil }
+        } ?? false
+
+        if allNodesPositioned, let overrides {
+            applySnapshot(
+                GraphViewModel.makeSnapshot(
+                    documents: documents,
+                    index: backlinkIndex,
+                    selectedDocumentID: selectedDocumentID,
+                    canvasSize: layoutCanvasSize,
+                    positionOverrides: overrides
+                )
+            )
+            return
+        }
+
+        let docs = documents
+        let index = backlinkIndex
+        let selectedID = selectedDocumentID
+        let canvas = layoutCanvasSize
+        let manualOverrides = overrides
+
+        layoutTask = Task {
+            let prepared = GraphViewModel.prepareAutoLayout(
+                documents: docs,
+                index: index,
+                canvasSize: canvas
+            )
+            let autoPositions = await GraphViewModel.computeAutoLayoutOffMain(
+                documentIDs: prepared.sortedDocuments.map(\.id),
+                sizes: prepared.sizes,
+                edges: prepared.edges,
+                canvasSize: canvas
+            )
+            guard !Task.isCancelled else { return }
+
+            let built = GraphViewModel.makeSnapshot(
+                documents: docs,
+                index: index,
+                selectedDocumentID: selectedID,
+                canvasSize: canvas,
+                positionOverrides: manualOverrides,
+                precomputedAutoPositions: autoPositions
+            )
+            await MainActor.run {
+                guard !Task.isCancelled else { return }
+                applySnapshot(built)
+            }
+        }
+    }
+
+    private func scheduleSnapshotRebuildForCanvasResize(_ newSize: CGSize) {
+        guard !usesManualLayout else { return }
+
+        canvasResizeDebounceTask?.cancel()
+        canvasResizeDebounceTask = Task {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            let resolved = resolvedLayoutCanvasSize(newSize)
+            guard resolved != layoutCanvasSize else { return }
+            layoutCanvasSize = resolved
+            rebuildSnapshot()
+        }
+    }
+
+    private func refreshSelectionHighlight() {
+        guard !snapshot.nodes.isEmpty else { return }
+        let nodes = snapshot.nodes.map { node in
+            GraphSnapshot.Node(
+                id: node.id,
+                title: node.title,
+                pageType: node.pageType,
+                position: node.position,
+                size: node.size,
+                linkCount: node.linkCount,
+                isSelected: node.id == selectedDocumentID
+            )
+        }
+        snapshot = GraphSnapshot(
+            nodes: nodes,
+            edges: snapshot.edges,
+            isolatedCount: snapshot.isolatedCount
+        )
+    }
+
+    // MARK: - Layout persistence
+
+    private func loadPersistedLayout() {
+        let stored = GraphLayoutStore.load(vaultID: vaultID)
+        nodePositions = stored
+        usesManualLayout = !stored.isEmpty
+    }
+
+    private func persistLayout() {
+        GraphLayoutStore.save(vaultID: vaultID, positions: nodePositions)
+    }
+
+    private func pruneStalePositions() {
+        let liveIDs = Set(documents.map(\.id))
+        let pruned = nodePositions.filter { liveIDs.contains($0.key) }
+        if pruned.count != nodePositions.count {
+            nodePositions = pruned
+            if pruned.isEmpty {
+                usesManualLayout = false
+            }
+            persistLayout()
+            rebuildSnapshot()
+        }
+    }
+
+    private func resetToAutoLayout() {
+        withAnimation(DesignTokens.Motion.animationStandard) {
+            usesManualLayout = false
+            nodePositions = [:]
+            zoom = 1
+            panOffset = .zero
+        }
+        GraphLayoutStore.clear(vaultID: vaultID)
+        rebuildSnapshot()
+    }
+
+    private func resetViewTransform() {
+        zoom = 1
+        panOffset = .zero
+        draggingNodeID = nil
+        nodeDragTranslation = .zero
     }
 
     // MARK: - Chrome
@@ -199,7 +434,11 @@ struct GraphView: View {
                     Text("\(snapshot.nodes.count) notes")
                         .font(DesignTokens.Typography.captionEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                    if snapshot.isolatedCount > 0 {
+                    if usesManualLayout {
+                        Text("Custom layout")
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                    } else if snapshot.isolatedCount > 0 {
                         Text("\(snapshot.isolatedCount) without links")
                             .font(DesignTokens.Typography.caption)
                             .foregroundStyle(DesignTokens.Color.textTertiary)
@@ -240,14 +479,12 @@ struct GraphView: View {
             .buttonStyle(.plain)
 
             Button {
-                withAnimation(DesignTokens.Motion.animationStandard) {
-                    zoom = 1
-                    panOffset = .zero
-                }
+                resetToAutoLayout()
             } label: {
                 Text("Reset")
             }
             .buttonStyle(.plain)
+            .help("Reset zoom, pan, and auto-layout positions")
 
             Button {
                 withAnimation(DesignTokens.Motion.animationStandard) { zoom = min(2.0, zoom + 0.15) }
@@ -260,6 +497,12 @@ struct GraphView: View {
     }
 
     // MARK: - Empty states
+
+    /// Center "No links yet" hero only when several notes exist but none are linked.
+    /// Single-note vaults keep the node visible without a overlapping empty-state card.
+    private func shouldShowLinklessOverlay(snapshot: GraphSnapshot) -> Bool {
+        snapshot.edges.isEmpty && snapshot.nodes.count > 1
+    }
 
     private func emptyVaultState(in size: CGSize) -> some View {
         centeredGraphHero(
@@ -312,8 +555,57 @@ struct GraphView: View {
     }
 }
 
+// MARK: - Window drag policy
+
+/// Suppresses `isMovableByWindowBackground` while the graph is visible; chrome configurator may re-apply.
+private struct GraphWindowDragPolicyModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content.background(GraphWindowDragPolicyHost())
+    }
+}
+
+private struct GraphWindowDragPolicyHost: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.activate(from: view)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.activate(from: nsView)
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.deactivate()
+    }
+
+    final class Coordinator {
+        private var isActive = false
+
+        func activate(from view: NSView) {
+            if !isActive {
+                isActive = true
+                OWWindowChrome.suppressBackgroundWindowDrag = true
+            }
+            if let window = view.window {
+                OWWindowChrome.apply(to: window)
+            }
+        }
+
+        func deactivate() {
+            guard isActive else { return }
+            isActive = false
+            OWWindowChrome.suppressBackgroundWindowDrag = false
+            OWWindowChrome.reapplyToKeyWindow()
+        }
+    }
+}
+
 #Preview {
     GraphView(
+        vaultID: OpenWriteVault.primaryID,
         documents: [VaultDocument.welcomeSample],
         backlinkIndex: .build(from: [VaultDocument.welcomeSample]),
         selectedDocumentID: VaultDocument.welcomeSample.id,

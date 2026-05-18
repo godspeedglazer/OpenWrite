@@ -36,7 +36,8 @@ struct AgentConfig: Identifiable, Hashable, Sendable, Codable {
     var toolFlags: AgentToolFlags
 
     var effectiveChunkLimit: Int {
-        min(max(1, chunkLimit), AISafetyLimits.maxContextChunks)
+        guard chunkLimit > 0 else { return 0 }
+        return min(chunkLimit, AISafetyLimits.maxContextChunks)
     }
 
     var snippetCharsPerChunk: Int {

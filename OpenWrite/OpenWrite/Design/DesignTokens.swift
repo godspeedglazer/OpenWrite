@@ -209,6 +209,10 @@ enum DesignTokens {
         static let inspectorPadding = EdgeInsets(
             top: spacing4, leading: spacing4, bottom: spacing4, trailing: spacing4
         )
+        /// Chat, related, and past-writes columns in the assist strip.
+        static let assistStripContentPadding = EdgeInsets(
+            top: spacing3, leading: spacing3, bottom: spacing3, trailing: spacing3
+        )
         static let captureSheetPadding = EdgeInsets(
             top: spacing6, leading: spacing6, bottom: spacing6, trailing: spacing6
         )
@@ -325,6 +329,8 @@ enum DesignTokens {
         static let inspectorMaxWidth: CGFloat = assistStripMaxWidth
         static let assistBottomBarHeight: CGFloat = 32
         static let assistStripComposerBottomInset: CGFloat = Spacing.spacing4
+        /// Chat composer attach / send / stop control height (matches `OWThemedComposerField`).
+        static let composerActionSize: CGFloat = 36
         static let centerCardOuterPadding: CGFloat = Spacing.spacing2
         static let shellColumnGutter: CGFloat = Spacing.spacing2
         /// Below this width, collapse assist before shrinking editor (see LayoutAndResize.md).
@@ -344,6 +350,8 @@ enum DesignTokens {
         static let graphChromeTopReserve: CGFloat = 24
         /// Optional readable measure cap (settings / empty states). Editor body fills the column by default.
         static let editorMaxContentWidth: CGFloat = 880
+        /// Single leading gutter for page title, metadata, toolbars, and block text (Anytype-style column).
+        static let editorContentLeadingInset: CGFloat = Spacing.spacing3
         /// Vertical gap between page header stack and block list.
         static let editorHeaderToBodySpacing: CGFloat = Spacing.spacing4
         /// Vertical gap between block rows in the WYSIWYG editor.
@@ -365,6 +373,12 @@ enum DesignTokens {
         static let shellChromeContentLeadingInset: CGFloat = 78
         /// Slightly tighter inset when the window is below `shellCompactBreakpoint`.
         static let shellChromeCompactLeadingInset: CGFloat = 72
+        /// Aligns shell brand text with `OWSidebarSectionHeader` labels inside the navigation rail.
+        static var navigationRailBrandLeadingInset: CGFloat {
+            Spacing.sidebarPadding.leading + Spacing.spacing2 + 20 + Spacing.spacing1
+        }
+        /// Fixed leading gutter for callout icon + type control (matches quote bar density).
+        static let calloutLeadingGutter: CGFloat = 22
         static let splitDividerHitWidth: CGFloat = 6
         static let focusRingWidth: CGFloat = 2
         static let quoteBarWidth: CGFloat = 3
@@ -393,6 +407,11 @@ extension View {
             }
         }
         .frame(maxWidth: .infinity, alignment: alignment)
+    }
+
+    /// Applies the canonical editor column leading/trailing inset (use once per row — not on scroll + blocks).
+    func openWriteEditorLeadingInset() -> some View {
+        padding(.horizontal, DesignTokens.Layout.editorContentLeadingInset)
     }
 
     /// Full-width editor canvas; content is responsible for its own vertical scroll when needed.

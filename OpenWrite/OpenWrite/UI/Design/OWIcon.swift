@@ -29,6 +29,7 @@ enum OWIcon: String, CaseIterable, Sendable {
   case pastWrites
   case sparkles
   case send
+  case stop
   case mic
   case micActive
   case link
@@ -267,6 +268,7 @@ private extension OWIcon {
     case .sparkles, .ai: return sparklesPath()
     case .collapseTrailing: return chevronPath(right: true)
     case .send: return sendPath()
+    case .stop: return statusDotPath()
     case .mic: return micPath(filled: false)
     case .micActive: return micPath(filled: true)
     case .warning: return warningPath(filled: false)

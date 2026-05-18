@@ -7,27 +7,59 @@ struct AISettingsView: View {
 
     @State private var baseURLString: String = LMStudioConfig.default.baseURL.absoluteString
     @State private var useCustomEmbeddingID = false
+    @State private var allowlistDomains: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing5) {
-            OWSettingsSection(title: "LM Studio", footer: lmStudioFooter) {
+            OWSettingsSection(title: "AI server", footer: lmStudioFooter) {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
+                    VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                        Text("Backend")
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                        OWThemedDropdown(
+                            accessibilityLabel: "AI backend",
+                            selection: backendPresetBinding,
+                            options: AIBackendPreset.allCases,
+                            optionTitle: \.menuTitle,
+                            minWidth: 200
+                        )
+                    }
+
                     VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
                         Text("Server URL")
                             .font(DesignTokens.Typography.caption)
                             .foregroundStyle(DesignTokens.Color.textTertiary)
-                        OWThemedTextField(placeholder: "http://127.0.0.1:1234", text: $baseURLString) {
+                        OWThemedTextField(
+                            placeholder: aiServices.lmConfig.backendPreset.defaultBaseURL.absoluteString,
+                            text: $baseURLString
+                        ) {
                             commitBaseURL()
                         }
+                        .disabled(aiServices.lmConfig.backendPreset != .custom)
                     }
 
                     modelRoleRow(
                         title: "Chat model",
                         selection: chatModelBinding,
-                        placeholder: "local-model"
+                        placeholder: LMStudioConfig.defaultChatModelID
                     )
 
                     embeddingModelSection
+                }
+            }
+
+            OWSettingsSection(
+                title: "Safe web lookup",
+                footer: "Optional comma-separated domains (e.g. wikipedia.org, docs.swift.org). Leave empty to allow any public HTTPS host. Chat has a per-session Web toggle."
+            ) {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                    Text("Domain allowlist")
+                        .font(DesignTokens.Typography.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                    OWThemedTextField(placeholder: "empty = any HTTPS", text: $allowlistDomains) {
+                        commitAllowlist()
+                    }
                 }
             }
 
@@ -36,7 +68,7 @@ struct AISettingsView: View {
                     OWSettingsLabeledRow(label: "Connection", value: aiServices.lmStatus)
                     OWSettingsLabeledRow(label: "Activity", value: aiServices.activityState.shortLabel)
                     OWSettingsLabeledRow(label: "Ingestion", value: aiServices.ingestionHealth.health.statusLabel)
-                    OWSettingsLabeledRow(label: "Indexed chunks", value: "\(aiServices.indexedChunkCount)")
+                    OWSettingsLabeledRow(label: "Search index", value: "\(aiServices.indexedChunkCount) passages")
                     OWSettingsLabeledRow(label: "Embedding", value: aiServices.lmConfig.embeddingModelDisplay)
 
                     if let progress = aiServices.ingestionHealth.health.progressSummary {
@@ -89,6 +121,7 @@ struct AISettingsView: View {
         }
         .onAppear {
             baseURLString = aiServices.lmConfig.baseURL.absoluteString
+            allowlistDomains = UserDefaults.standard.string(forKey: WebFetchPolicy.allowlistDefaultsKey) ?? ""
             let id = aiServices.lmConfig.embeddingModel
             useCustomEmbeddingID = !EmbeddingModelPreset.allCases.contains { $0.rawValue == id }
         }
@@ -96,10 +129,30 @@ struct AISettingsView: View {
 
     private var lmStudioFooter: String {
         """
-        OpenAI-compatible endpoint on this Mac. Load chat and embedding models in LM Studio before chatting or rebuilding the index. \
-        Recommended embedding: \(EmbeddingModelPreset.defaultPreset.menuTitle) (\(LMStudioConfig.defaultEmbeddingModelID)) — download the GGUF in LM Studio; OpenWrite does not bundle model weights. \
-        After changing the embedding model, rebuild the index so vectors match.
+        OpenAI-compatible endpoint on this Mac. LM Studio default: http://127.0.0.1:1234 · Ollama: http://127.0.0.1:11434 (/v1). \
+        Load chat and embedding models before chatting or rebuilding the index. \
+        Config: ~/Library/Application Support/openwrite/lm_studio_config.json. \
+        Recommended embedding: \(EmbeddingModelPreset.defaultPreset.menuTitle) (\(LMStudioConfig.defaultEmbeddingModelID)).
         """
+    }
+
+    private var backendPresetBinding: Binding<AIBackendPreset> {
+        Binding(
+            get: { aiServices.lmConfig.backendPreset },
+            set: { preset in
+                aiServices.applyBackendPreset(preset)
+                baseURLString = aiServices.lmConfig.baseURL.absoluteString
+            }
+        )
+    }
+
+    private func commitAllowlist() {
+        let trimmed = allowlistDomains.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: WebFetchPolicy.allowlistDefaultsKey)
+        } else {
+            UserDefaults.standard.set(trimmed, forKey: WebFetchPolicy.allowlistDefaultsKey)
+        }
     }
 
     @ViewBuilder
@@ -184,6 +237,7 @@ struct AISettingsView: View {
         guard let url = URL(string: trimmed), !trimmed.isEmpty else { return }
         var config = aiServices.lmConfig
         config.baseURL = url
+        config.backendPreset = AIBackendPreset.infer(from: url)
         aiServices.applyConfig(config)
     }
 

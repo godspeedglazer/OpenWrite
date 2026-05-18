@@ -207,6 +207,7 @@ struct LMStudioClient: Sendable {
         }
 
         var lineData = Data()
+        var yieldedContent = false
         for try await byte in bytes {
             try Task.checkCancellation()
             if byte == UInt8(ascii: "\n") {
@@ -218,7 +219,8 @@ struct LMStudioClient: Sendable {
                     continue
                 }
                 lineData.removeAll(keepingCapacity: true)
-                if let delta = Self.parseSSEDataLine(line) {
+                if let delta = Self.parseSSEDataLine(line), !delta.isEmpty {
+                    yieldedContent = true
                     continuation.yield(delta)
                 }
             } else {
@@ -227,9 +229,12 @@ struct LMStudioClient: Sendable {
         }
         if !lineData.isEmpty,
            let line = String(data: lineData, encoding: .utf8),
-           let delta = Self.parseSSEDataLine(line) {
+           let delta = Self.parseSSEDataLine(line),
+           !delta.isEmpty {
+            yieldedContent = true
             continuation.yield(delta)
         }
+        guard yieldedContent else { throw LMStudioError.emptyResponse }
     }
 
     private func validateHTTP(response: URLResponse, data: Data) throws {
