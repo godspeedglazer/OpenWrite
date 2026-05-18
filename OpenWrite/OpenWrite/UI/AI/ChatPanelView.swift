@@ -719,13 +719,12 @@ final class ChatPanelModel: ObservableObject {
                 switch message.pipelineSteps[stepIndex].status {
                 case .active:
                     if connectFailed, stepID == "respond" || stepID == "done" {
-                        message.pipelineSteps[stepIndex].status = .failed
+                        message.pipelineSteps[stepIndex].status = .pending
                     } else {
                         message.pipelineSteps[stepIndex].status = .failed
                     }
                 case .pending:
                     if connectFailed, stepID == "respond" || stepID == "done" {
-                        message.pipelineSteps[stepIndex].status = .failed
                         continue
                     }
                     message.pipelineSteps[stepIndex].status = .failed

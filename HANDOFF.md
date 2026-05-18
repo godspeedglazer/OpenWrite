@@ -24,13 +24,9 @@ This document is the **single honest snapshot** of OpenWrite as it exists today.
 
 **Not fixed in this pass:** Affine-style block suite, real vault crypto, font banner on Release if fonts missing, block text clipping in cards, emoji popover polish.
 
-### Runtime warnings (brief)
-
-After launch, Console may show benign **AttributeGraph** layout messages, **NSHostingView** measure probes, and titlebar accessory layout on first window — not user-facing unless paired with climbing RAM/CPU (see above).
-
 ### Runtime warnings (2026-05-17)
 
-Debug launch + 1s `sample` + `log show` (process OpenWrite): **no stderr faults or system log errors** on idle startup. Console spam when **rapid theme cycling** was traced to **`OWWindowChrome.apply` on every `updateNSView`** and **`ContentView.id(themeManager.revision)`** tearing down the workbench — fixed with debounced `ThemeManager.select` (200ms), revision-gated chrome configurator, removed root `.id(revision)`, traffic lights merged into `OWShellTitleBar`. Re-profile in Xcode console while hammering the rail theme control if new warnings appear.
+Idle launch: benign **AttributeGraph** / **NSHostingView** measure messages are common; treat as bugs only with climbing RAM/CPU. Rapid theme cycling previously spammed layout because **`OWWindowChrome.apply` ran every `updateNSView`** and **`ContentView.id(themeManager.revision)`** rebuilt the tree — addressed in **`aeaebc2`** (debounced select, revision-gated chrome, controls in title bar row).
 
 ---
 
