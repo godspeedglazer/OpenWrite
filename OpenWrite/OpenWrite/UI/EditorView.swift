@@ -235,7 +235,7 @@ struct EditorView: View {
 
     @ViewBuilder
     private func editorScrollSurface(_ document: VaultDocument) -> some View {
-        ScrollView {
+        OpenWriteThemedScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 pageBanner(document)
 
@@ -303,7 +303,7 @@ struct EditorView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .ready(let text, let sourceHits):
-                    ScrollView {
+                    OpenWriteThemedScrollView {
                         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                             if !sourceHits.isEmpty {
                                 RAGSourcePillsView(hits: sourceHits) { documentID in

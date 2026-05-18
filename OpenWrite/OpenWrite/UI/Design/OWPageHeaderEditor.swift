@@ -434,7 +434,7 @@ struct OWCoverStylePickerSheet: View {
 
     var body: some View {
         OWSettingsSheet(title: "Cover", onDone: { dismiss() }) {
-            ScrollView {
+            OpenWriteThemedScrollView {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing4) {
                     customImageSection
 
@@ -651,7 +651,7 @@ struct OWPageIconPicker: View {
 
             searchField
 
-            ScrollView {
+            OpenWriteThemedScrollView {
                 switch tab {
                 case .symbols:
                     symbolsContent

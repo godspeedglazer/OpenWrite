@@ -385,7 +385,7 @@ struct OWThemedDropdown<Option: Hashable>: View {
     }
 
     private var dropdownList: some View {
-        ScrollView {
+        OpenWriteThemedScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
                 ForEach(options, id: \.self) { option in
                     dropdownRow(option)

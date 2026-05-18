@@ -114,7 +114,7 @@ struct RelatedNotesView: View {
             .padding(DesignTokens.Spacing.assistStripContentPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView {
+            OpenWriteThemedScrollView {
                 LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
                     ForEach(model.hits) { hit in
                         relatedNoteCard(hit)

@@ -21,7 +21,7 @@ struct OWChatStatusStepper: View {
 
     private let railWidth: CGFloat = 14
     private let dotSize: CGFloat = 12
-    private let connectorMinHeight: CGFloat = 22
+    private let rowSpacing: CGFloat = 6
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -44,26 +44,29 @@ struct OWChatStatusStepper: View {
                 if !isLast {
                     connector(from: step.status)
                         .frame(width: 2)
-                        .frame(minHeight: connectorMinHeight)
-                        .padding(.top, 2)
+                        .frame(maxHeight: .infinity)
                 }
             }
             .frame(width: railWidth)
+            .frame(maxHeight: .infinity, alignment: .top)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(step.title)
                     .font(OWTypography.caption)
                     .foregroundStyle(labelColor(for: step.status))
                     .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+                    .truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
                 if step.status == .active, showsStreamingDots {
                     StepperStreamingDots()
                 }
             }
-            .padding(.bottom, isLast ? 0 : 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer(minLength: 0)
         }
+        .padding(.bottom, isLast ? 0 : rowSpacing)
     }
 
     @ViewBuilder

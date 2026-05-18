@@ -733,7 +733,7 @@ struct ChatPanelView: View {
     private var agentPickerPanel: some View {
         VStack(spacing: 0) {
             OWAIPanelHeader(title: "Chat", compact: true)
-            ScrollView {
+            OpenWriteThemedScrollView {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 Text("Choose an agent")
                     .font(OWTypography.calloutEmphasis)
@@ -843,41 +843,38 @@ struct ChatPanelView: View {
     }
 
     private var messageList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
-                    if model.messages.isEmpty {
-                        VStack(spacing: DesignTokens.Spacing.spacing2) {
-                            OWUnicodeIconView(icon: .sparkles, size: 22)
-                                .foregroundStyle(DesignTokens.Color.textTertiary)
-                            Text("Ask about your notes")
-                                .font(OWTypography.calloutEmphasis)
-                            Text("Answers cite your notes when search is on.")
-                                .font(OWTypography.caption)
-                                .foregroundStyle(DesignTokens.Color.textTertiary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, DesignTokens.Spacing.spacing6)
+        OpenWriteThemedScrollView(scrollToken: chatScrollToken) {
+            LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
+                if model.messages.isEmpty {
+                    VStack(spacing: DesignTokens.Spacing.spacing2) {
+                        OWUnicodeIconView(icon: .sparkles, size: 22)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                        Text("Ask about your notes")
+                            .font(OWTypography.calloutEmphasis)
+                        Text("Answers cite your notes when search is on.")
+                            .font(OWTypography.caption)
+                            .foregroundStyle(DesignTokens.Color.textTertiary)
+                            .multilineTextAlignment(.center)
                     }
-                    ForEach(model.messages) { message in
-                        messageRow(message)
-                            .id(message.id)
-                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DesignTokens.Spacing.spacing6)
                 }
-                .padding(DesignTokens.Spacing.assistStripContentPadding)
+                ForEach(model.messages) { message in
+                    messageRow(message)
+                        .id(message.id)
+                }
             }
-            .background(DesignTokens.Color.background)
-            .onChange(of: model.messages.count) { _, _ in
-                scrollToBottom(proxy: proxy)
-            }
-            .onChange(of: streamingTail) { _, _ in
-                scrollToBottom(proxy: proxy)
-            }
-            .onChange(of: pipelineStepsTail) { _, _ in
-                scrollToBottom(proxy: proxy)
-            }
+            .padding(DesignTokens.Spacing.assistStripContentPadding)
         }
+        .background(DesignTokens.Color.background)
+    }
+
+    private var chatScrollToken: Int {
+        var hasher = Hasher()
+        hasher.combine(model.messages.count)
+        hasher.combine(streamingTail)
+        hasher.combine(pipelineStepsTail)
+        return hasher.finalize()
     }
 
     private var streamingTail: String {
@@ -886,14 +883,6 @@ struct ChatPanelView: View {
 
     private var pipelineStepsTail: Int {
         model.messages.last?.pipelineSteps.count ?? 0
-    }
-
-    private func scrollToBottom(proxy: ScrollViewProxy) {
-        if let last = model.messages.last {
-            withAnimation(.easeOut(duration: 0.2)) {
-                proxy.scrollTo(last.id, anchor: .bottom)
-            }
-        }
     }
 
     @ViewBuilder

@@ -51,6 +51,7 @@
 		AA00010100000000000000F1 /* RetrievalHit+Sources.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000F1 /* RetrievalHit+Sources.swift */; };
 		AA00010100000000000000F9 /* ChatAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000F9 /* ChatAttachmentStore.swift */; };
 		AA00010100000000000000FB /* OWChatStatusStepper.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000FB /* OWChatStatusStepper.swift */; };
+		AA00010100000000000000F5 /* OpenWriteThemedScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000F5 /* OpenWriteThemedScrollView.swift */; };
 		AA00010100000000000000FE /* ChatSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000FE /* ChatSessionStore.swift */; };
 		AA00010100000000000000FA /* SourceDisplayName.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000FA /* SourceDisplayName.swift */; };
 		AA00010100000000000000F2 /* LMStudioConfigPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000F2 /* LMStudioConfigPersistence.swift */; };
@@ -169,6 +170,7 @@
 		BB00010100000000000000F1 /* RetrievalHit+Sources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RetrievalHit+Sources.swift"; sourceTree = "<group>"; };
 		BB00010100000000000000F9 /* ChatAttachmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatAttachmentStore.swift; sourceTree = "<group>"; };
 		BB00010100000000000000FB /* OWChatStatusStepper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWChatStatusStepper.swift; sourceTree = "<group>"; };
+		BB00010100000000000000F5 /* OpenWriteThemedScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWriteThemedScrollView.swift; sourceTree = "<group>"; };
 		BB00010100000000000000FE /* ChatSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSessionStore.swift; sourceTree = "<group>"; };
 		BB00010100000000000000FA /* SourceDisplayName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceDisplayName.swift; sourceTree = "<group>"; };
 		BB00010100000000000000F2 /* LMStudioConfigPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LMStudioConfigPersistence.swift; sourceTree = "<group>"; };
@@ -552,6 +554,7 @@
 				BB00010100000000000000B1 /* OWIcon.swift */,
 				BB00010100000000000000D3 /* OWUnicodeIcon.swift */,
 				BB00010100000000000000D6 /* OWThemedControls.swift */,
+				BB00010100000000000000F5 /* OpenWriteThemedScrollView.swift */,
 				BB00010100000000000000DE /* OWPageBanner.swift */,
 			);
 			path = Design;
@@ -727,6 +730,7 @@
 				AA0001010000000000000025 /* OpenWriteAIServices.swift in Sources */,
 				AA0001010000000000000026 /* ChatPanelView.swift in Sources */,
 				AA00010100000000000000FB /* OWChatStatusStepper.swift in Sources */,
+				AA00010100000000000000F5 /* OpenWriteThemedScrollView.swift in Sources */,
 				AA00010100000000000000F0 /* RAGSourcePillsView.swift in Sources */,
 				AA0001010000000000000027 /* RelatedNotesView.swift in Sources */,
 				AA00010100000000000000F1 /* RetrievalHit+Sources.swift in Sources */,

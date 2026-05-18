@@ -20,7 +20,7 @@ struct PastChatSessionsView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
+                OpenWriteThemedScrollView {
                     LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
                         ForEach(threads) { thread in
                             chatRow(thread)
@@ -127,7 +127,7 @@ struct PastWritesTimelineView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
+                OpenWriteThemedScrollView {
                     LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
                         ForEach(entries) { entry in
                             timelineRow(entry)

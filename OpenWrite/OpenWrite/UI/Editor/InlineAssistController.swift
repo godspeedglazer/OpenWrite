@@ -264,9 +264,7 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
         scrollView.openWriteSuppressFocusRing()
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.drawsBackground = false
+        scrollView.openWriteApplyThemedScrollers(vertical: true, horizontal: false)
         scrollView.borderType = .noBorder
         scrollView.autoresizingMask = [.width, .height]
 
@@ -302,6 +300,7 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        scrollView.openWriteRefreshThemedScrollers()
         guard let textView = scrollView.documentView as? NSTextView else { return }
         let font = DesignTokens.Typography.editorNSFont
         if textView.font != font {

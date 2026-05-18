@@ -217,7 +217,7 @@ struct RelatedNoteDetailView: View {
     let hit: RetrievalHit
 
     var body: some View {
-        ScrollView {
+        OpenWriteThemedScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 Text(hit.documentTitle)
                     .font(OWTypography.calloutEmphasis)
