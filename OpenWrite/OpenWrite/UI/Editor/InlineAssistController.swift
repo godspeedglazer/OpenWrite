@@ -429,12 +429,23 @@ final class BlockEditorPasteCaptureView: NSView {
         cachedMeasureHeight = 1
     }
 
-    /// Read-only measure for SwiftUI `sizeThatFits` — must not invalidate intrinsic size or relayout AppKit.
+    /// Read-only measure for SwiftUI `sizeThatFits` — width + `fittingSize` only; no subtree layout or intrinsic invalidation.
     func measureDocumentSize(width: CGFloat) -> CGSize {
         let safeWidth = max(width, 320)
         if abs(cachedMeasureWidth - safeWidth) < 0.5, cachedMeasureHeight > 0 {
             return CGSize(width: safeWidth, height: cachedMeasureHeight)
         }
+        if abs(hostedView.frame.width - safeWidth) > 0.5 {
+            hostedView.frame.size.width = safeWidth
+        }
+        let fitting = hostedView.fittingSize.height
+        let intrinsic = hostedView.intrinsicContentSize.height
+        let contentHeight = max(max(fitting, intrinsic), 1)
+        return CGSize(width: safeWidth, height: contentHeight)
+    }
+
+    private func laidOutDocumentSize(width: CGFloat) -> CGSize {
+        let safeWidth = max(width, 320)
         if abs(hostedView.frame.width - safeWidth) > 0.5 {
             hostedView.frame.size.width = safeWidth
         }
@@ -451,17 +462,17 @@ final class BlockEditorPasteCaptureView: NSView {
     func applyDocumentLayout(width: CGFloat) {
         guard !isApplyingLayout else { return }
         let safeWidth = max(width, 320)
-        let measured = measureDocumentSize(width: safeWidth)
-        let target = CGSize(width: measured.width, height: measured.height)
+
+        isApplyingLayout = true
+        defer { isApplyingLayout = false }
+
+        let target = laidOutDocumentSize(width: safeWidth)
         let frameUnchanged =
             abs(frame.width - target.width) < 0.5
             && abs(frame.height - target.height) < 0.5
             && abs(hostedView.frame.width - target.width) < 0.5
             && abs(hostedView.frame.height - target.height) < 0.5
         if frameUnchanged { return }
-
-        isApplyingLayout = true
-        defer { isApplyingLayout = false }
 
         hostedView.frame = CGRect(origin: .zero, size: target)
         frame.size = NSSize(width: target.width, height: target.height)
