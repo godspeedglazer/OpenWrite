@@ -76,21 +76,37 @@ extension NSScrollView {
     }
 }
 
+// MARK: - Scroll container (live resize + content growth)
+
+/// NSScrollView that remeasures its hosting document whenever the clip view resizes.
+private final class OpenWriteThemedScrollContainer: NSScrollView {
+    var onClipViewLayout: (() -> Void)?
+
+    override func layout() {
+        super.layout()
+        onClipViewLayout?()
+    }
+}
+
 // MARK: - SwiftUI themed scroll
 
 /// Theme-aware vertical scroll surface (NSScrollView + custom scroller).
 struct OpenWriteThemedScrollView<Content: View>: View {
     private let axes: Axis.Set
     private let scrollToken: Int
+    /// When true, a changed `scrollToken` scrolls to the bottom (chat). When false, remeasures only (editor).
+    private let scrollToBottomOnTokenChange: Bool
     private let content: Content
 
     init(
         _ axes: Axis.Set = .vertical,
         scrollToken: Int = 0,
+        scrollToBottomOnTokenChange: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.axes = axes
         self.scrollToken = scrollToken
+        self.scrollToBottomOnTokenChange = scrollToBottomOnTokenChange
         self.content = content()
     }
 
@@ -98,6 +114,7 @@ struct OpenWriteThemedScrollView<Content: View>: View {
         OpenWriteThemedScrollRepresentable(
             axes: axes,
             scrollToken: scrollToken,
+            scrollToBottomOnTokenChange: scrollToBottomOnTokenChange,
             content: content
         )
     }
@@ -106,14 +123,15 @@ struct OpenWriteThemedScrollView<Content: View>: View {
 private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresentable {
     let axes: Axis.Set
     let scrollToken: Int
+    let scrollToBottomOnTokenChange: Bool
     let content: Content
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
 
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+    func makeNSView(context: Context) -> OpenWriteThemedScrollContainer {
+        let scrollView = OpenWriteThemedScrollContainer()
         scrollView.openWriteApplyThemedScrollers(
             vertical: axes.contains(.vertical),
             horizontal: axes.contains(.horizontal)
@@ -121,12 +139,21 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         let hosting = NSHostingView(rootView: content)
         hosting.translatesAutoresizingMaskIntoConstraints = true
         hosting.sizingOptions = [.intrinsicContentSize]
+        if let layer = hosting.layer {
+            layer.backgroundColor = NSColor(DesignTokens.Color.background).cgColor
+        }
         context.coordinator.hostingView = hosting
         scrollView.documentView = hosting
+
+        scrollView.onClipViewLayout = { [weak coordinator = context.coordinator, weak scrollView] in
+            guard let coordinator, let scrollView else { return }
+            coordinator.refreshDocumentSize(in: scrollView)
+        }
+
         return scrollView
     }
 
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+    func updateNSView(_ scrollView: OpenWriteThemedScrollContainer, context: Context) {
         scrollView.openWriteApplyThemedScrollers(
             vertical: axes.contains(.vertical),
             horizontal: axes.contains(.horizontal)
@@ -136,35 +163,71 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         guard let hosting = context.coordinator.hostingView else { return }
         hosting.rootView = content
 
-        let width = max(scrollView.bounds.width, 1)
-        let height = Self.documentHeight(for: hosting, width: width, minHeight: scrollView.bounds.height + 1)
-        if abs(hosting.frame.width - width) > 0.5 || abs(hosting.frame.height - height) > 0.5 {
-            hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
-            hosting.needsLayout = true
-            hosting.layoutSubtreeIfNeeded()
-        }
+        context.coordinator.refreshDocumentSize(in: scrollView)
 
         if context.coordinator.lastScrollToken != scrollToken {
             context.coordinator.lastScrollToken = scrollToken
-            DispatchQueue.main.async {
-                scrollView.openWriteScrollToBottom(animated: true)
+            if scrollToBottomOnTokenChange {
+                DispatchQueue.main.async {
+                    scrollView.openWriteScrollToBottom(animated: true)
+                }
+            } else {
+                context.coordinator.invalidateDocumentMeasurement()
+                context.coordinator.refreshDocumentSize(in: scrollView)
             }
         }
     }
 
-    private static func documentHeight(
+    private static func measureDocumentHeight(
         for hosting: NSHostingView<Content>,
         width: CGFloat,
-        minHeight: CGFloat
+        clipHeight: CGFloat
     ) -> CGFloat {
-        hosting.frame.size.width = width
+        let safeWidth = max(width, 1)
+        // Measure with minimal height so lazy stacks and growing content are not clipped
+        // to a previously assigned document frame (fixes assist-strip scroll softlock).
+        hosting.frame = NSRect(x: 0, y: 0, width: safeWidth, height: 1)
+        hosting.needsLayout = true
         hosting.layoutSubtreeIfNeeded()
+
         let measured = max(hosting.fittingSize.height, hosting.intrinsicContentSize.height)
+        let minHeight = max(clipHeight + 1, 1)
         return max(measured, minHeight)
     }
 
     final class Coordinator {
         var hostingView: NSHostingView<Content>?
         var lastScrollToken: Int = -1
+        private var lastClipSize: NSSize = .zero
+
+        func invalidateDocumentMeasurement() {
+            lastClipSize = .zero
+        }
+
+        func refreshDocumentSize(in scrollView: NSScrollView) {
+            guard let hosting = hostingView else { return }
+
+            let clipSize = scrollView.contentView.bounds.size
+            let width = max(clipSize.width, 1)
+            let height = OpenWriteThemedScrollRepresentable.measureDocumentHeight(
+                for: hosting,
+                width: width,
+                clipHeight: clipSize.height
+            )
+
+            let sizeChanged =
+                abs(hosting.frame.width - width) > 0.5
+                || abs(hosting.frame.height - height) > 0.5
+                || abs(lastClipSize.width - clipSize.width) > 0.5
+                || abs(lastClipSize.height - clipSize.height) > 0.5
+
+            guard sizeChanged else { return }
+
+            lastClipSize = clipSize
+            hosting.frame = NSRect(x: 0, y: 0, width: width, height: height)
+            hosting.needsLayout = true
+            hosting.layoutSubtreeIfNeeded()
+            scrollView.tile()
+        }
     }
 }

@@ -378,6 +378,12 @@ enum DesignTokens {
         static let editorMaxContentWidth: CGFloat = 880
         /// Single leading gutter for page title, metadata, toolbars, and block text (Anytype-style column).
         static let editorContentLeadingInset: CGFloat = Spacing.spacing3
+        /// Trailing/top inset for header overlay controls (page options) inside the clipped editor card.
+        static let editorChromePadding: CGFloat = Spacing.spacing3
+        /// Top inset clearing `Radius.large` on the editor panel when controls sit on the cover strip.
+        static let editorChromeTopInset: CGFloat = Radius.large + Spacing.spacing1
+        /// Extra leading inset on list block cards so bullets/checkboxes clear the card edge.
+        static let blockCardListExtraLeadingInset: CGFloat = Spacing.spacing1
         /// Vertical gap between page header stack and block list.
         static let editorHeaderToBodySpacing: CGFloat = Spacing.spacing4
         /// Vertical gap between block rows in the WYSIWYG editor.
@@ -420,19 +426,18 @@ extension View {
         return shadow(color: spec.color, radius: spec.radius, x: spec.x, y: spec.y)
     }
 
-    /// Fills the editor column. Pass `readableMaxWidth` to cap line length (empty states, optional setting).
+    /// Centers readable editor content in the workbench column (cover/banner may stay full bleed outside this).
     func openWriteEditorContentWidth(
-        alignment: Alignment = .leading,
-        readableMaxWidth: CGFloat? = nil
+        alignment: Alignment = .center,
+        readableMaxWidth: CGFloat = DesignTokens.Layout.editorMaxContentWidth
     ) -> some View {
-        Group {
-            if let readableMaxWidth {
-                frame(maxWidth: readableMaxWidth, alignment: alignment)
-            } else {
-                self
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: alignment)
+        frame(maxWidth: readableMaxWidth, alignment: alignment)
+            .frame(maxWidth: .infinity, alignment: alignment)
+    }
+
+    /// Full-bleed width inside the editor card (empty states that need edge-to-edge chrome).
+    func openWriteEditorFullWidth(alignment: Alignment = .leading) -> some View {
+        frame(maxWidth: .infinity, alignment: alignment)
     }
 
     /// Applies the canonical editor column leading/trailing inset (use once per row — not on scroll + blocks).

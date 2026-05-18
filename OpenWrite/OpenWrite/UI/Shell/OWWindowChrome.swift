@@ -78,6 +78,18 @@ enum OWWindowChrome {
         stripTitlebarVibrancy(in: window, fill: chrome)
         installSolidTitlebarFill(on: window, color: chrome)
         tintHostingRoot(window, color: chrome)
+        reorderTitlebarAccessories(on: window)
+    }
+
+    /// Keeps the opaque fill behind traffic lights (first accessory wins stacking).
+    private static func reorderTitlebarAccessories(on window: NSWindow) {
+        let key = ObjectIdentifier(window)
+        guard let accessory = titlebarFillAccessories[key] else { return }
+        var accessories = window.titlebarAccessoryViewControllers
+        guard let index = accessories.firstIndex(where: { $0 === accessory }), index > 0 else { return }
+        accessories.remove(at: index)
+        accessories.insert(accessory, at: 0)
+        window.titlebarAccessoryViewControllers = accessories
     }
 
     static func applyToAllWindows() {
@@ -228,17 +240,30 @@ private final class OWSolidTitlebarAccessory: NSTitlebarAccessoryViewController 
     }
 
     func syncHeightToTitlebar() {
-        let titlebarHeight = view.window?.standardWindowButton(.closeButton)?
+        guard let window = view.window else { return }
+
+        let trafficLightHeight = window.standardWindowButton(.closeButton)?
             .superview?
             .frame
-            .maxY ?? DesignTokens.Layout.shellChromeSafeAreaTop
-        let height = max(titlebarHeight, DesignTokens.Layout.shellChromeSafeAreaTop)
+            .maxY ?? 0
+        let layoutChrome = window.frame.height - window.contentLayoutRect.maxY
+        let height = max(
+            trafficLightHeight,
+            layoutChrome,
+            DesignTokens.Layout.shellChromeSafeAreaTop
+        )
+
         if abs(view.frame.height - height) > 0.5 {
             view.frame.size.height = height
         }
-        if let window = view.window {
+        if abs(view.frame.width - window.frame.width) > 0.5 {
             view.frame.size.width = window.frame.width
         }
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        syncHeightToTitlebar()
     }
 }
 

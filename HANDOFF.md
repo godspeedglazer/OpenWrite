@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Date:** 2026-05-17  
-**Branch:** `main` (HEAD `932e576`)  
+**Branch:** `main` (HEAD `3e5849e` + working-tree shell/editor polish)  
 **Audience:** Next engineer, designer, or Cursor agent taking ownership
 
 This document is the **single honest snapshot** of OpenWrite as it exists today. Read it before touching code. For the mandated next workstream, start with **[AGENT_PROMPT_UI_REFACTOR.md](./AGENT_PROMPT_UI_REFACTOR.md)**.
@@ -23,7 +23,7 @@ OpenWrite is a **local macOS app-of-apps**: one encrypted vault where you **writ
 
 | Area | Reality |
 |------|---------|
-| **UI / shell** | **Not shippable.** Builds and runs, but still reads as an unfinished Mac utility or hollow Anytype-shaped shell. Downloads depend on frontend polish, not more backend surface. |
+| **UI / shell** | **Phase 0 largely landed** — custom rail, flush titlebar accessory, centered editor column, collapsible Reor-style assist strip, themed scroll remeasure. Still not App Store “done”; needs visual QA on user machines. |
 | **Backend / vault** | In-memory demo vault + encryption **stubs**. No production `.openwrite` package, Keychain unlock, or FSEvents indexer on disk. |
 | **RAG / AI** | **Largely scaffolded:** `LMStudioClient`, `RAGService`, `EmbeddingService`, `InMemoryVectorStore`, `IngestionPipeline` exist; end-to-end answers with citations, persisted index, and streaming are incomplete. |
 | **NDL / editor** | Block model + partial parser + `OWBlockEditorView` / preview rows — **not** a Logseq-grade outliner (no indent/outdent, slash menu, drag reorder). |
@@ -97,18 +97,18 @@ Statuses: **done** = usable on `main`; **partial** = scaffold or weak UX; **brok
 | **Vault (in-memory)** | partial | `VaultStore`, `VaultSnapshot`, sample docs; reconcile on delete/import |
 | **Vault encryption (real)** | partial / broken for prod | `EncryptionService` protocol stub; no CryptoKit disk vault |
 | **NDL model** | partial | `NoteBlock`, `NDLParser` — not full round-trip or outliner ops |
-| **Block editor UI** | partial / broken layout | `OWBlockEditorView`, `OWPreviewBlockRow`, `EditorView` — spacing/glitches |
+| **Block editor UI** | partial (improved) | `OWBlockEditorView`, `OWPreviewBlockRow`, `EditorView` — formatting toolbar, preview mode, centered column, list inset fix |
 | **Typed pages** | partial | `PageType`, `PageProperties`, `TypePickerView`, `PropertyInspectorView` |
 | **Page header / hero** | partial | `OWPageHeaderEditor`, `OWPageHero`, `OWPageBanner`, `CoverStyle` |
 | **Universal databases** | partial | `OWDatabase`, `DatabaseTableView`, `CreateDatabaseSheet` — no full lens over all page kinds |
 | **Themes (9 palettes)** | partial | `ThemeManager`, `ThemePickerView` — switching fixed in BUGFIXES.md |
-| **Workbench shell** | partial | `AnytypeShellView`, `OWNavigationRail`, `WorkbenchState` — still HIG-adjacent feel |
+| **Workbench shell** | partial (improved) | `AnytypeShellView`, `OWNavigationRail`, `OWWindowChrome`, `AIAssistStripView` — assist collapsed by default |
 | **Graph view** | partial (improved) | `GraphView`, `GraphViewModel` — **932e576** fixed rects, edges, layout; not Anytype Flow quality |
 | **Backlinks** | partial | `BacklinkIndex` stub |
 | **LM Studio client** | partial | `LMStudioClient`, health in Settings |
 | **RAG pipeline** | partial | `RAGService`, `RetrievalService`, `HybridRanker` — in-memory index only |
 | **Embeddings / ingestion** | partial | `EmbeddingService`, `IngestionPipeline`, `IngestionHealth` |
-| **Vault chat / related** | partial | `ChatPanelView`, `RelatedNotesView` — inspector still competes with editor |
+| **Vault chat / related** | partial (improved) | `ChatPanelView`, `RelatedNotesView` — assist strip; 2×2 composer; scroll softlock fixed |
 | **Agents registry** | partial | `AgentRegistry`, `BuiltInAgents` (Reor port notes in `ReorPortNotes.md`) |
 | **Past Writes** | partial | `PastWritesService`, timeline UI, `REMImportAdapter` stub |
 | **Inline AI assist** | partial | `InlineAssistController` — popover path started, not product-grade |
@@ -135,9 +135,9 @@ Prioritize these in user demos and the UI refactor.
 | Issue | Symptom | Context |
 |-------|---------|---------|
 | **Source Serif 4 “not loading” banner** | Yellow/warning strip on page header/banner | `OWTypography.isBundledSerifAvailable` false at runtime → `OWTypographyFontWarningBanner`. Fonts exist under `Resources/Fonts/` and `Info.plist` `UIAppFonts`; PostScript names must match (`SourceSerif4-Regular`, etc.). Banner is intentional honesty, still **embarrassing** if it shows in every build. |
-| **Block editor layout glitches** | Uneven block spacing, preview vs edit mismatch, cramped hero | `OWBlockEditorView` + `OWPreviewBlockRow` still evolving; not AFFiNE/Anytype block rhythm. |
-| **Still feels HIG-ish** | Stock split behaviors, form-like property grids, system accent habits | Shell renamed `AnytypeShellView` but density/cohesion lag Anytype captures in ProductDirection. |
-| **Anytype gap** | Hollow center, weak object rows, inspector too prominent | User captures: AI column too wide; LM Studio block was in rail (partially moved to Settings). |
+| **Titlebar grey strip** | Native vibrancy band above cream shell on some macOS builds | `OWSolidTitlebarAccessory` + theme-frame paint; verify after theme switch / fullscreen |
+| **Block editor layout** | Residual spacing edge cases in preview vs edit | Toolbar, preview mode, and scroll remeasure landed; outliner ops still missing |
+| **Anytype gap** | Density / object rows vs reference captures | Assist strip capped and off by default; rail uses custom rows not `List` |
 | **Graph was broken; now “OK scaffold”** | Pre-**932e576**: huge circles, bad edges, missing nodes | Fixed: rounded-rect cards, force-directed lite, border edges, all docs visible. **UI overall still weak** — graph is not the product win yet. |
 | **RAG without citations** | Chat feels generic when LM Studio is up | E-03 not complete; undermines “research” story. |
 | **No real vault on disk** | “Encryption” story is theoretical | Cannot dogfood as daily driver with restart persistence. |
@@ -154,8 +154,8 @@ Canonical docs: [docs/design/README.md](docs/design/README.md), [docs/design/Ant
 ### Writing-first, AI-second
 
 - Center column **≥ 55%** width at default window size.
-- **Inspector / AI strip collapsed by default**; cap trailing assist ~320–360pt (`DesignTokens.Layout.assistStripMaxWidth`).
-- Vault Q&A, Related, Past Writes → **inspector**, not the main landing.
+- **AI assist strip collapsed by default**; cap trailing assist ~360pt (`DesignTokens.Layout.assistStripMaxWidth`).
+- Vault Q&A, Related, Past Writes → **assist strip** (`AIAssistStripView`), not the main landing.
 - LM Studio URL, model pickers, ingestion health → **Settings** or compact footer — not a giant left-rail block.
 
 ### Visual identity
@@ -186,6 +186,10 @@ Read with `git show <hash>`. Messages are the changelog.
 
 | Hash | Summary |
 |------|---------|
+| **3e5849e** | Tighten chat composer vertical layout in assist strip. |
+| **60d5513** | Fix editor preview mode toggle relayout in block host. |
+| **04bffeb** | Flush titlebar chrome, theme Create page sheet, Solarized cover preset. |
+| **58aeca5** | Redesign chat composer with 2×2 action board and text insets. |
 | **fbf8f28** | `Ship OpenWrite product slice: design system, docs hub, and Reor-style AI.` — `DesignTokens`, typed pages, workbench inspector tabs, LM Studio RAG scaffolding, Past Writes, docs hub, app icon. |
 | **97901f1** | `Ship Anytype/Logseq shell slice: themes, databases, and graph.` — Nine themes, `OWDatabase` + table UI, `AnytypeShellView`, `GraphView`/`GraphViewModel`, agent registry, ingestion pipeline ports, Inter fonts bundled. |
 | **d22bb44** | `fix(ui): unicode icons, editable header, status dot, image paste, submenus` — `OWUnicodeIcon`, header editor, AI panel header, block editor fixes, `BUGFIXES.md` started. |

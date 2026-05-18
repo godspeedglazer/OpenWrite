@@ -135,5 +135,24 @@ Canon: [OWIcons.md](./OWIcons.md). Align [FrontendPriorities.md](./FrontendPrior
 - Logo final art ([BrandAndLogo.md](./BrandAndLogo.md))
 - Real vault crypto, full RAG streaming, force-directed graph physics v2
 - Anytype framework port or cloud sync
+- In-app browser (OpenWrite is a writer; use system browser for web pages)
+
+---
+
+## Implementation reality (2026-05-17 cleanup)
+
+Phase 0 UI fixes are in Swift sources on `main` (see recent commits `04bffeb`–`3e5849e` plus working-tree polish). Agents should treat this table as ground truth over older “inspector column” docs.
+
+| Topic | Code |
+|-------|------|
+| **Shell layout** | `AnytypeShellView` — rail optional; center `OWRoundedRect.editorPanel`; trailing `AIAssistStripView` when `WorkbenchState.aiAssistExpanded`. |
+| **Titlebar** | `OWWindowChrome` + `OWSolidTitlebarAccessory` — opaque shell chrome behind traffic lights; `AppDelegate` re-applies on resize/focus/theme. |
+| **Editor width** | `View.openWriteEditorContentWidth()` — centered max ~880pt; banner full-bleed; blocks/toolbars share `openWriteEditorLeadingInset()`. |
+| **Chat composer** | `ChatPanelView.composerActionBoard` — 2×2 toggles (Notes/Web, Attach/Send); field min height = `DesignTokens.Layout.composerBoardHeight`. |
+| **Themed scroll** | `OpenWriteThemedScrollView` — `scrollToBottomOnTokenChange: true` for chat; `scrollToken` remeasure for editor (no spurious scroll-to-bottom). |
+| **Graph inline** | `OWRoundedRect` `.editorPanel` uses `maxHeight: .infinity`; `GraphView` empty overlay separated from node layer. |
+| **Create page sheet** | `ContentView.newPageSheet` + `openWriteSheetPresentationChrome()` (not system white). |
+| **Cover preset** | `CoverStyle.solarizedHeader` for Solarized Warm theme. |
+| **Block toolbar** | `OWBlockFormattingToolbar` — B/I/U/S, serif/sans + size dropdowns, Preview toggle; no Insert image button (paste/drag only). |
 
 *Update this brief when Phase 0 completes or reference captures change.*

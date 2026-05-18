@@ -178,14 +178,15 @@ struct AnytypeShellView: View {
                     }
                 } else {
                     centerEditorColumn
-                        .frame(
-                            minWidth: editorMin,
-                            maxWidth: .infinity,
-                            maxHeight: .infinity
-                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: workbench.aiAssistExpanded ? .leading : .center
+            )
+            .id(workbench.aiAssistExpanded)
             .padding(DesignTokens.Layout.centerCardOuterPadding)
             .onAppear {
                 reconcileCenterWorkbenchLayout(centerWidth: paddedWidth)
@@ -394,9 +395,7 @@ struct AnytypeShellView: View {
                             OWPreviewBlockRow(block: block)
                         }
                     }
-                    .openWriteEditorContentWidth(
-                        readableMaxWidth: DesignTokens.Layout.editorMaxContentWidth
-                    )
+                    .openWriteEditorContentWidth()
                     .padding(.top, DesignTokens.Spacing.spacing2)
                 }
             }

@@ -16,7 +16,8 @@ struct StructureTemplatePicker: View {
             OWThemedTextField(placeholder: "Title", text: $newTitle)
 
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 140), spacing: DesignTokens.Spacing.spacing2)],
+                columns: [GridItem(.adaptive(minimum: 148, maximum: 220), spacing: DesignTokens.Spacing.spacing2)],
+                alignment: .leading,
                 spacing: DesignTokens.Spacing.spacing2
             ) {
                 ForEach(StructureTemplate.allCases) { structure in

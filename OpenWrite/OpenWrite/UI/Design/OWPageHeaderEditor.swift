@@ -59,6 +59,11 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             .padding(.bottom, DesignTokens.Spacing.spacing2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .topTrailing) {
+            pageOptionsMenu
+                .padding(.top, DesignTokens.Layout.editorChromeTopInset)
+                .padding(.trailing, DesignTokens.Layout.editorChromePadding)
+        }
         .onAppear { syncDescriptionFromDocument() }
         .onChange(of: documentID) { _, _ in syncDescriptionFromDocument() }
         .sheet(isPresented: $showCoverPicker) {
@@ -168,13 +173,14 @@ struct OWPageHeaderEditor<Metadata: View>: View {
 
     // MARK: - Title & page options
 
-    private var titleRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Spacing.spacing2) {
-            titleField
-                .layoutPriority(1)
+    /// Clears the overlay page-options control (28pt) + trailing chrome inset.
+    private var pageOptionsTitleReserve: CGFloat {
+        28 + DesignTokens.Layout.editorChromePadding + DesignTokens.Spacing.spacing2
+    }
 
-            pageOptionsMenu
-        }
+    private var titleRow: some View {
+        titleField
+            .padding(.trailing, pageOptionsTitleReserve)
     }
 
     private var pageOptionsMenu: some View {

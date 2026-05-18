@@ -19,9 +19,11 @@ struct OWChatStatusStepper: View {
     let steps: [ChatPipelineStep]
     var showsStreamingDots: Bool = false
 
-    private let railWidth: CGFloat = 14
+    /// Fixed indicator column: dot centered, connector on the same vertical axis.
+    private let railWidth: CGFloat = 16
     private let dotSize: CGFloat = 12
-    private let rowSpacing: CGFloat = 6
+    private let connectorWidth: CGFloat = 2
+    private let rowSpacing: CGFloat = 4
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -37,36 +39,50 @@ struct OWChatStatusStepper: View {
 
     @ViewBuilder
     private func stepRow(_ step: ChatPipelineStep, isLast: Bool) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(spacing: 0) {
-                stepIndicator(step.status)
-                    .frame(width: railWidth, height: railWidth)
-                if !isLast {
-                    connector(from: step.status)
-                        .frame(width: 2)
-                        .frame(maxHeight: .infinity)
-                }
-            }
-            .frame(width: railWidth)
-            .frame(maxHeight: .infinity, alignment: .top)
-
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(step.title)
-                    .font(OWTypography.caption)
-                    .foregroundStyle(labelColor(for: step.status))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.82)
-                    .truncationMode(.tail)
-                    .fixedSize(horizontal: false, vertical: true)
-                if step.status == .active, showsStreamingDots {
-                    StepperStreamingDots()
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Spacer(minLength: 0)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            railColumn(step: step, isLast: isLast)
+            stepLabel(step)
+                .padding(.bottom, isLast ? 0 : rowSpacing)
         }
-        .padding(.bottom, isLast ? 0 : rowSpacing)
+    }
+
+    @ViewBuilder
+    private func railColumn(step: ChatPipelineStep, isLast: Bool) -> some View {
+        VStack(spacing: 0) {
+            stepIndicator(step.status)
+                .frame(width: dotSize, height: dotSize)
+                .frame(width: railWidth)
+                .alignmentGuide(.firstTextBaseline) { dimensions in
+                    dimensions[VerticalAlignment.center]
+                }
+
+            if !isLast {
+                connector(from: step.status)
+                    .frame(width: connectorWidth)
+                    .frame(maxWidth: .infinity)
+                    .frame(maxHeight: .infinity)
+                    .padding(.bottom, rowSpacing)
+            }
+        }
+        .frame(width: railWidth)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder
+    private func stepLabel(_ step: ChatPipelineStep) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(step.title)
+                .font(OWTypography.caption)
+                .foregroundStyle(labelColor(for: step.status))
+                .lineLimit(2)
+                .minimumScaleFactor(0.82)
+                .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: true)
+            if step.status == .active, showsStreamingDots {
+                StepperStreamingDots()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

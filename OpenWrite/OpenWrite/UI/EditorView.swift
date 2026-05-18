@@ -5,6 +5,7 @@ struct EditorView: View {
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var pastWrites: InMemoryPastWritesService
     @EnvironmentObject private var aiServices: OpenWriteAIServices
+    @EnvironmentObject private var workbench: WorkbenchState
 
     let documentID: UUID
     @State private var editingBlocks: [NoteBlock] = []
@@ -241,58 +242,68 @@ struct EditorView: View {
         .padding(.vertical, DesignTokens.Spacing.spacing1)
     }
 
+    private var editorScrollLayoutToken: Int {
+        var token = 0
+        if workbench.aiAssistExpanded { token |= 1 }
+        if !workbench.sidebarVisible { token |= 2 }
+        if workbench.navigationRailCollapsed { token |= 4 }
+        return token
+    }
+
     @ViewBuilder
     private func editorScrollSurface(_ document: VaultDocument) -> some View {
-        OpenWriteThemedScrollView {
+        OpenWriteThemedScrollView(scrollToken: editorScrollLayoutToken) {
             VStack(alignment: .leading, spacing: 0) {
                 pageBanner(document)
 
-                if !isEditorPreviewMode {
-                    blockFormattingBar
-                        .padding(.top, DesignTokens.Spacing.spacing2)
+                VStack(alignment: .leading, spacing: 0) {
+                    if !isEditorPreviewMode {
+                        blockFormattingBar
+                            .padding(.top, DesignTokens.Spacing.spacing2)
 
-                    editorActionBar(document)
-                        .padding(.top, DesignTokens.Spacing.spacing2)
-                } else {
-                    HStack {
-                        Spacer()
-                        Button {
-                            isEditorPreviewMode = false
-                        } label: {
-                            Text("Edit")
-                                .font(OWTypography.captionEmphasis)
-                                .foregroundStyle(DesignTokens.Color.accent)
+                        editorActionBar(document)
+                            .padding(.top, DesignTokens.Spacing.spacing2)
+                    } else {
+                        HStack {
+                            Spacer()
+                            Button {
+                                isEditorPreviewMode = false
+                            } label: {
+                                Text("Edit")
+                                    .font(OWTypography.captionEmphasis)
+                                    .foregroundStyle(DesignTokens.Color.accent)
+                            }
+                            .buttonStyle(.plain)
+                            .openWriteFocusChrome()
+                            .help("Return to editing")
                         }
-                        .buttonStyle(.plain)
-                        .openWriteFocusChrome()
-                        .help("Return to editing")
+                        .openWriteEditorLeadingInset()
+                        .padding(.top, DesignTokens.Spacing.spacing2)
                     }
-                    .openWriteEditorLeadingInset()
-                    .padding(.top, DesignTokens.Spacing.spacing2)
-                }
 
-                OWBlockEditorView(
-                    blocks: $editingBlocks,
-                    previewMode: isEditorPreviewMode,
-                    onActivateBlock: { _ in
-                        isEditorPreviewMode = false
+                    OWBlockEditorView(
+                        blocks: $editingBlocks,
+                        previewMode: isEditorPreviewMode,
+                        onActivateBlock: { _ in
+                            isEditorPreviewMode = false
+                        }
+                    ) { selectedText in
+                        inlineAssist.scheduleSelectionCapture(
+                            documentID: document.id,
+                            blockID: blockFormatting.focusedBlockID,
+                            selectedText: selectedText
+                        )
                     }
-                ) { selectedText in
-                    inlineAssist.scheduleSelectionCapture(
-                        documentID: document.id,
-                        blockID: blockFormatting.focusedBlockID,
-                        selectedText: selectedText
-                    )
+                        .openWriteEditorLeadingInset()
+                        .padding(.top, DesignTokens.Layout.editorHeaderToBodySpacing)
+                        .onChange(of: editingBlocks) { _, newBlocks in
+                            scheduleCommitBlocks(document: document, blocks: newBlocks)
+                        }
                 }
-                    .openWriteEditorLeadingInset()
-                    .padding(.top, DesignTokens.Layout.editorHeaderToBodySpacing)
-                    .onChange(of: editingBlocks) { _, newBlocks in
-                        scheduleCommitBlocks(document: document, blocks: newBlocks)
-                    }
+                .openWriteEditorContentWidth()
+                .padding(.bottom, DesignTokens.Spacing.spacing4)
             }
-            .openWriteEditorContentWidth()
-            .padding(.bottom, DesignTokens.Spacing.spacing4)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(palette.editorCanvas)

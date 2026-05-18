@@ -22,6 +22,11 @@ extension View {
     func openWriteButtonKeyboardFocus<S: InsettableShape>(in shape: S) -> some View {
         modifier(OpenWriteButtonKeyboardFocusModifier(shape: shape))
     }
+
+    /// macOS sheet window background — cream `background` token, not system white.
+    func openWriteSheetPresentationChrome() -> some View {
+        presentationBackground(DesignTokens.Color.background)
+    }
 }
 
 private struct OpenWriteFocusChromeModifier: ViewModifier {
@@ -127,6 +132,7 @@ struct OWSettingsSheet<Content: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(DesignTokens.Color.background)
+        .openWriteSheetPresentationChrome()
     }
 
     @ViewBuilder

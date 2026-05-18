@@ -28,7 +28,11 @@ struct OWRoundedRect<Content: View>: View {
     var body: some View {
         content()
             .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: style == .editorPanel ? .infinity : nil,
+                alignment: .topLeading
+            )
             .background(fillColor, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
                 if showsBorder {

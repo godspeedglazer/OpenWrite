@@ -189,7 +189,10 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             }
         }
 
-        let layoutWidth = max(context.coordinator.lastProposedWidth ?? host.bounds.width, 320)
+        let layoutWidth = max(
+            max(host.bounds.width, context.coordinator.lastProposedWidth ?? 0),
+            320
+        )
         let structureRevision = context.coordinator.blocksStructureRevision(blocks)
         let widthChanged = abs((context.coordinator.lastAppliedWidth ?? 0) - layoutWidth) > 0.5
         let structureChanged = structureRevision != context.coordinator.lastStructureRevision

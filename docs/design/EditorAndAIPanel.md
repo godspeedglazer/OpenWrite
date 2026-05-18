@@ -1,9 +1,9 @@
 # Editor and AI panel placement
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Last updated:** 2026-05-17  
-**Status:** Decided — implemented in workbench v1  
-**Code:** `ContentView.swift`, `EditorView.swift`, `WorkbenchInspectorView.swift`, `ChatPanelView.swift`
+**Status:** Decided — implemented in workbench v2 (assist strip)  
+**Code:** `ContentView.swift`, `AnytypeShellView.swift`, `AIAssistStripView.swift`, `ChatPanelView.swift`, `EditorView.swift`
 
 ---
 
@@ -11,13 +11,15 @@
 
 | Surface | Placement | Rationale |
 |---------|-----------|-----------|
-| **Vault chat (RAG Q&A)** | Trailing **inspector** tab (`InspectorTab.chat` → `ChatPanelView`) | Long transcripts, citations, and composer need stable width; must not cover the editor. |
-| **Related notes** | Inspector tab (`InspectorTab.related` → `RelatedNotesView`) | Contextual to the open note; debounced retrieval on selection change. |
-| **Past Writes** | Inspector tab (`InspectorTab.pastWrites` → `PastWritesTimelineView`) | Timeline is reference material, not inline editing. |
-| **Selection refine / rewrite (v1)** | **Inline** at selection — **target:** popover; **shipped:** toolbar + result **sheet** | Keeps author in flow; see [InlineAIEditing.md](./InlineAIEditing.md). |
-| **LM Studio / index controls** | Sidebar **AI** section (for now) | Operator settings, not conversational UI. |
+| **Vault chat (RAG Q&A)** | Trailing **AI assist strip** (`AIAssistStripView` → `ChatPanelView`) when `WorkbenchState.aiAssistExpanded` | Reor-narrow column (~240–360pt); collapsed by default via bottom bar. |
+| **Related notes** | Assist strip stack (`RelatedNotesView`) | Contextual to the open note; debounced retrieval on selection change. |
+| **Past Writes** | Assist strip stack (`PastWritesTimelineView`) | Timeline is reference material, not inline editing. |
+| **Selection refine / rewrite (v1)** | **Inline** — toolbar **Refine** + result **sheet** (`InlineAssistController`) | Keeps author in flow; see [InlineAIEditing.md](./InlineAIEditing.md). |
+| **LM Studio / index controls** | **Settings** sheet (`OpenWriteSettingsView` / `AISettingsView`) | Operator config, not rail chrome. |
 
-**Author-first rule:** The center column stays the hero (`EditorView`). AI that answers questions about the vault lives in the inspector; AI that changes the current note appears at the selection.
+**Author-first rule:** The center column stays the hero (`EditorView`). Vault Q&A lives in the optional assist strip; AI that changes the current note uses selection refine in the editor column.
+
+**Legacy note:** Early docs described a `NavigationSplitView` **inspector** column (`WorkbenchInspectorView`). That layout was replaced by the center card + collapsible assist strip — do not reintroduce a third permanent column without product review.
 
 ---
 
@@ -45,25 +47,24 @@ A collapsible bubble (messages app style) over the editor corner.
 
 **Verdict:** Rejected for v1. Bubbles work for short hints, not RAG with 6+ source snippets.
 
-### C — Split inspector (chosen for chat)
+### C — Split assist strip (chosen for chat)
 
-`NavigationSplitView` **detail** column hosts `WorkbenchInspectorView` with a segmented tab picker.
+`AnytypeShellView` hosts a center **editor card** and an optional trailing **assist strip** (`OWResizableColumnSplit`, fixed trailing column).
 
 ```
-┌ Sidebar ──┬── Editor (content) ──┬── Inspector ─────────────┐
-│ Vault     │  EditorView           │ [Chat|Related|Past Writes]│
-│ list      │  title + properties   │  active panel             │
-│           │  TextEditor / preview │                           │
-└───────────┴───────────────────────┴───────────────────────────┘
+┌ Rail ──┬── Editor card (EditorView) ──┬── Assist strip (optional) ─┐
+│ OBJECTS│  page header + blocks         │ Chat / Related / Past Writes│
+│ …      │                               │ 2×2 composer board          │
+└────────┴───────────────────────────────┴─────────────────────────────┘
+         ▲ collapsed: AIAssistBottomBar expands strip
 ```
 
 | Pros | Cons |
 |------|------|
-| Editor remains fully visible | Uses horizontal space (~300–340pt) |
-| Citations and related notes share one chrome pattern | User must open inspector (default: visible) |
-| Matches macOS `NavigationSplitView` mental model | |
+| Editor remains primary; strip capped at `assistStripMaxWidth` | User must expand assist (default off) |
+| Citations and related notes share strip chrome | Narrow windows auto-collapse strip (`OWShellLayout`) |
 
-**Verdict:** **Chosen** for vault chat, related notes, and Past Writes. Toggle via edge control in `ContentView` (`workbench.inspectorVisible`, 0.2s ease).
+**Verdict:** **Chosen** for vault chat, related notes, and Past Writes. Toggle via `AIAssistBottomBar` / strip header close (`WorkbenchState.aiAssistExpanded`).
 
 ### D — Inline at selection (chosen for refine v1)
 

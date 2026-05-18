@@ -315,7 +315,7 @@ final class OpenWriteAIServices: ObservableObject {
             case .emptyResponse:
                 return "LM Studio returned an empty reply. Confirm the chat model is loaded and not out of memory."
             case .payloadTooLarge:
-                return lm.localizedDescription ?? "Prompt too large."
+                return lm.errorDescription ?? "Prompt too large."
             case .embeddingsUnavailable:
                 return "Embeddings unavailable — indexing uses a local fallback. Chat may still work if the chat model is loaded."
             case .decodeFailed:
@@ -342,7 +342,7 @@ final class OpenWriteAIServices: ObservableObject {
                 }
                 return "HTTP \(code) from LM Studio"
             default:
-                return lm.localizedDescription ?? "Connection failed"
+                return lm.errorDescription ?? "Connection failed"
             }
         }
         return "Cannot reach LM Studio — start the server on port 1234 and try again."

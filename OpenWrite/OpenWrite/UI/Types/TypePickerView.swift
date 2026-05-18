@@ -40,6 +40,7 @@ struct TypePickerView: View {
                     .toggleStyle(.checkbox)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, layout == .compact ? 0 : 4)
     }
 

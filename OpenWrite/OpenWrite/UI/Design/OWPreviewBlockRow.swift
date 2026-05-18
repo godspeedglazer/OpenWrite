@@ -89,7 +89,7 @@ struct OWPreviewBlockRow: View {
             )
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .owBlockCardPadding()
+        .owBlockListCardPadding()
         .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
@@ -107,7 +107,7 @@ struct OWPreviewBlockRow: View {
             )
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .owBlockCardPadding()
+        .owBlockListCardPadding()
         .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
@@ -443,6 +443,12 @@ private extension View {
             .padding(.bottom, DesignTokens.Spacing.spacing2)
             .padding(.leading, DesignTokens.Spacing.spacing3)
             .padding(.trailing, DesignTokens.Spacing.spacing3)
+    }
+
+    /// List blocks need slightly more leading inset so markers are not clipped by the card edge.
+    func owBlockListCardPadding() -> some View {
+        owBlockCardPadding()
+            .padding(.leading, DesignTokens.Layout.blockCardListExtraLeadingInset)
     }
 }
 

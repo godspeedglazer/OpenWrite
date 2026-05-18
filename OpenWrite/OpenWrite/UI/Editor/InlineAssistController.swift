@@ -491,9 +491,9 @@ final class BlockEditorPasteCaptureView: NSView {
         super.layout()
         guard bounds.width > 1, !isApplyingLayout else { return }
         let safeWidth = bounds.width
-        if abs(hostedView.frame.width - safeWidth) > 0.5 {
-            hostedView.frame.size.width = safeWidth
-        }
+        guard abs(hostedView.frame.width - safeWidth) > 0.5 else { return }
+        invalidateMeasurementCache()
+        applyDocumentLayout(width: safeWidth)
     }
 
     @objc func paste(_ sender: Any?) {

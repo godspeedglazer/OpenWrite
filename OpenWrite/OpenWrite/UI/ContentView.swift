@@ -33,10 +33,13 @@ struct ContentView: View {
                 .environment(themeManager)
                 .environmentObject(vaultStore)
                 .openWriteThemeAppearance()
+                .openWriteSheetPresentationChrome()
         }
         .sheet(isPresented: $showCreateDatabaseSheet) {
             CreateDatabaseSheet(workbench: workbench, isPresented: $showCreateDatabaseSheet)
                 .environmentObject(vaultStore)
+                .openWriteThemeAppearance()
+                .openWriteSheetPresentationChrome()
         }
         .sheet(isPresented: $showAISettings) {
             OWSettingsSheet(title: "Settings", onDone: { showAISettings = false }) {
@@ -125,10 +128,13 @@ struct ContentView: View {
                         showNewPageSheet = false
                     }
                 }
-                .padding(DesignTokens.Spacing.spacing5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DesignTokens.Spacing.spacing5)
+                .padding(.vertical, DesignTokens.Spacing.spacing4)
             }
+            .background(DesignTokens.Color.background)
         }
-        .frame(minWidth: 420, minHeight: 460)
+        .frame(minWidth: 440, minHeight: 480)
     }
 }
 

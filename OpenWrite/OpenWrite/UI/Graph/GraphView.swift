@@ -49,7 +49,7 @@ struct GraphView: View {
         GeometryReader { geometry in
             let size = geometry.size
 
-            ZStack {
+            ZStack(alignment: .topLeading) {
                 DesignTokens.Color.editorCanvas
 
                 if documents.isEmpty {
@@ -74,7 +74,20 @@ struct GraphView: View {
             }
             .onChange(of: size) { _, newSize in
                 canvasSize = newSize
-                scheduleSnapshotRebuildForCanvasResize(newSize)
+                let resolved = resolvedLayoutCanvasSize(newSize)
+                guard resolved != layoutCanvasSize else { return }
+                layoutCanvasSize = resolved
+                if usesManualLayout {
+                    nodePositions = clampPositionsToCanvas(nodePositions, canvasSize: resolved)
+                    rebuildSnapshot()
+                } else {
+                    canvasResizeDebounceTask?.cancel()
+                    canvasResizeDebounceTask = Task {
+                        try? await Task.sleep(for: .milliseconds(200))
+                        guard !Task.isCancelled else { return }
+                        rebuildSnapshot()
+                    }
+                }
             }
             .onChange(of: vaultID) { _, _ in
                 resetViewTransform()
@@ -92,6 +105,7 @@ struct GraphView: View {
                 refreshSelectionHighlight()
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(DesignTokens.Color.editorCanvas)
         .accessibilityIdentifier("openwrite.graph.canvas")
     }
@@ -174,7 +188,7 @@ struct GraphView: View {
     // MARK: - Nodes
 
     private func graphNodeCards(snapshot: GraphSnapshot) -> some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             ForEach(snapshot.nodes) { node in
                 graphNodeCard(node: node)
                     .position(displayPosition(for: node))
@@ -186,6 +200,7 @@ struct GraphView: View {
                     }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(true)
     }
 
@@ -347,20 +362,6 @@ struct GraphView: View {
         }
     }
 
-    private func scheduleSnapshotRebuildForCanvasResize(_ newSize: CGSize) {
-        guard !usesManualLayout else { return }
-
-        canvasResizeDebounceTask?.cancel()
-        canvasResizeDebounceTask = Task {
-            try? await Task.sleep(for: .milliseconds(200))
-            guard !Task.isCancelled else { return }
-            let resolved = resolvedLayoutCanvasSize(newSize)
-            guard resolved != layoutCanvasSize else { return }
-            layoutCanvasSize = resolved
-            rebuildSnapshot()
-        }
-    }
-
     private func refreshSelectionHighlight() {
         guard !snapshot.nodes.isEmpty else { return }
         let nodes = snapshot.nodes.map { node in
@@ -385,8 +386,28 @@ struct GraphView: View {
 
     private func loadPersistedLayout() {
         let stored = GraphLayoutStore.load(vaultID: vaultID)
-        nodePositions = stored
-        usesManualLayout = !stored.isEmpty
+        nodePositions = clampPositionsToCanvas(stored, canvasSize: layoutCanvasSize)
+        usesManualLayout = !nodePositions.isEmpty
+    }
+
+    /// Keeps saved manual positions visible after window resize or stale layout files.
+    private func clampPositionsToCanvas(
+        _ positions: [UUID: CGPoint],
+        canvasSize: CGSize
+    ) -> [UUID: CGPoint] {
+        guard canvasSize.width > 1, canvasSize.height > 1 else { return positions }
+        let inset: CGFloat = 48
+        let maxX = max(inset, canvasSize.width - inset)
+        let maxY = max(inset, canvasSize.height - inset)
+        var clamped: [UUID: CGPoint] = [:]
+        clamped.reserveCapacity(positions.count)
+        for (id, point) in positions {
+            clamped[id] = CGPoint(
+                x: min(max(point.x, inset), maxX),
+                y: min(max(point.y, inset), maxY)
+            )
+        }
+        return clamped
     }
 
     private func persistLayout() {

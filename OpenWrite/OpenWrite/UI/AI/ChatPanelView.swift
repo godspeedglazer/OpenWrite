@@ -845,8 +845,8 @@ struct ChatPanelView: View {
     }
 
     private var messageList: some View {
-        OpenWriteThemedScrollView(scrollToken: chatScrollToken) {
-            LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
+        OpenWriteThemedScrollView(scrollToken: chatScrollToken, scrollToBottomOnTokenChange: true) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 if model.messages.isEmpty {
                     VStack(spacing: DesignTokens.Spacing.spacing2) {
                         OWUnicodeIconView(icon: .sparkles, size: 22)
@@ -944,7 +944,6 @@ struct ChatPanelView: View {
                     steps: message.pipelineSteps,
                     showsStreamingDots: message.isStreaming
                 )
-                .padding(.leading, DesignTokens.Spacing.spacing1)
             }
 
             if showsAssistantBubble(message) {

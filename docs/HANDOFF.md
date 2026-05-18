@@ -3,6 +3,21 @@
 **Last updated:** 2026-05-17  
 **Scope:** Frontend perception pass (Refactor Phase 0) — not backend, NDL grammar, or vault crypto.
 
+### Implementation snapshot (2026-05-17)
+
+| Area | Shipped in code |
+|------|-----------------|
+| **Shell** | `AnytypeShellView` — custom `OWNavigationRail` + resizable center card; `OWShellTitleBar` tabs; AI assist **collapsed by default** (`AIAssistBottomBar` to expand). |
+| **Title bar** | `OWWindowChrome` — transparent unified titlebar, `OWSolidTitlebarAccessory` opaque fill, theme-frame paint, vibrancy strip; reapplied on theme/window events. |
+| **Editor column** | `openWriteEditorContentWidth()` centers readable column (~880pt); `editorScrollLayoutToken` remeasures `OpenWriteThemedScrollView` when assist/rail toggles. |
+| **Chat** | `ChatPanelView` — 2×2 composer board (`composerBoardHeight`), `scrollToBottomOnTokenChange` for transcript only; `OWChatStatusStepper` baseline-aligned rail. |
+| **Scroll** | `OpenWriteThemedScrollContainer` remeasures hosting height on clip resize (fixes assist-strip scroll softlock). |
+| **Graph** | `GraphView` + `OWRoundedRect.editorPanel` maxHeight; empty overlay when linkless; layout clamp on resize. |
+| **Sheets** | `openWriteSheetPresentationChrome()` — cream `background` token on Create page / database sheets. |
+| **Out of scope** | In-app browser, cloud sync, real vault crypto, voice dictation (`VoiceInputService` stubs). |
+
+Canonical UI spec: [design/UIRefactorBrief.md](./design/UIRefactorBrief.md). Audit rows: [design/CurrentUIAudit.md](./design/CurrentUIAudit.md).
+
 ---
 
 ## Start here

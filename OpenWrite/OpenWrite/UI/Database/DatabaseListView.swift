@@ -8,9 +8,20 @@ struct DatabaseListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-            HStack {
-                OWNavigationRailSectionLabel(title: "Databases")
-                Spacer()
+            HStack(spacing: DesignTokens.Spacing.spacing1) {
+                // Align label column with collapsible OBJECTS / VAULT headers (chevron width).
+                Color.clear
+                    .frame(width: 20, height: 1)
+                    .accessibilityHidden(true)
+
+                Text("Databases".uppercased())
+                    .font(OWTypography.railSectionLabel)
+                    .tracking(OWTypography.railSectionTracking)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+                    .accessibilityAddTraits(.isHeader)
+
+                Spacer(minLength: 0)
+
                 Button {
                     showCreateDatabaseSheet = true
                 } label: {
@@ -20,6 +31,7 @@ struct DatabaseListView: View {
                 .openWriteFocusChrome()
                 .help("New database")
             }
+            .padding(.horizontal, DesignTokens.Spacing.spacing2)
 
             if vaultStore.databases.isEmpty {
                 OWRoundedRect(style: .sidebarCard, padding: DesignTokens.Spacing.spacing2) {
@@ -47,7 +59,7 @@ struct DatabaseListView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                    .openWriteFocusChrome()
+                        .openWriteFocusChrome()
                     }
                 }
             } else {
