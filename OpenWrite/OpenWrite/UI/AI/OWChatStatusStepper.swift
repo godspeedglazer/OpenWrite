@@ -24,10 +24,30 @@ struct OWChatStatusStepper: View {
     private let connectorWidth: CGFloat = 2
     private let rowSpacing: CGFloat = 6
 
+    /// Steps that have started or are next up — hides trailing pending rows that only lengthen the rail.
+    private var visibleSteps: [ChatPipelineStep] {
+        var visible: [ChatPipelineStep] = []
+        var includedFirstPending = false
+        for step in steps {
+            switch step.status {
+            case .pending:
+                if visible.isEmpty || visible.last?.status == .completed || visible.last?.status == .failed {
+                    if !includedFirstPending {
+                        visible.append(step)
+                        includedFirstPending = true
+                    }
+                }
+            case .active, .completed, .failed:
+                visible.append(step)
+            }
+        }
+        return visible
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: rowSpacing) {
-            ForEach(Array(steps.enumerated()), id: \.element) { index, step in
-                stepRow(step, isLast: index == steps.count - 1)
+            ForEach(Array(visibleSteps.enumerated()), id: \.element) { index, step in
+                stepRow(step, isLast: index == visibleSteps.count - 1)
             }
         }
         .padding(.leading, DesignTokens.Spacing.spacing1)
@@ -46,8 +66,7 @@ struct OWChatStatusStepper: View {
                 if !isLast {
                     connector(from: step.status)
                         .frame(width: connectorWidth)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: connectorMinHeight, maxHeight: .infinity, alignment: .top)
+                        .frame(height: connectorMinHeight, alignment: .top)
                 }
             }
             .frame(width: railWidth)
@@ -123,6 +142,7 @@ struct OWChatStatusStepper: View {
 
 private struct StepperStreamingDots: View {
     @State private var phase = 0
+    @State private var animationTask: Task<Void, Never>?
 
     var body: some View {
         HStack(spacing: 4) {
@@ -132,12 +152,20 @@ private struct StepperStreamingDots: View {
                     .frame(width: 5, height: 5)
             }
         }
-        .onAppear {
-            Task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(320))
-                    phase = (phase + 1) % 3
-                }
+        .onAppear { startAnimation() }
+        .onDisappear {
+            animationTask?.cancel()
+            animationTask = nil
+            phase = 0
+        }
+    }
+
+    private func startAnimation() {
+        animationTask?.cancel()
+        animationTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(320))
+                phase = (phase + 1) % 3
             }
         }
     }

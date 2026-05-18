@@ -384,6 +384,7 @@ final class BlockEditorPasteCaptureView: NSView {
 
     private var cachedMeasureWidth: CGFloat = 0
     private var cachedMeasureHeight: CGFloat = 1
+    private var lastAppliedLayoutWidth: CGFloat = 0
     private var isApplyingLayout = false
 
     init(hostedView: NSView) {
@@ -427,6 +428,7 @@ final class BlockEditorPasteCaptureView: NSView {
     func invalidateMeasurementCache() {
         cachedMeasureWidth = 0
         cachedMeasureHeight = 1
+        lastAppliedLayoutWidth = 0
     }
 
     /// Read-only measure — width probe + `fittingSize` only; never forces subtree layout (AttributeGraph-safe).
@@ -453,6 +455,14 @@ final class BlockEditorPasteCaptureView: NSView {
     func applyDocumentLayout(width: CGFloat) {
         guard !isApplyingLayout else { return }
         let safeWidth = max(width, 320)
+        if abs(lastAppliedLayoutWidth - safeWidth) < 0.5,
+           abs(frame.width - safeWidth) < 0.5,
+           abs(hostedView.frame.width - safeWidth) < 0.5,
+           cachedMeasureHeight > 0,
+           abs(frame.height - cachedMeasureHeight) < 0.5,
+           abs(hostedView.frame.height - cachedMeasureHeight) < 0.5 {
+            return
+        }
 
         isApplyingLayout = true
         defer { isApplyingLayout = false }
@@ -473,10 +483,14 @@ final class BlockEditorPasteCaptureView: NSView {
             && abs(frame.height - target.height) < 0.5
             && abs(hostedView.frame.width - target.width) < 0.5
             && abs(hostedView.frame.height - target.height) < 0.5
-        if frameUnchanged { return }
+        if frameUnchanged {
+            lastAppliedLayoutWidth = safeWidth
+            return
+        }
 
         hostedView.frame = CGRect(origin: .zero, size: target)
         frame.size = NSSize(width: target.width, height: target.height)
+        lastAppliedLayoutWidth = safeWidth
         invalidateIntrinsicContentSize()
     }
 
@@ -484,19 +498,7 @@ final class BlockEditorPasteCaptureView: NSView {
         if cachedMeasureWidth > 0, cachedMeasureHeight > 0 {
             return NSSize(width: cachedMeasureWidth, height: cachedMeasureHeight)
         }
-        let size = measureDocumentSize(width: max(bounds.width, 320))
-        return NSSize(width: size.width, height: size.height)
-    }
-
-    override func layout() {
-        super.layout()
-        guard bounds.width > 1, !isApplyingLayout else { return }
-        let safeWidth = bounds.width
-        guard abs(hostedView.frame.width - safeWidth) > 0.5 else { return }
-        let width = safeWidth
-        DispatchQueue.main.async { [weak self] in
-            self?.applyDocumentLayout(width: width)
-        }
+        return NSSize(width: NSView.noIntrinsicMetric, height: 1)
     }
 
     @objc func paste(_ sender: Any?) {

@@ -263,20 +263,33 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         return max(max(fitting, intrinsic), 1)
     }
 
-    /// Full subtree layout runs only from deferred `refreshDocumentSize` (next run-loop turn), not from measure.
+    /// Bounded subtree layout (deferred `refreshDocumentSize` only — never from `measureDocumentHeight`).
+    /// Uses a tight probe height instead of a multi-million-point frame so `fittingSize` reflects real content.
     private static func applyDocumentLayout(
         for hosting: NSHostingView<Content>,
         width: CGFloat
     ) -> CGFloat {
         let safeWidth = max(width, 1)
+        let measured = measureDocumentHeight(for: hosting, width: safeWidth)
         var frame = hosting.frame
         frame.origin = .zero
         frame.size.width = safeWidth
-        frame.size.height = 10_000_000
+        frame.size.height = max(measured, 1)
         hosting.frame = frame
         hosting.invalidateIntrinsicContentSize()
         hosting.layoutSubtreeIfNeeded()
-        return max(hosting.fittingSize.height, hosting.intrinsicContentSize.height, 1)
+
+        var height = max(hosting.intrinsicContentSize.height, measured, 1)
+        let fitting = hosting.fittingSize.height
+        if fitting.isFinite, fitting > 0, fitting < frame.size.height - 1 {
+            height = max(fitting, height)
+        }
+
+        frame.size.height = height
+        hosting.frame = frame
+        hosting.invalidateIntrinsicContentSize()
+        hosting.layoutSubtreeIfNeeded()
+        return max(hosting.intrinsicContentSize.height, height, 1)
     }
 
     final class Coordinator {
@@ -382,6 +395,7 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
                 width: width
             )
 
+            // Exact content height — never clipHeight+1 or viewport fill; that creates a fake scroll range on empty chat.
             let targetSize = NSSize(width: width, height: height)
             let sizeChanged =
                 abs(lastAppliedDocumentSize.width - targetSize.width) > 0.5
@@ -399,8 +413,8 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
                 hosting.needsLayout = true
                 scrollView.tile()
             }
-            // Do not auto-pin on every remeasure during streaming — `scheduleScrollToBottomIfPinned`
-            // runs only when `scrollToken` changes (new message / stream start / end).
+            // Pin policy: `scheduleScrollToBottomIfPinned` runs only when `scrollToken` changes
+            // (new message / pipeline step / stream end) — never on every deferred remeasure.
         }
     }
 }

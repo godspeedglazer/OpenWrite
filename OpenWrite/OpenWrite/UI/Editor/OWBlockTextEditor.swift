@@ -56,7 +56,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
         context.coordinator.applySelectionChrome()
         let layoutWidth = container.bounds.width
         if layoutWidth > 1 {
-            context.coordinator.layout(toWidth: layoutWidth)
+            context.coordinator.scheduleLayout(toWidth: layoutWidth)
         }
         guard !context.coordinator.isProgrammaticUpdate else { return }
 
@@ -88,8 +88,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
         guard let proposedWidth = proposal.width, proposedWidth.isFinite, proposedWidth > 0, proposedWidth < 4096 else {
             return nil
         }
-        context.coordinator.layout(toWidth: proposedWidth)
-        let height = nsView.intrinsicContentSize.height
+        let height = context.coordinator.measureHeight(forWidth: proposedWidth)
         return CGSize(width: proposedWidth, height: height)
     }
 
@@ -100,6 +99,11 @@ struct OWBlockTextEditor: NSViewRepresentable {
         var lastEmittedMarkdown: String = ""
         private var lastLayoutWidth: CGFloat = 0
         private var lastLayoutHeight: CGFloat = 24
+        private var pendingLayoutWidth: CGFloat?
+        private var layoutFlushScheduled = false
+        private var lastMeasureWidth: CGFloat = 0
+        private var lastMeasureHeight: CGFloat = 24
+        var cachedMeasureHeight: CGFloat { lastMeasureHeight }
         var lastAppliedAttributes: [String: String] = [:]
         var lastAppliedStrikethrough = false
         private var lastThemeRevision: String = ""
@@ -119,8 +123,44 @@ struct OWBlockTextEditor: NSViewRepresentable {
             return false
         }
 
+        /// Read-only height probe for SwiftUI `sizeThatFits` — no `ensureLayout` (AttributeGraph-safe).
+        func measureHeight(forWidth width: CGFloat) -> CGFloat {
+            guard let textView, let container = textView.textContainer else { return 24 }
+            let safeWidth = max(width, 1)
+            if abs(lastMeasureWidth - safeWidth) < 0.5, lastMeasureHeight > 0 {
+                return lastMeasureHeight
+            }
+            let priorFrame = textView.frame
+            if abs(priorFrame.width - safeWidth) > 0.5 {
+                textView.frame.size.width = safeWidth
+            }
+            container.containerSize = NSSize(width: safeWidth, height: .greatestFiniteMagnitude)
+            let used = textView.layoutManager?.usedRect(for: container) ?? .zero
+            textView.frame = priorFrame
+            let insetY = textView.textContainerInset.height * 2
+            let height = max(ceil(used.height) + insetY, 24)
+            lastMeasureWidth = safeWidth
+            lastMeasureHeight = height
+            return height
+        }
+
+        /// Defers `ensureLayout` out of SwiftUI `updateNSView` to avoid layout re-entrancy.
+        func scheduleLayout(toWidth width: CGFloat) {
+            pendingLayoutWidth = width
+            guard !layoutFlushScheduled else { return }
+            layoutFlushScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.layoutFlushScheduled = false
+                guard let width = self.pendingLayoutWidth else { return }
+                self.pendingLayoutWidth = nil
+                self.layout(toWidth: width)
+            }
+        }
+
         func layout(toWidth width: CGFloat) {
-            guard let textView, let container = textView.textContainer else { return }
+            guard let textView, let textContainer = textView.textContainer else { return }
+            let container = textContainer
             let safeWidth = max(width, 1)
             if abs(textView.frame.width - safeWidth) > 0.5 {
                 textView.frame.size.width = safeWidth
@@ -140,6 +180,8 @@ struct OWBlockTextEditor: NSViewRepresentable {
             let heightChanged = abs(lastLayoutHeight - newHeight) > 0.5
             lastLayoutWidth = safeWidth
             lastLayoutHeight = newHeight
+            lastMeasureWidth = safeWidth
+            lastMeasureHeight = newHeight
             guard widthChanged || heightChanged else { return }
             textView.invalidateIntrinsicContentSize()
             textView.superview?.invalidateIntrinsicContentSize()
@@ -291,10 +333,10 @@ final class BlockTextContainerView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        guard let textView else { return NSSize(width: NSView.noIntrinsicMetric, height: 24) }
-        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
-        let used = textView.layoutManager?.usedRect(for: textView.textContainer!) ?? .zero
-        return NSSize(width: NSView.noIntrinsicMetric, height: max(used.height + 6, 24))
+        if let height = textView?.formattingCoordinator?.cachedMeasureHeight, height > 0 {
+            return NSSize(width: NSView.noIntrinsicMetric, height: height)
+        }
+        return NSSize(width: NSView.noIntrinsicMetric, height: 24)
     }
 }
 

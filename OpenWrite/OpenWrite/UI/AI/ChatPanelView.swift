@@ -1,6 +1,11 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private struct ChatPanelStreamError: LocalizedError {
+    let message: String
+    var errorDescription: String? { message }
+}
+
 struct ChatMessage: Identifiable, Hashable {
     enum Role: Hashable {
         case user
@@ -279,15 +284,17 @@ final class ChatPanelModel: ObservableObject {
                             reason: message,
                             connectStepFinished: &connectStepFinished
                         )
+                        let diagnosed = await services.diagnoseChatFailure(
+                            ChatPanelStreamError(message: message)
+                        )
                         mutateMessage(at: assistantIndex) { assistant in
-                            assistant.text = OpenWriteAIServices.chatFailureBubble(message: message)
+                            assistant.text = diagnosed
                             assistant.isError = true
                             assistant.isStreaming = false
                         }
                         markPipelineFailed(at: assistantIndex)
                         clearPipelineTimingState(for: assistantIndex)
                         services.setActivity(.idle)
-                        services.lastChatError = nil
                     }
                 }
 
@@ -307,7 +314,7 @@ final class ChatPanelModel: ObservableObject {
             } catch is CancellationError {
                 return
             } catch {
-                let diagnosed = OpenWriteAIServices.chatFailureBubble(error, config: services.lmConfig)
+                let diagnosed = await services.diagnoseChatFailure(error)
                 if assistantIndex < messages.count {
                     var connectDone = false
                     await failConnectPipelineStep(
@@ -324,7 +331,6 @@ final class ChatPanelModel: ObservableObject {
                     clearPipelineTimingState(for: assistantIndex)
                 }
                 services.setActivity(.idle)
-                services.lastChatError = nil
             }
         }
     }
@@ -772,6 +778,7 @@ struct AIActivityIndicator: View {
 
 private struct StreamingDots: View {
     @State private var phase = 0
+    @State private var animationTask: Task<Void, Never>?
 
     var body: some View {
         HStack(spacing: 4) {
@@ -783,11 +790,16 @@ private struct StreamingDots: View {
         }
         .accessibilityLabel("Receiving response")
         .onAppear { startCycle() }
-        .onDisappear { phase = 0 }
+        .onDisappear {
+            animationTask?.cancel()
+            animationTask = nil
+            phase = 0
+        }
     }
 
     private func startCycle() {
-        Task {
+        animationTask?.cancel()
+        animationTask = Task {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(320))
                 phase = (phase + 1) % 3

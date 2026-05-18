@@ -27,6 +27,8 @@ final class OpenWriteAIServices: ObservableObject {
     private var ingestionPipeline: IngestionPipeline?
     private var indexingTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
+    /// Vault content signature reflected in the last successful `prepareVaultIndex` / `reindex`.
+    private(set) var lastPreparedVaultSignature: Int?
 
     /// True after a successful connection check (`lmStatus` begins with "Connected").
     var isLMStudioConnected: Bool {
@@ -66,8 +68,32 @@ final class OpenWriteAIServices: ObservableObject {
         let loaded = await vectorStore.chunkCount
         indexedChunkCount = loaded
         ingestionHealth.updateIndexedChunkCount(loaded)
-        guard loaded == 0, Self.hasIndexableContent(documents: documents) else { return }
+        let signature = Self.vaultContentSignature(documents: documents)
+        if loaded > 0 {
+            lastPreparedVaultSignature = signature
+            return
+        }
+        guard Self.hasIndexableContent(documents: documents) else { return }
         await reindex(documents: documents)
+        lastPreparedVaultSignature = signature
+    }
+
+    static func vaultContentSignature(documents: [VaultDocument]) -> Int {
+        var hasher = Hasher()
+        for entry in indexEntries(including: documents) {
+            hasher.combine(entry.documentID)
+            hasher.combine(entry.title)
+            hasher.combine(entry.blocks.count)
+            hasher.combine(entry.sourceFilename ?? "")
+        }
+        return hasher.finalize()
+    }
+
+    func shouldSkipDebouncedReindex(for signature: Int) -> Bool {
+        guard indexedChunkCount > 0,
+              let lastPreparedVaultSignature,
+              lastPreparedVaultSignature == signature else { return false }
+        return true
     }
 
     /// Pages plus on-disk `.md` under the vault root, deduped by stable document id.
@@ -265,6 +291,7 @@ final class OpenWriteAIServices: ObservableObject {
                 await MainActor.run {
                     indexedChunkCount = count
                     ingestionHealth.updateIndexedChunkCount(count)
+                    lastPreparedVaultSignature = Self.vaultContentSignature(documents: documents)
                 }
             } catch is CancellationError {
                 await MainActor.run { ingestionHealth.markCancelled() }

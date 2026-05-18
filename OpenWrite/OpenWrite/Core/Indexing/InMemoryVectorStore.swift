@@ -57,6 +57,8 @@ actor InMemoryVectorStore {
     private var vectorsByID: [UUID: [Float]] = [:]
     private let persistenceURL: URL
     private var persistenceEnabled: Bool
+    private var persistDebounceTask: Task<Void, Never>?
+    private static let persistDebounceNanoseconds: UInt64 = 2_000_000_000
 
     /// MainActor monitor; reports load/save failures into the rail footer.
     nonisolated(unsafe) private weak var health: IngestionHealthMonitor?
@@ -79,13 +81,13 @@ actor InMemoryVectorStore {
     func reset() {
         chunksByID.removeAll()
         vectorsByID.removeAll()
-        persistToDisk()
+        schedulePersistToDisk()
     }
 
     func upsert(chunk: IndexChunk, vector: [Float]) {
         chunksByID[chunk.id] = chunk
         vectorsByID[chunk.id] = vector
-        persistToDisk()
+        schedulePersistToDisk()
     }
 
     func remove(documentID: UUID) {
@@ -94,7 +96,24 @@ actor InMemoryVectorStore {
             chunksByID.removeValue(forKey: id)
             vectorsByID.removeValue(forKey: id)
         }
-        persistToDisk()
+        schedulePersistToDisk()
+    }
+
+    /// Writes the index immediately (end of rebuild or explicit flush).
+    func flushPersistedIndex() {
+        persistDebounceTask?.cancel()
+        persistDebounceTask = nil
+        writeIndexToDisk()
+    }
+
+    private func schedulePersistToDisk() {
+        guard persistenceEnabled else { return }
+        persistDebounceTask?.cancel()
+        persistDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: Self.persistDebounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            writeIndexToDisk()
+        }
     }
 
     func chunk(id: UUID) -> IndexChunk? {
@@ -126,8 +145,8 @@ actor InMemoryVectorStore {
         if loadSnapshot(from: persistenceURL) {
             return
         }
-        if loadSnapshot(from: VectorStorePersistence.legacyURL) {
-            persistToDisk()
+            if loadSnapshot(from: VectorStorePersistence.legacyURL) {
+            flushPersistedIndex()
         }
     }
 
@@ -167,7 +186,7 @@ actor InMemoryVectorStore {
         }
     }
 
-    private func persistToDisk() {
+    private func writeIndexToDisk() {
         guard persistenceEnabled else { return }
         let records = chunksByID.values.sorted { $0.id.uuidString < $1.id.uuidString }.map { chunk -> PersistedChunkRecord in
             PersistedChunkRecord(

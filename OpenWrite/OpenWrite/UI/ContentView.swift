@@ -99,6 +99,12 @@ struct ContentView: View {
     }
 
     private func scheduleDebouncedReindex() {
+        let signature = OpenWriteAIServices.vaultContentSignature(
+            documents: vaultStore.documentsInActiveVault
+        )
+        if aiServices.shouldSkipDebouncedReindex(for: signature) {
+            return
+        }
         reindexDebounceTask?.cancel()
         reindexDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)

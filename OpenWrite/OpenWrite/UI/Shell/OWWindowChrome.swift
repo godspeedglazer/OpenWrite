@@ -55,6 +55,24 @@ enum OWWindowChrome {
     static var suppressBackgroundWindowDrag = false
 
     private static var titlebarFillAccessories: [ObjectIdentifier: OWSolidTitlebarAccessory] = [:]
+    private static var installedWindowCloseObserver = false
+
+    private static func installWindowCloseObserverIfNeeded() {
+        guard !installedWindowCloseObserver else { return }
+        installedWindowCloseObserver = true
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let window = notification.object as? NSWindow else { return }
+            let key = ObjectIdentifier(window)
+            guard let accessory = titlebarFillAccessories.removeValue(forKey: key) else { return }
+            if let index = window.titlebarAccessoryViewControllers.firstIndex(where: { $0 === accessory }) {
+                window.removeTitlebarAccessoryViewController(at: index)
+            }
+        }
+    }
 
     /// Main document windows only — not sheets, panels, or borderless utility chrome.
     static func canApplyChrome(to window: NSWindow) -> Bool {
@@ -161,6 +179,7 @@ enum OWWindowChrome {
     /// `NSTitlebarAccessoryViewController` crashes on unsupported windows — always guard first.
     private static func installSolidTitlebarFill(on window: NSWindow, color: NSColor) {
         guard supportsTitlebarAccessory(on: window) else { return }
+        installWindowCloseObserverIfNeeded()
         let key = ObjectIdentifier(window)
         if let accessory = titlebarFillAccessories[key] {
             accessory.chromeColor = color

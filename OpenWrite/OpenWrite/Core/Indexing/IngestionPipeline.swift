@@ -265,6 +265,7 @@ actor IngestionPipeline {
         }
 
         let count = await vectorStore.chunkCount
+        await vectorStore.flushPersistedIndex()
         await withHealth { $0.markCompleted(indexedChunks: count) }
     }
 
