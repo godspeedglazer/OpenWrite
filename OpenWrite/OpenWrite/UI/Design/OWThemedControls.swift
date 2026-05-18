@@ -544,7 +544,8 @@ struct OWThemedToggleButton: View {
                     )
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .layoutPriority(1)
+                    .minimumScaleFactor(0.85)
+                    .layoutPriority(-1)
             }
             .padding(.trailing, DesignTokens.Spacing.spacing2)
         }

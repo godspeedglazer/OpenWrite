@@ -169,7 +169,10 @@ struct AnytypeShellView: View {
                                 workbench.persistChromePreferences()
                             }
                         }
-                        .frame(maxHeight: .infinity)
+                        .frame(
+                            minWidth: DesignTokens.Layout.assistStripMinWidth,
+                            maxHeight: .infinity
+                        )
                         .layoutPriority(0)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
@@ -398,6 +401,7 @@ struct AnytypeShellView: View {
                     .padding(.top, DesignTokens.Spacing.spacing2)
                 }
             }
+            .openWriteEditorLeadingInset()
             .padding(DesignTokens.Spacing.spacing5)
             .frame(maxWidth: .infinity, alignment: .top)
         }

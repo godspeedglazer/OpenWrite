@@ -50,9 +50,10 @@ struct AIAssistStripView: View {
                 .background(DesignTokens.Color.background)
         }
         .frame(
-            minWidth: DesignTokens.Layout.inspectorMinWidth,
+            minWidth: DesignTokens.Layout.assistStripMinWidth,
             maxWidth: DesignTokens.Layout.assistStripMaxWidth
         )
+        .safeAreaPadding(.horizontal, DesignTokens.Spacing.spacing1)
         .background {
             GeometryReader { geometry in
                 Color.clear

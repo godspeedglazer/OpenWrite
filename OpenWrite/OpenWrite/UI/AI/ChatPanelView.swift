@@ -707,6 +707,12 @@ struct ChatPanelView: View {
         assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
     }
 
+    /// Between default strip width and icon-only threshold: shorter toggle captions.
+    private var composerTogglesAbbreviated: Bool {
+        assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
+            && !composerTogglesIconOnly
+    }
+
     private var showsComposerModelLabel: Bool {
         !composerTogglesIconOnly
     }
@@ -1127,7 +1133,7 @@ struct ChatPanelView: View {
                 isOn: $model.searchVaultEnabled,
                 icon: .search,
                 showsLabel: !composerTogglesIconOnly,
-                abbreviatedLabel: "Notes"
+                abbreviatedLabel: composerTogglesAbbreviated ? "Notes" : nil
             )
             .help("Search notes")
 

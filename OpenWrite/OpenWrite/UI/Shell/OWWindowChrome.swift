@@ -263,6 +263,13 @@ enum OWShellLayout {
             + (isResizable ? DesignTokens.Layout.splitDividerHitWidth : 0)
     }
 
+    /// Minimum center workbench width (after outer card padding) for editor + assist minimums.
+    static func minimumCenterWidthForAssistOpen(forCenterWidth centerWidth: CGFloat) -> CGFloat {
+        let editorMin = editorMinimumWhenAssistOpen(forCenterWidth: centerWidth)
+        let chrome = splitChromeWidth(isResizable: true)
+        return editorMin + DesignTokens.Layout.assistStripMinWidth + chrome
+    }
+
     /// Maximum width the fixed column may occupy without starving the flexible column.
     static func clampedFixedWidth(
         preferred: CGFloat,
@@ -273,16 +280,19 @@ enum OWShellLayout {
         isResizable: Bool
     ) -> CGFloat {
         let chrome = splitChromeWidth(isResizable: isResizable)
-        let maxFixed = max(minWidth, availableWidth - flexibleMinWidth - chrome)
+        let flexibleBudget = max(0, availableWidth - chrome)
+        let nominalMaxFixed = flexibleBudget - flexibleMinWidth
+        if nominalMaxFixed < minWidth {
+            // Container too narrow for both mins — cap fixed column so the flexible column keeps space.
+            return preferred.clamped(to: 0 ... min(maxWidth, max(0, nominalMaxFixed)))
+        }
+        let maxFixed = max(minWidth, nominalMaxFixed)
         return preferred.clamped(to: minWidth ... min(maxWidth, maxFixed))
     }
 
-    /// When assist is expanded, returns false only when editor + minimum assist cannot fit (with hysteresis).
+    /// When assist is expanded, collapse before the split would clip below assist minimum width.
     static func shouldAutoCollapseAssist(centerWidth: CGFloat) -> Bool {
-        let editorMin = editorMinimumWhenAssistOpen(forCenterWidth: centerWidth)
-        let chrome = splitChromeWidth(isResizable: true)
-        let required = editorMin + DesignTokens.Layout.assistStripMinWidth + chrome
-        return centerWidth < required - DesignTokens.Layout.assistCollapseHysteresis
+        centerWidth < minimumCenterWidthForAssistOpen(forCenterWidth: centerWidth)
     }
 
     static func maxAssistWidth(
