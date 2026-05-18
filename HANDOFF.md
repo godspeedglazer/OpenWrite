@@ -11,8 +11,8 @@ That document is the single source of truth: product intent, P0/P1 blockers (use
 | Field | Value |
 |-------|--------|
 | **Branch** | `main` |
-| **HEAD** | `8ba07f7` (after handoff commit; app code baseline `8c228e4`) |
-| **Latest commit** | `8ba07f7` — docs: add Opus 4.7 resolution handoff for OpenWrite blockers |
+| **HEAD** | `5d3e21a` (handoff doc; app code baseline `8c228e4`) |
+| **Latest commit** | `5d3e21a` — docs: add Opus 4.7 resolution handoff for OpenWrite blockers |
 
 ```bash
 cd /Users/erichspringer/Downloads/OpenWrite

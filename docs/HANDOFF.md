@@ -4,7 +4,7 @@
 **Repo:** `/Users/erichspringer/Downloads/OpenWrite`  
 **Date:** 2026-05-17  
 **App code baseline (pre-handoff):** `8c228e409611c1113476e7b29f7e53a0b0d721a4` (`8c228e4`)  
-**Handoff doc commit:** `8ba07f7`
+**Handoff doc commit:** `5d3e21a`
 
 **Rule:** Do **not** treat “shipped” commits as user-verified fixes. The user has screenshots and repeated reports that P0 items remain broken after many agent passes. Your job is to **reproduce on a clean Debug build**, fix root causes, and pass §G acceptance tests on the user’s machine.
 
