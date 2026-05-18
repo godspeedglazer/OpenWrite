@@ -19,6 +19,8 @@
 
 **Author-first rule:** The center column stays the hero (`EditorView`). Vault Q&A lives in the optional assist strip; AI that changes the current note uses selection refine in the editor column.
 
+**Agent presets (2026-05-17):** Chat header picker chooses `AgentConfig` presets with distinct retrieval limits, excerpt widths, LM Studio temperature, and answer-shape instructions (`AgentRegistry`). Indexing runs on launch via `prepareVaultIndex` (load persisted vectors, then rebuild active-vault pages + vault-root `*.md`). If hybrid search exceeds 15s, chat falls back to lexical `keywordSearch` so sources still appear. Settings → **Rebuild index** shows passage count and ingestion phase.
+
 **Legacy note:** Early docs described a `NavigationSplitView` **inspector** column (`WorkbenchInspectorView`). That layout was replaced by the center card + collapsible assist strip — do not reintroduce a third permanent column without product review.
 
 ---
@@ -100,12 +102,20 @@ Future: collapse inspector below ~900pt window width per [Components.md § Workb
 
 ### Block editor engine (AppKit host)
 
+**Layout contract (measure vs apply):**
+
+| Phase | Where | Rules |
+|-------|--------|--------|
+| **Measure (read-only)** | `sizeThatFits`, `intrinsicContentSize`, scroll height probe | Width probe + `fittingSize` / `intrinsicContentSize` only — **never** `layoutSubtreeIfNeeded` (AttributeGraph precondition). |
+| **Apply (async)** | `BlockEditorPasteHost.updateNSView` → `scheduleLayout` → `applyDocumentLayout` | Full subtree layout on next run-loop turn; sets paste-host + hosted frames. |
+| **Revisions** | `blocksStructureRevision` (kind/attrs/id), `blocksContentRevision` (text/checked) | Structure rebuilds hosted root; content schedules apply without rebuilding rows. |
+
 | Piece | Role |
 |-------|------|
 | `EditorView` | `OpenWriteThemedScrollView(scrollToken: editorScrollLayoutToken)` — remeasures on assist/rail width changes; **does not** scroll-to-bottom on token change (chat-only). |
-| `OWBlockEditorView` | `BlockEditorPasteCaptureView` + inner `NSHostingView` — block rows stay alive across keystrokes; **structure revision** excludes `text` and `checked` so typing/todo toggles do not remeasure the host. |
+| `OWBlockEditorView` | `BlockEditorPasteCaptureView` + inner `NSHostingView` — block rows stay alive across keystrokes; typing bumps **content revision** for async height apply. |
 | `OWBlockTextEditor` | Per-block `NSTextView`; strikethrough for todos applied in-place when only checkbox state changes. |
-| `OpenWriteThemedScrollView` | Measure pass restores the live hosting frame after probing; document resize preserves `contentView.bounds.origin` (no snap-back during scroll). |
+| `OpenWriteThemedScrollView` | Read-only measure in `refreshDocumentSize` (deferred via `scheduleRefreshDocumentSize`); preserves scroll origin on document resize. |
 
 ---
 

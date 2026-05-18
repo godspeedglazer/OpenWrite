@@ -113,10 +113,12 @@ final class ChatPanelModel: ObservableObject {
         )
         retrievalSummary = nil
         let searchesVault = effectiveAgent.toolFlags.useVaultRetrieval
-        messages[assistantIndex].pipelineSteps = Self.initialPipelineSteps(
-            searchesVault: searchesVault,
-            fetchesWeb: fetchesWeb
-        )
+        mutateMessage(at: assistantIndex) { message in
+            message.pipelineSteps = Self.initialPipelineSteps(
+                searchesVault: searchesVault,
+                fetchesWeb: fetchesWeb
+            )
+        }
         if fetchesWeb {
             activatePipelineStep(at: assistantIndex, id: "web")
         } else if searchesVault {
@@ -134,11 +136,9 @@ final class ChatPanelModel: ObservableObject {
 
         streamTask = Task {
             defer {
-                Task { @MainActor in
-                    streamTask = nil
-                    if services.activityState != .indexing {
-                        services.setActivity(.idle)
-                    }
+                streamTask = nil
+                if services.activityState != .indexing {
+                    services.setActivity(.idle)
                 }
             }
 
@@ -146,103 +146,95 @@ final class ChatPanelModel: ObservableObject {
                 var webPages: [WebPageSnapshot] = []
                 if fetchesWeb {
                     webPages = await services.webFetch.fetchPages(urls: webURLs)
-                    await MainActor.run {
-                        guard assistantIndex < messages.count else { return }
-                        let count = webPages.count
-                        if count > 0 {
-                            updatePipelineStepTitle(
-                                at: assistantIndex,
-                                id: "web",
-                                title: "Fetched \(count) page\(count == 1 ? "" : "s")"
-                            )
-                        } else {
-                            updatePipelineStepTitle(at: assistantIndex, id: "web", title: "Couldn't fetch page")
-                            setPipelineStep(at: assistantIndex, id: "web", status: .failed)
-                        }
+                    guard assistantIndex < messages.count else { return }
+                    let count = webPages.count
+                    if count > 0 {
+                        updatePipelineStepTitle(
+                            at: assistantIndex,
+                            id: "web",
+                            title: "Fetched \(count) page\(count == 1 ? "" : "s")"
+                        )
+                    } else {
+                        updatePipelineStepTitle(at: assistantIndex, id: "web", title: "Couldn't fetch page")
+                        setPipelineStep(at: assistantIndex, id: "web", status: .failed)
                     }
                     await completePipelineStep(at: assistantIndex, id: "web", skipDelay: webPages.isEmpty)
                     if webPages.isEmpty {
-                        await MainActor.run {
-                            guard assistantIndex < messages.count else { return }
-                            messages[assistantIndex].text = """
+                        mutateMessage(at: assistantIndex) { message in
+                            message.text = """
                             Couldn't load the linked page. Turn on Web, use HTTPS, and check Settings if you use a domain allowlist.
                             """
-                            messages[assistantIndex].isError = true
-                            messages[assistantIndex].isStreaming = false
-                            markPipelineFailed(at: assistantIndex)
-                            clearPipelineTimingState(for: assistantIndex)
-                            services.setActivity(.idle)
+                            message.isError = true
+                            message.isStreaming = false
                         }
+                        markPipelineFailed(at: assistantIndex)
+                        clearPipelineTimingState(for: assistantIndex)
+                        services.setActivity(.idle)
                         return
                     }
-                    await MainActor.run {
-                        guard assistantIndex < messages.count else { return }
-                        if searchesVault {
-                            activatePipelineStep(at: assistantIndex, id: "search")
-                            services.setActivity(.retrieving)
-                        } else {
-                            activatePipelineStep(at: assistantIndex, id: "connect")
-                            services.setActivity(.connecting)
-                        }
-                    }
-                }
-
-                let context = try await services.rag.buildContext(
-                    query: query,
-                    agent: effectiveAgent,
-                    attachments: attachments,
-                    webPages: webPages
-                )
-                await MainActor.run {
-                    guard assistantIndex < messages.count else { return }
-                    messages[assistantIndex].sourceHits = context.allHits
                     if searchesVault {
-                        let pillCount = context.allHits.uniqueDocumentSources().count
-                        if pillCount > 0 {
-                            updatePipelineStepTitle(
-                                at: assistantIndex,
-                                id: "sources",
-                                title: "Found \(pillCount) source\(pillCount == 1 ? "" : "s")"
-                            )
-                        } else {
-                            updatePipelineStepTitle(at: assistantIndex, id: "sources", title: "No matching sources")
-                        }
-                    }
-                    updatePipelineStepTitle(
-                        at: assistantIndex,
-                        id: "connect",
-                        title: AIActivityState.connecting.connectedStatus(
-                            modelDisplay: services.lmConfig.chatModelDisplay
-                        )
-                    )
-                    retrievalSummary = Self.retrievalSummary(
-                        hits: context.allHits,
-                        attachmentCount: attachments.count,
-                        agentName: agent.name
-                    )
-                    if !context.allHits.isEmpty || attachments.isEmpty {
+                        activatePipelineStep(at: assistantIndex, id: "search")
+                        services.setActivity(.retrieving)
+                    } else {
+                        activatePipelineStep(at: assistantIndex, id: "connect")
                         services.setActivity(.connecting)
                     }
                 }
+
+                let (context, vaultSearchTimedOut) = try await Self.buildRAGContextWithTimeout(
+                    services: services,
+                    query: query,
+                    agent: effectiveAgent,
+                    attachments: attachments,
+                    webPages: webPages,
+                    searchesVault: searchesVault
+                )
+
+                guard assistantIndex < messages.count else { return }
+                if vaultSearchTimedOut {
+                    updatePipelineStepTitle(at: assistantIndex, id: "search", title: "Vault search timed out")
+                }
+                mutateMessage(at: assistantIndex) { message in
+                    message.sourceHits = context.allHits
+                }
+                if searchesVault {
+                    let pillCount = context.allHits.uniqueDocumentSources().count
+                    if pillCount > 0 {
+                        updatePipelineStepTitle(
+                            at: assistantIndex,
+                            id: "sources",
+                            title: "Found \(pillCount) source\(pillCount == 1 ? "" : "s")"
+                        )
+                    } else {
+                        updatePipelineStepTitle(at: assistantIndex, id: "sources", title: "No matching sources")
+                    }
+                }
+                updatePipelineStepTitle(
+                    at: assistantIndex,
+                    id: "connect",
+                    title: AIActivityState.connecting.connectedStatus(
+                        modelDisplay: services.lmConfig.chatModelDisplay
+                    )
+                )
+                retrievalSummary = Self.retrievalSummary(
+                    hits: context.allHits,
+                    attachmentCount: attachments.count,
+                    agentName: agent.name
+                )
+                if !context.allHits.isEmpty || attachments.isEmpty {
+                    services.setActivity(.connecting)
+                }
+
                 if searchesVault {
                     await completePipelineStep(at: assistantIndex, id: "search")
-                    await MainActor.run {
-                        guard assistantIndex < messages.count else { return }
-                        activatePipelineStep(at: assistantIndex, id: "sources")
-                    }
+                    activatePipelineStep(at: assistantIndex, id: "sources")
                     await completePipelineStep(at: assistantIndex, id: "sources")
                 }
-                await MainActor.run {
-                    guard assistantIndex < messages.count else { return }
-                    if messages[assistantIndex].pipelineSteps.first(where: { $0.id == "connect" })?.status != .active {
-                        activatePipelineStep(at: assistantIndex, id: "connect")
-                    }
+                if messages[assistantIndex].pipelineSteps.first(where: { $0.id == "connect" })?.status != .active {
+                    activatePipelineStep(at: assistantIndex, id: "connect")
                 }
                 await completePipelineStep(at: assistantIndex, id: "connect")
-                await MainActor.run {
-                    guard assistantIndex < messages.count else { return }
-                    activatePipelineStep(at: assistantIndex, id: "respond")
-                }
+                activatePipelineStep(at: assistantIndex, id: "respond")
 
                 for try await event in services.rag.streamAnswer(
                     context: context,
@@ -252,80 +244,70 @@ final class ChatPanelModel: ObservableObject {
                     try Task.checkCancellation()
                     switch event.kind {
                     case .activity(let state):
-                        await MainActor.run {
-                            guard assistantIndex < messages.count else { return }
-                            if state != .idle {
-                                services.setActivity(state)
-                            }
-                            if state == .streaming {
-                                activatePipelineStep(at: assistantIndex, id: "respond")
-                            }
+                        if state != .idle {
+                            services.setActivity(state)
+                        }
+                        if state == .streaming {
+                            activatePipelineStep(at: assistantIndex, id: "respond")
                         }
                     case .token(let token):
-                        await MainActor.run {
-                            guard assistantIndex < messages.count else { return }
-                            recordRespondFirstToken(at: assistantIndex)
-                            services.setActivity(.streaming)
-                            messages[assistantIndex].text += token
+                        recordRespondFirstToken(at: assistantIndex)
+                        services.setActivity(.streaming)
+                        mutateMessage(at: assistantIndex) { message in
+                            message.text += token
                         }
                     case .citations:
                         break
                     case .completed:
-                        await MainActor.run {
-                            guard assistantIndex < messages.count else { return }
-                            messages[assistantIndex].text = AIInput.stripChunkReferences(
-                                messages[assistantIndex].text
-                            )
-                            messages[assistantIndex].isStreaming = false
+                        mutateMessage(at: assistantIndex) { message in
+                            message.text = AIInput.stripChunkReferences(message.text)
+                            message.isStreaming = false
                         }
                         await completeRespondStep(at: assistantIndex, skipDelay: false)
                         await completePipelineStep(at: assistantIndex, id: "done")
-                        await MainActor.run {
-                            trimMessagesIfNeeded()
-                            clearPipelineTimingState(for: assistantIndex)
-                        }
+                        trimMessagesIfNeeded()
+                        clearPipelineTimingState(for: assistantIndex)
                     case .error(let message):
-                        await MainActor.run {
-                            guard assistantIndex < messages.count else { return }
-                            messages[assistantIndex].text = OpenWriteAIServices.chatFailureBubble(message: message)
-                            messages[assistantIndex].isError = true
-                            messages[assistantIndex].isStreaming = false
-                            markPipelineFailed(at: assistantIndex)
-                            clearPipelineTimingState(for: assistantIndex)
-                            services.setActivity(.idle)
-                            services.lastChatError = nil
+                        mutateMessage(at: assistantIndex) { assistant in
+                            assistant.text = OpenWriteAIServices.chatFailureBubble(message: message)
+                            assistant.isError = true
+                            assistant.isStreaming = false
                         }
+                        markPipelineFailed(at: assistantIndex)
+                        clearPipelineTimingState(for: assistantIndex)
+                        services.setActivity(.idle)
+                        services.lastChatError = nil
                     }
                 }
 
-                let respondStillActive = await MainActor.run { () -> Bool in
-                    guard assistantIndex < messages.count else { return false }
-                    if messages[assistantIndex].isStreaming {
-                        messages[assistantIndex].isStreaming = false
+                if assistantIndex < messages.count,
+                   messages[assistantIndex].isStreaming {
+                    mutateMessage(at: assistantIndex) { message in
+                        message.isStreaming = false
                     }
-                    return messages[assistantIndex].pipelineSteps.contains { $0.id == "respond" && $0.status == .active }
                 }
-                if respondStillActive {
+                if assistantIndex < messages.count,
+                   messages[assistantIndex].pipelineSteps.contains(where: { $0.id == "respond" && $0.status == .active }) {
                     await completeRespondStep(at: assistantIndex, skipDelay: false)
                     await completePipelineStep(at: assistantIndex, id: "done")
-                    await MainActor.run {
-                        trimMessagesIfNeeded()
-                        clearPipelineTimingState(for: assistantIndex)
-                    }
+                    trimMessagesIfNeeded()
+                    clearPipelineTimingState(for: assistantIndex)
                 }
+            } catch is CancellationError {
+                return
             } catch {
                 let diagnosed = OpenWriteAIServices.chatFailureBubble(error, config: services.lmConfig)
-                await MainActor.run {
-                    if assistantIndex < messages.count {
-                        messages[assistantIndex].text = diagnosed
-                        messages[assistantIndex].isError = true
-                        messages[assistantIndex].isStreaming = false
-                        markPipelineFailed(at: assistantIndex)
-                        clearPipelineTimingState(for: assistantIndex)
+                if assistantIndex < messages.count {
+                    mutateMessage(at: assistantIndex) { message in
+                        message.text = diagnosed
+                        message.isError = true
+                        message.isStreaming = false
                     }
-                    services.setActivity(.idle)
-                    services.lastChatError = nil
+                    markPipelineFailed(at: assistantIndex)
+                    clearPipelineTimingState(for: assistantIndex)
                 }
+                services.setActivity(.idle)
+                services.lastChatError = nil
             }
         }
     }
@@ -357,12 +339,26 @@ final class ChatPanelModel: ObservableObject {
         streamTask?.cancel()
         streamTask = nil
         if let index = messages.lastIndex(where: { $0.role == .assistant && $0.isStreaming }) {
-            messages[index].isStreaming = false
-            if messages[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                messages[index].text = "Stopped."
+            mutateMessage(at: index) { message in
+                message.isStreaming = false
+                if message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    message.text = "Stopped."
+                }
+                for stepIndex in message.pipelineSteps.indices {
+                    switch message.pipelineSteps[stepIndex].status {
+                    case .active:
+                        message.pipelineSteps[stepIndex].status = .failed
+                    case .pending:
+                        break
+                    case .completed, .failed:
+                        break
+                    }
+                }
+                if let doneIndex = message.pipelineSteps.firstIndex(where: { $0.id == "done" }) {
+                    message.pipelineSteps[doneIndex].title = "Stopped"
+                    message.pipelineSteps[doneIndex].status = .completed
+                }
             }
-            setPipelineStep(at: index, id: "respond", status: .completed)
-            setPipelineStep(at: index, id: "done", status: .completed)
             clearPipelineTimingState(for: index)
         }
         services.setActivity(.idle)
@@ -464,13 +460,64 @@ final class ChatPanelModel: ObservableObject {
         return turns
     }
 
+    /// Vault search with a hard cap so chat always reaches model connect / respond.
+    private static func buildRAGContextWithTimeout(
+        services: OpenWriteAIServices,
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment],
+        webPages: [WebPageSnapshot],
+        searchesVault: Bool
+    ) async throws -> (RAGContext, Bool) {
+        do {
+            if searchesVault {
+                let context = try await AITaskTimeout.run(seconds: AISafetyLimits.vaultSearchTimeoutSeconds) {
+                    try await services.rag.buildContext(
+                        query: query,
+                        agent: agent,
+                        attachments: attachments,
+                        webPages: webPages
+                    )
+                }
+                return (context, false)
+            }
+            let context = try await services.rag.buildContext(
+                query: query,
+                agent: agent,
+                attachments: attachments,
+                webPages: webPages
+            )
+            return (context, false)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch is AITaskTimeoutError {
+            let sanitized = AIInput.sanitizeQuery(query) ?? query
+            var hits: [RetrievalHit] = []
+            if searchesVault, agent.toolFlags.useVaultRetrieval, agent.effectiveChunkLimit > 0 {
+                hits = (try? await services.retrieval.keywordSearch(
+                    query: sanitized,
+                    limit: agent.effectiveChunkLimit
+                )) ?? []
+            }
+            let fallback = RAGContext(
+                query: sanitized,
+                hits: hits,
+                attachmentHits: ChatAttachmentStore.retrievalHits(from: attachments),
+                webPages: webPages
+            )
+            return (fallback, true)
+        } catch {
+            throw error
+        }
+    }
+
     private static func initialPipelineSteps(searchesVault: Bool, fetchesWeb: Bool = false) -> [ChatPipelineStep] {
         var steps: [ChatPipelineStep] = []
         if fetchesWeb {
             steps.append(ChatPipelineStep(id: "web", title: "Fetching page…", status: .pending))
         }
         if searchesVault {
-            steps.append(ChatPipelineStep(id: "search", title: "Searching vault", status: .pending))
+            steps.append(ChatPipelineStep(id: "search", title: "Searching vault…", status: .pending))
             steps.append(ChatPipelineStep(id: "sources", title: "Found sources", status: .pending))
         }
         steps.append(ChatPipelineStep(id: "connect", title: "Connected to model", status: .pending))
@@ -479,10 +526,19 @@ final class ChatPanelModel: ObservableObject {
         return steps
     }
 
+    /// Reassigns the message so `@Published` emits and the stepper refreshes during pre-stream phases.
+    private func mutateMessage(at index: Int, _ body: (inout ChatMessage) -> Void) {
+        guard index < messages.count else { return }
+        var message = messages[index]
+        body(&message)
+        messages[index] = message
+    }
+
     private func setPipelineStep(at index: Int, id: String, status: ChatPipelineStep.Status) {
-        guard index < messages.count,
-              let stepIndex = messages[index].pipelineSteps.firstIndex(where: { $0.id == id }) else { return }
-        messages[index].pipelineSteps[stepIndex].status = status
+        mutateMessage(at: index) { message in
+            guard let stepIndex = message.pipelineSteps.firstIndex(where: { $0.id == id }) else { return }
+            message.pipelineSteps[stepIndex].status = status
+        }
     }
 
     private func activatePipelineStep(at index: Int, id: String) {
@@ -550,23 +606,25 @@ final class ChatPanelModel: ObservableObject {
     }
 
     private func updatePipelineStepTitle(at index: Int, id: String, title: String) {
-        guard index < messages.count,
-              let stepIndex = messages[index].pipelineSteps.firstIndex(where: { $0.id == id }) else { return }
-        messages[index].pipelineSteps[stepIndex].title = title
+        mutateMessage(at: index) { message in
+            guard let stepIndex = message.pipelineSteps.firstIndex(where: { $0.id == id }) else { return }
+            message.pipelineSteps[stepIndex].title = title
+        }
     }
 
     private func markPipelineFailed(at index: Int) {
-        guard index < messages.count else { return }
-        for stepIndex in messages[index].pipelineSteps.indices {
-            if messages[index].pipelineSteps[stepIndex].status == .active {
-                messages[index].pipelineSteps[stepIndex].status = .failed
-            } else if messages[index].pipelineSteps[stepIndex].status == .pending {
-                messages[index].pipelineSteps[stepIndex].status = .failed
+        mutateMessage(at: index) { message in
+            for stepIndex in message.pipelineSteps.indices {
+                if message.pipelineSteps[stepIndex].status == .active {
+                    message.pipelineSteps[stepIndex].status = .failed
+                } else if message.pipelineSteps[stepIndex].status == .pending {
+                    message.pipelineSteps[stepIndex].status = .failed
+                }
             }
-        }
-        if let doneIndex = messages[index].pipelineSteps.firstIndex(where: { $0.id == "done" }) {
-            messages[index].pipelineSteps[doneIndex].title = "Failed"
-            messages[index].pipelineSteps[doneIndex].status = .failed
+            if let doneIndex = message.pipelineSteps.firstIndex(where: { $0.id == "done" }) {
+                message.pipelineSteps[doneIndex].title = "Failed"
+                message.pipelineSteps[doneIndex].status = .failed
+            }
         }
     }
 
@@ -692,6 +750,8 @@ private struct StreamingDots: View {
 // MARK: - Chat panel
 
 struct ChatPanelView: View {
+    @Environment(\.openWritePalette) private var palette
+    @Environment(ThemeManager.self) private var themeManager
     @EnvironmentObject private var aiServices: OpenWriteAIServices
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var workbench: WorkbenchState
@@ -706,6 +766,7 @@ struct ChatPanelView: View {
     }
 
     var body: some View {
+        let _ = themeManager.revision
         Group {
             switch effectiveScreen {
             case .agentPicker:
@@ -714,6 +775,7 @@ struct ChatPanelView: View {
                 conversationPanel
             }
         }
+        .id(themeManager.revision)
         .onChange(of: workbench.archivedChatThreadIDToOpen) { _, threadID in
             guard let threadID, let thread = ChatSessionStore.loadThread(id: threadID) else { return }
             model.loadArchivedThread(thread, services: aiServices)
@@ -739,7 +801,7 @@ struct ChatPanelView: View {
     private var agentPickerPanel: some View {
         VStack(spacing: 0) {
             OWAIPanelHeader(title: "Chat", compact: true)
-            OpenWriteThemedScrollView {
+            OpenWriteThemedScrollView(canvasColor: palette.background) {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 Text("Choose an agent")
                     .font(OWTypography.calloutEmphasis)
@@ -753,7 +815,7 @@ struct ChatPanelView: View {
                 }
                 .padding(DesignTokens.Spacing.assistStripContentPadding)
             }
-            .background(DesignTokens.Color.background)
+            .background(palette.background)
         }
     }
 
@@ -785,7 +847,7 @@ struct ChatPanelView: View {
             .padding(DesignTokens.Spacing.spacing2)
             .background(
                 isSelected
-                    ? DesignTokens.Color.accentMuted
+                    ? DesignTokens.Color.selectionPill
                     : DesignTokens.Color.surface,
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium)
             )
@@ -809,7 +871,7 @@ struct ChatPanelView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             composer
         }
-        .background(DesignTokens.Color.background)
+        .background(palette.background)
     }
 
     private var conversationHeader: some View {
@@ -845,7 +907,11 @@ struct ChatPanelView: View {
     }
 
     private var messageList: some View {
-        OpenWriteThemedScrollView(scrollToken: chatScrollToken, scrollToBottomOnTokenChange: true) {
+        OpenWriteThemedScrollView(
+            scrollToken: chatScrollToken,
+            canvasColor: palette.background,
+            scrollToBottomOnTokenChange: true
+        ) {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 if model.messages.isEmpty {
                     VStack(spacing: DesignTokens.Spacing.spacing2) {
@@ -868,11 +934,12 @@ struct ChatPanelView: View {
             }
             .padding(DesignTokens.Spacing.assistStripMessageListPadding)
         }
-        .background(DesignTokens.Color.background)
+        .background(palette.background)
     }
 
     private var chatScrollToken: Int {
         var hasher = Hasher()
+        hasher.combine(themeManager.selectedTheme.rawValue)
         hasher.combine(model.messages.count)
         hasher.combine(streamingTail)
         hasher.combine(pipelineStepsTail)
@@ -884,7 +951,14 @@ struct ChatPanelView: View {
     }
 
     private var pipelineStepsTail: Int {
-        model.messages.last?.pipelineSteps.count ?? 0
+        guard let steps = model.messages.last?.pipelineSteps, !steps.isEmpty else { return 0 }
+        var hasher = Hasher()
+        for step in steps {
+            hasher.combine(step.id)
+            hasher.combine(step.title)
+            hasher.combine(step.status)
+        }
+        return hasher.finalize()
     }
 
     @ViewBuilder
@@ -1084,10 +1158,10 @@ struct ChatPanelView: View {
         .padding(DesignTokens.Spacing.assistStripComposerPadding)
         .padding(.bottom, DesignTokens.Layout.assistStripComposerBottomInset)
         .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing1)
-        .background(DesignTokens.Color.background)
+        .background(palette.background)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(DesignTokens.Color.borderSubtle)
+                .fill(palette.borderSubtle)
                 .frame(height: DesignTokens.Layout.borderWidth)
         }
     }
@@ -1231,13 +1305,6 @@ struct ChatPanelView: View {
     }
 
     private func agentHelp(_ agent: AgentConfig) -> String {
-        var parts = ["Retrieves up to \(agent.effectiveChunkLimit) chunks."]
-        if agent.toolFlags.allowCreateNote {
-            parts.append("Create-note tool enabled.")
-        }
-        if agent.toolFlags.passFullNoteContext {
-            parts.append("Wider excerpts per chunk.")
-        }
-        return parts.joined(separator: " ")
+        agent.uiHelpText
     }
 }

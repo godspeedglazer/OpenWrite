@@ -46,13 +46,33 @@ final class OpenWriteAIServices: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: .openWriteEmbeddingUnreachable)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notification in
+                guard let self else { return }
+                let message = notification.userInfo?["message"] as? String
+                    ?? "LM Studio unreachable — using local embedding fallback."
+                if !lmStatus.localizedCaseInsensitiveContains("unreachable") {
+                    lmStatus = message
+                }
+            }
+            .store(in: &cancellables)
         rebuildPipeline()
-        Task {
-            await vectorStore.loadFromDiskIfPresent()
-            let count = await vectorStore.chunkCount
-            indexedChunkCount = count
-            ingestionHealth.updateIndexedChunkCount(count)
-        }
+    }
+
+    /// Loads persisted vectors, then rebuilds the search index (serialized — avoids racing `loadFromDisk` with `rebuildAll`).
+    func prepareVaultIndex(documents: [VaultDocument]) async {
+        await vectorStore.loadFromDiskIfPresent()
+        let loaded = await vectorStore.chunkCount
+        indexedChunkCount = loaded
+        ingestionHealth.updateIndexedChunkCount(loaded)
+        guard loaded == 0, Self.hasIndexableContent(documents: documents) else { return }
+        await reindex(documents: documents)
+    }
+
+    /// Pages plus on-disk `.md` under the vault root, deduped by stable document id.
+    static func hasIndexableContent(documents: [VaultDocument]) -> Bool {
+        !indexEntries(including: documents).isEmpty
     }
 
     func applyConfig(_ config: LMStudioConfig) {
@@ -185,8 +205,11 @@ final class OpenWriteAIServices: ObservableObject {
 
     /// In-app pages plus all on-disk `.md` files under the vault root (Reor-style).
     static func indexEntries(including documents: [VaultDocument]) -> [VaultIndexEntry] {
-        var entries: [VaultIndexEntry] = documents.map { doc in
-            VaultIndexEntry(
+        var byID: [UUID: VaultIndexEntry] = [:]
+        byID.reserveCapacity(documents.count + 8)
+
+        for doc in documents {
+            byID[doc.id] = VaultIndexEntry(
                 documentID: doc.id,
                 title: doc.title,
                 blocks: doc.rootBlocks,
@@ -196,17 +219,18 @@ final class OpenWriteAIServices: ObservableObject {
 
         let vaultRoot = VaultLocationPreferences.resolvedVaultRootURL()
         for file in VaultMarkdownCatalog.scan(vaultRoot: vaultRoot) {
+            guard byID[file.documentID] == nil else { continue }
             guard let blocks = try? VaultMarkdownCatalog.loadBlocks(from: file) else { continue }
-            entries.append(
-                VaultIndexEntry(
-                    documentID: file.documentID,
-                    title: file.title,
-                    blocks: blocks,
-                    sourceFilename: file.sourceFilename
-                )
+            byID[file.documentID] = VaultIndexEntry(
+                documentID: file.documentID,
+                title: file.title,
+                blocks: blocks,
+                sourceFilename: file.sourceFilename
             )
         }
-        return entries
+        return byID.values.sorted {
+            $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+        }
     }
 
     func reindex(documents: [VaultDocument]) async {

@@ -133,7 +133,10 @@ struct LMStudioClient: Sendable {
         var request = URLRequest(url: config.embeddingsURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = config.timeoutSeconds
+        request.timeoutInterval = min(
+            config.timeoutSeconds,
+            AISafetyLimits.retrievalEmbeddingTimeoutSeconds
+        )
         applyAuth(&request)
 
         let body: [String: Any] = [

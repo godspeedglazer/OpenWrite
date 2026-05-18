@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainWindowPresentationAttempts = 0
     private let maxMainWindowPresentationAttempts = 40
     private var windowChromeObservers: [NSObjectProtocol] = []
+    private var windowChromeReapplyTask: Task<Void, Never>?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -17,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     deinit {
+        windowChromeReapplyTask?.cancel()
         for observer in windowChromeObservers {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -29,18 +31,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSWindow.didBecomeMainNotification,
             NSWindow.didResizeNotification,
             NSApplication.didBecomeActiveNotification,
+            .openWriteThemeDidChange,
         ]
         for name in names {
             let observer = center.addObserver(
                 forName: name,
                 object: nil,
                 queue: .main
-            ) { _ in
+            ) { [weak self] notification in
                 Task { @MainActor in
-                    OWWindowChrome.applyToAllWindows()
+                    if name == NSWindow.didBecomeKeyNotification,
+                       let window = notification.object as? NSWindow,
+                       OWWindowChrome.canApplyChrome(to: window) {
+                        OWWindowChrome.apply(to: window)
+                        return
+                    }
+                    self?.scheduleWindowChromeReapply()
                 }
             }
             windowChromeObservers.append(observer)
+        }
+    }
+
+    /// Coalesces resize/focus storms so titlebar paint does not spin the main thread.
+    private func scheduleWindowChromeReapply() {
+        windowChromeReapplyTask?.cancel()
+        windowChromeReapplyTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            guard !Task.isCancelled else { return }
+            OWWindowChrome.applyToAllWindows()
         }
     }
 

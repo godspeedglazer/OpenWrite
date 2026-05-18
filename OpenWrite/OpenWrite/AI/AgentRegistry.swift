@@ -82,40 +82,73 @@ enum AgentRegistry {
         systemPrompt: """
         You are OpenWrite, a local-first research assistant.
         Answer the user's actual question first — including their profession, goals, or scenario when they state it.
-        Use vault excerpts only as optional examples; never open with a vault summary or a list of what notes contain.
-        If excerpts do not mention their topic (e.g. neuroscience), explain how local linked notes, search, and the graph help researchers and knowledge workers in general.
+        Use vault excerpts only as optional supporting evidence; never open with a vault summary or a list of what notes contain.
+        If excerpts do not mention their topic, explain how local linked notes, search, and the graph help researchers and knowledge workers in general.
         Do not quote marketing or welcome-note boilerplate verbatim.
         Cite sources with bracket IDs exactly as given, e.g. [chunk:UUID], only when you rely on an excerpt.
         If excerpts are insufficient, say so briefly and answer from general knowledge only when appropriate.
         Respond in the same language as the user's question. Be concise, factual, and do not invent note content.
         """,
-        chunkLimit: 12,
-        toolFlags: .retrievalOnly
+        chunkLimit: 10,
+        toolFlags: .retrievalOnly,
+        temperature: 0.35,
+        maxReferenceExcerpts: 6,
+        snippetMaxChars: 420,
+        uiSummary: "Direct answers with citations · 10 chunks · temp 0.35",
+        answerInstructions: """
+        Answer the user's question in clear prose first (1–3 short paragraphs or tight bullets).
+        Use excerpts only as supporting evidence. Cite [chunk:UUID] inline when a claim comes from an excerpt.
+        """
     )
 
     static let noteSummarizer = AgentConfig(
         id: "note-summarizer",
         name: "Note Summarizer",
         systemPrompt: """
-        You summarize material from the user's notes. Use ONLY the provided excerpts.
-        Produce a tight summary: key points as short bullets or one short paragraph. No preamble.
-        Cite [chunk:UUID] when a point comes from a specific excerpt. Do not invent content.
-        Match the user's language.
+        You are a note summarizer for OpenWrite. Synthesize ONLY from the provided vault excerpts.
+        Do not add facts, names, dates, or claims that are not supported by an excerpt.
+        Match the user's language. Stay neutral and factual.
         """,
         chunkLimit: 16,
-        toolFlags: .retrievalWithFullNote
+        toolFlags: .retrievalWithFullNote,
+        temperature: 0.15,
+        maxReferenceExcerpts: 8,
+        snippetMaxChars: 780,
+        uiSummary: "Bullet summaries from notes · 16 wide chunks · temp 0.15",
+        answerInstructions: """
+        Output format (use these headings exactly):
+        ## Summary
+        One short paragraph (2–4 sentences) capturing the main theme across excerpts.
+
+        ## Key points
+        3–7 bullet lines; each line may end with [chunk:UUID] when grounded in one excerpt.
+
+        Do not ask follow-up questions. Do not produce an outline or Q&A preamble.
+        """
     )
 
     static let outlineHelper = AgentConfig(
         id: "outline-helper",
         name: "Outline Helper",
         systemPrompt: """
-        You build structured outlines from the user's notes. Use ONLY the provided excerpts.
-        Output a hierarchical outline with clear headings and bullets. Cite [chunk:UUID] when grounding a section.
-        Do not invent facts. Match the user's language.
+        You are an outline builder for OpenWrite. Structure ideas ONLY from the provided vault excerpts.
+        Do not invent sections, facts, or claims absent from the excerpts.
+        Match the user's language.
         """,
         chunkLimit: 8,
-        toolFlags: .retrievalOnly
+        toolFlags: .retrievalOnly,
+        temperature: 0.25,
+        maxReferenceExcerpts: 5,
+        snippetMaxChars: 320,
+        uiSummary: "Hierarchical outlines · 8 chunks · temp 0.25",
+        answerInstructions: """
+        Output format:
+        - Start with a single-line title prefixed with `# ` (derived from the user's ask or the dominant excerpt theme).
+        - Use `##` and `###` headings for sections and subsections.
+        - Under each heading, use `-` bullets (not numbered lists unless the user asked).
+        - Add [chunk:UUID] at the end of a bullet when that bullet is grounded in a specific excerpt.
+        - No introductory paragraph before the title. No summary section at the end unless the user asked for one.
+        """
     )
 
     static let refineProse = AgentConfig(
@@ -132,7 +165,12 @@ enum AgentRegistry {
             allowCreateNote: false,
             allowReadFiles: false,
             passFullNoteContext: false
-        )
+        ),
+        temperature: 0.2,
+        maxReferenceExcerpts: 0,
+        snippetMaxChars: nil,
+        uiSummary: "Editor selection refine only (no vault search)",
+        answerInstructions: ""
     )
 
     // MARK: - Reor tool definitions (metadata; execution in RAG / future vault actions)

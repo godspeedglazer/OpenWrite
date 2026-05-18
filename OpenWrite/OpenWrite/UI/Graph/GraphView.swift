@@ -3,6 +3,8 @@ import SwiftUI
 
 /// Anytype-inspired global graph — wikilink canvas with drag, curved edges, persisted layout.
 struct GraphView: View {
+    @Environment(\.openWritePalette) private var palette
+
     let vaultID: UUID
     let documents: [VaultDocument]
     let backlinkIndex: BacklinkIndex
@@ -50,7 +52,7 @@ struct GraphView: View {
             let size = geometry.size
 
             ZStack(alignment: .topLeading) {
-                DesignTokens.Color.editorCanvas
+                palette.editorCanvas
 
                 if documents.isEmpty {
                     emptyVaultState(in: size)
@@ -106,7 +108,7 @@ struct GraphView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DesignTokens.Color.editorCanvas)
+        .background(palette.editorCanvas)
         .accessibilityIdentifier("openwrite.graph.canvas")
     }
 

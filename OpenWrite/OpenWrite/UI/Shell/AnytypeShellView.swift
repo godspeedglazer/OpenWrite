@@ -7,6 +7,7 @@ import SwiftUI
 
 struct AnytypeShellView: View {
     @Environment(\.openWritePalette) private var palette
+    @Environment(ThemeManager.self) private var themeManager
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var pastWrites: InMemoryPastWritesService
     @ObservedObject var workbench: WorkbenchState
@@ -22,6 +23,7 @@ struct AnytypeShellView: View {
     @State private var editorLayoutEpoch: UInt = 0
 
     var body: some View {
+        let _ = themeManager.revision
         VStack(spacing: 0) {
             OWShellTitleBar(
                 tabs: centerTabBarItems,

@@ -21,13 +21,6 @@ struct AgentPickerView: View {
     }
 
     private func agentHelp(_ agent: AgentConfig) -> String {
-        var parts = ["Retrieves up to \(agent.effectiveChunkLimit) chunks."]
-        if agent.toolFlags.allowCreateNote {
-            parts.append("Create-note tool enabled (confirmation required).")
-        }
-        if agent.toolFlags.passFullNoteContext {
-            parts.append("Uses wider excerpts per chunk.")
-        }
-        return parts.joined(separator: " ")
+        agent.uiHelpText
     }
 }

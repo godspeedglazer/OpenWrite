@@ -16,6 +16,7 @@ struct OWPreviewBlockRow: View {
     var onActivate: (() -> Void)? = nil
 
     @Environment(\.openWritePalette) private var palette
+    @Environment(ThemeManager.self) private var themeManager
     @Environment(\.blockFormatting) private var blockFormatting
 
     private var isEditing: Bool { text != nil }
@@ -341,6 +342,7 @@ struct OWPreviewBlockRow: View {
                 textColor: foreground,
                 selectionHighlight: palette.selectionHighlight,
                 selectionForeground: palette.textPrimary,
+                themeRevision: themeManager.selectedTheme.rawValue,
                 formatting: blockFormatting,
                 strikethrough: strikethrough,
                 onSelectionChange: onSelectionChange

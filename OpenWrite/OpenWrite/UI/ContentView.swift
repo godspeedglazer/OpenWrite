@@ -15,6 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         let _ = themeManager.selectedTheme
+        let _ = themeManager.revision
         AnytypeShellView(
             workbench: workbench,
             backlinkIndex: backlinkIndex,
@@ -52,13 +53,14 @@ struct ContentView: View {
             .frame(minWidth: 480, minHeight: 520)
         }
         .background(DesignTokens.Color.shellChrome)
+        .id(themeManager.revision)
         .task {
             _ = try? VaultLocationPreferences.ensureDefaultVaultLayout()
             await aiServices.startFilesystemIngestionWatch()
             markdownVaultWatcher.start {
                 scheduleDebouncedReindex()
             }
-            await aiServices.reindex(documents: vaultStore.documents)
+            await aiServices.prepareVaultIndex(documents: vaultStore.documentsInActiveVault)
         }
         .onDisappear {
             markdownVaultWatcher.stop()
@@ -99,9 +101,9 @@ struct ContentView: View {
     private func scheduleDebouncedReindex() {
         reindexDebounceTask?.cancel()
         reindexDebounceTask = Task {
-            try? await Task.sleep(nanoseconds: 750_000_000)
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
-            await aiServices.reindex(documents: vaultStore.documents)
+            await aiServices.reindex(documents: vaultStore.documentsInActiveVault)
         }
     }
 
@@ -112,7 +114,7 @@ struct ContentView: View {
             dismissButtonUsesSecondaryStyle: true,
             onDone: { showNewPageSheet = false }
         ) {
-            OpenWriteThemedScrollView {
+            OpenWriteThemedScrollView(canvasColor: DesignTokens.Color.background) {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing5) {
                     StructureTemplatePicker { newID in
                         vaultStore.selectedDocumentID = newID

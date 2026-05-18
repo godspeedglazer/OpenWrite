@@ -139,8 +139,11 @@ private final class OpenWriteThemedScrollContainer: NSScrollView {
 
 /// Theme-aware vertical scroll surface (NSScrollView + custom scroller).
 struct OpenWriteThemedScrollView<Content: View>: View {
+    @Environment(\.openWritePalette) private var palette
+
     private let axes: Axis.Set
     private let scrollToken: Int
+    private let canvasColor: Color?
     /// When true, a changed `scrollToken` scrolls to the bottom (chat). When false, remeasures only (editor).
     private let scrollToBottomOnTokenChange: Bool
     private let content: Content
@@ -148,19 +151,26 @@ struct OpenWriteThemedScrollView<Content: View>: View {
     init(
         _ axes: Axis.Set = .vertical,
         scrollToken: Int = 0,
+        canvasColor: Color? = nil,
         scrollToBottomOnTokenChange: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.axes = axes
         self.scrollToken = scrollToken
+        self.canvasColor = canvasColor
         self.scrollToBottomOnTokenChange = scrollToBottomOnTokenChange
         self.content = content()
+    }
+
+    private var resolvedCanvasColor: Color {
+        canvasColor ?? palette.background
     }
 
     var body: some View {
         OpenWriteThemedScrollRepresentable(
             axes: axes,
             scrollToken: scrollToken,
+            canvasColor: resolvedCanvasColor,
             scrollToBottomOnTokenChange: scrollToBottomOnTokenChange,
             content: content
         )
@@ -170,6 +180,7 @@ struct OpenWriteThemedScrollView<Content: View>: View {
 private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresentable {
     let axes: Axis.Set
     let scrollToken: Int
+    let canvasColor: Color
     let scrollToBottomOnTokenChange: Bool
     let content: Content
 
@@ -186,15 +197,13 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         let hosting = NSHostingView(rootView: content)
         hosting.translatesAutoresizingMaskIntoConstraints = true
         hosting.sizingOptions = [.intrinsicContentSize]
-        if let layer = hosting.layer {
-            layer.backgroundColor = NSColor(DesignTokens.Color.background).cgColor
-        }
+        context.coordinator.applyCanvasColor(canvasColor, to: hosting)
         context.coordinator.hostingView = hosting
         scrollView.documentView = hosting
 
         scrollView.onClipViewLayout = { [weak coordinator = context.coordinator, weak scrollView] in
             guard let coordinator, let scrollView else { return }
-            coordinator.refreshDocumentSize(in: scrollView)
+            coordinator.scheduleRefreshDocumentSize(in: scrollView)
         }
 
         return scrollView
@@ -208,9 +217,16 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         scrollView.openWriteRefreshThemedScrollers()
 
         guard let hosting = context.coordinator.hostingView else { return }
+        context.coordinator.applyCanvasColor(canvasColor, to: hosting)
         hosting.rootView = content
 
-        context.coordinator.refreshDocumentSize(in: scrollView)
+        let themeRevision = ThemeManager.shared.revision
+        if context.coordinator.lastThemeRevision != themeRevision {
+            context.coordinator.lastThemeRevision = themeRevision
+            context.coordinator.invalidateDocumentMeasurement(in: scrollView)
+        }
+
+        context.coordinator.scheduleRefreshDocumentSize(in: scrollView)
 
         if context.coordinator.lastScrollToken != scrollToken {
             context.coordinator.lastScrollToken = scrollToken
@@ -220,12 +236,12 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
                 }
             } else {
                 context.coordinator.invalidateDocumentMeasurement(in: scrollView)
-                context.coordinator.refreshDocumentSize(in: scrollView)
+                context.coordinator.scheduleRefreshDocumentSize(in: scrollView)
             }
         }
     }
 
-    /// Probes intrinsic height at `width` without leaving the live document frame crushed (avoids scroll snap-back).
+    /// Read-only height probe — `fittingSize` only; never forces subtree layout during SwiftUI measure.
     private static func measureDocumentHeight(
         for hosting: NSHostingView<Content>,
         width: CGFloat,
@@ -233,12 +249,13 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
     ) -> CGFloat {
         let safeWidth = max(width, 1)
         let priorFrame = hosting.frame
-        hosting.frame = NSRect(x: 0, y: 0, width: safeWidth, height: 1)
-        hosting.needsLayout = true
-        hosting.layoutSubtreeIfNeeded()
-
+        if abs(priorFrame.width - safeWidth) > 0.5 {
+            hosting.frame.size.width = safeWidth
+        }
         let measured = max(hosting.fittingSize.height, hosting.intrinsicContentSize.height)
-        hosting.frame = priorFrame
+        if abs(priorFrame.width - safeWidth) > 0.5 || abs(priorFrame.height - hosting.frame.height) > 0.5 {
+            hosting.frame = priorFrame
+        }
 
         let minHeight = max(clipHeight + 1, 1)
         return max(measured, minHeight)
@@ -247,13 +264,28 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
     final class Coordinator {
         var hostingView: NSHostingView<Content>?
         var lastScrollToken: Int = -1
+        var lastThemeRevision: UInt = 0
         private var lastAppliedDocumentSize = NSSize.zero
         private var lastClipSize: NSSize = .zero
+        private var refreshGeneration = 0
+
+        func applyCanvasColor(_ color: Color, to hosting: NSHostingView<Content>) {
+            hosting.layer?.backgroundColor = NSColor(color).cgColor
+        }
 
         func invalidateDocumentMeasurement(in scrollView: NSScrollView) {
             lastClipSize = .zero
             lastAppliedDocumentSize = .zero
             (scrollView as? OpenWriteThemedScrollContainer)?.resetClipLayoutTracking()
+        }
+
+        func scheduleRefreshDocumentSize(in scrollView: NSScrollView) {
+            refreshGeneration += 1
+            let generation = refreshGeneration
+            DispatchQueue.main.async { [weak self, weak scrollView] in
+                guard let self, let scrollView, generation == self.refreshGeneration else { return }
+                self.refreshDocumentSize(in: scrollView)
+            }
         }
 
         func refreshDocumentSize(in scrollView: NSScrollView) {
@@ -282,7 +314,6 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
             scrollView.openWriteUpdateDocumentPreservingScroll {
                 hosting.frame = NSRect(origin: .zero, size: targetSize)
                 hosting.needsLayout = true
-                hosting.layoutSubtreeIfNeeded()
                 scrollView.tile()
             }
         }

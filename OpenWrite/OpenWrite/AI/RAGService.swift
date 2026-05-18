@@ -143,7 +143,10 @@ struct LiveRAGService: RAGService {
 
                     var fullText = ""
                     var announcedFirstToken = false
-                    for try await delta in client.chatCompletionsStream(messages: messages) {
+                    for try await delta in client.chatCompletionsStream(
+                        messages: messages,
+                        temperature: agent.temperature
+                    ) {
                         if !announcedFirstToken {
                             announcedFirstToken = true
                             continuation.yield(RAGStreamEvent(kind: .activity(.streaming)))
@@ -228,19 +231,13 @@ struct LiveRAGService: RAGService {
         """
     }
 
-    private static let ragAnswerInstructions = """
-    The latest user message (role: user) contains the question you must answer directly and first.
-    Address the user's profession, goals, scenario, or constraints when they state them — even if vault excerpts do not mention that topic.
-    Use reference excerpts only as optional supporting examples; do not summarize the vault, list note titles, or recite welcome/onboarding copy unless the user asked for that.
-    If excerpts are generic or off-topic, still explain how OpenWrite's local notes, graph links, and search help knowledge workers and researchers in general.
-    Do not quote marketing copy or welcome-note boilerplate verbatim.
-  """
-
     private static func systemAndCitations(context: RAGContext, agent: AgentConfig) -> (String, [UUID]) {
         let (excerptBlock, ids) = excerptBlock(context: context, agent: agent)
         var parts = [agent.systemPrompt]
-        parts.append("")
-        parts.append(ragAnswerInstructions)
+        if !agent.answerInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append("")
+            parts.append(agent.answerInstructions)
+        }
         if !excerptBlock.isEmpty {
             parts.append("")
             parts.append(excerptBlock)
@@ -308,8 +305,10 @@ struct LiveRAGService: RAGService {
     }
 
     private static func effectiveExcerptCap(context: RAGContext, agent: AgentConfig) -> Int {
-        let base = min(agent.effectiveChunkLimit, AISafetyLimits.maxChatReferenceExcerpts)
-        guard !context.allHits.isEmpty, queryLooksOffVaultTopic(query: context.query, hits: context.allHits) else {
+        let base = agent.effectiveMaxReferenceExcerpts
+        guard agent.id == AgentRegistry.researchQA.id,
+              !context.allHits.isEmpty,
+              queryLooksOffVaultTopic(query: context.query, hits: context.allHits) else {
             return base
         }
         return min(base, 3)

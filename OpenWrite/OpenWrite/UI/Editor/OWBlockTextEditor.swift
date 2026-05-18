@@ -11,6 +11,8 @@ struct OWBlockTextEditor: NSViewRepresentable {
     let textColor: Color
     let selectionHighlight: Color
     let selectionForeground: Color
+    /// Bumps when `ThemeManager` changes so AppKit text storage picks up new colors.
+    var themeRevision: String = ""
     @ObservedObject var formatting: BlockFormattingState
     var strikethrough: Bool = false
     var onSelectionChange: ((String?) -> Void)?
@@ -50,6 +52,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
     func updateNSView(_ container: BlockTextContainerView, context: Context) {
         guard let textView = container.textView else { return }
         context.coordinator.parent = self
+        let themeColorsChanged = context.coordinator.themeRevisionChanged(themeRevision)
         context.coordinator.applySelectionChrome()
         let layoutWidth = container.bounds.width
         if layoutWidth > 1 {
@@ -60,6 +63,10 @@ struct OWBlockTextEditor: NSViewRepresentable {
         let attributesChanged = context.coordinator.lastAppliedAttributes != blockAttributes
         let strikethroughChanged = context.coordinator.lastAppliedStrikethrough != strikethrough
         let markdownEcho = markdown == context.coordinator.lastEmittedMarkdown
+        if themeColorsChanged, !attributesChanged, !strikethroughChanged, markdownEcho {
+            context.coordinator.applyContent(preserveSelection: context.coordinator.isActivelyEditing(textView))
+            return
+        }
         if context.coordinator.isActivelyEditing(textView), !attributesChanged, !strikethroughChanged {
             return
         }
@@ -95,6 +102,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
         private var lastLayoutHeight: CGFloat = 24
         var lastAppliedAttributes: [String: String] = [:]
         var lastAppliedStrikethrough = false
+        private var lastThemeRevision: String = ""
 
         init(parent: OWBlockTextEditor) {
             self.parent = parent
@@ -192,6 +200,12 @@ struct OWBlockTextEditor: NSViewRepresentable {
             lastAppliedAttributes = parent.blockAttributes
             lastAppliedStrikethrough = parent.strikethrough
             layout(toWidth: textView.frame.width > 1 ? textView.frame.width : textView.bounds.width)
+        }
+
+        func themeRevisionChanged(_ revision: String) -> Bool {
+            guard revision != lastThemeRevision else { return false }
+            lastThemeRevision = revision
+            return true
         }
 
         func applySelectionChrome() {

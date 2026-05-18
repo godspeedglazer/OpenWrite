@@ -43,6 +43,90 @@ struct LocalHashEmbeddingService: EmbeddingService {
     }
 }
 
+extension Notification.Name {
+    /// User-facing notice when LM Studio embeddings are skipped (posted at most once per cooldown window).
+    static let openWriteEmbeddingUnreachable = Notification.Name("com.openwrite.embeddingUnreachable")
+}
+
+/// Cooldown after connection failures so indexing does not open parallel `/v1/embeddings` storms.
+actor LMStudioEmbeddingCircuit {
+    static let shared = LMStudioEmbeddingCircuit()
+
+    private var disabledUntil: Date?
+    private var lastNoticeAt: Date?
+
+    func shouldAttemptRemote() -> Bool {
+        guard let until = disabledUntil else { return true }
+        if Date() >= until {
+            disabledUntil = nil
+            return true
+        }
+        return false
+    }
+
+    func recordSuccess() {
+        disabledUntil = nil
+    }
+
+    /// Opens the circuit on unreachable errors; returns a debounced user notice string when appropriate.
+    func recordFailure(_ error: Error) -> String? {
+        guard Self.isUnreachable(error) else { return nil }
+        disabledUntil = Date().addingTimeInterval(AISafetyLimits.embeddingCircuitCooldownSeconds)
+        let now = Date()
+        if let last = lastNoticeAt,
+           now.timeIntervalSince(last) < AISafetyLimits.embeddingUnreachableNoticeIntervalSeconds {
+            return nil
+        }
+        lastNoticeAt = now
+        return "LM Studio unreachable — using local embedding fallback."
+    }
+
+    static func isUnreachable(_ error: Error) -> Bool {
+        if error is AITaskTimeoutError { return true }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .cannotConnectToHost, .cannotFindHost, .networkConnectionLost,
+                 .notConnectedToInternet, .timedOut, .dnsLookupFailed:
+                return true
+            default:
+                break
+            }
+        }
+        if let lm = error as? LMStudioError {
+            switch lm {
+            case .invalidURL, .embeddingsUnavailable:
+                return true
+            case .httpStatus(let code, _):
+                return code == 502 || code == 503 || code == 504
+            default:
+                break
+            }
+        }
+        let description = error.localizedDescription.lowercased()
+        return description.contains("connection refused")
+            || description.contains("could not connect")
+            || description.contains("network")
+    }
+}
+
+/// Caps concurrent embedding HTTP calls app-wide (indexing + retrieval share this gate).
+actor EmbeddingRequestGate {
+    static let shared = EmbeddingRequestGate()
+
+    private var inFlight = 0
+    private let maxConcurrent = 2
+
+    func withPermit<T: Sendable>(_ operation: @Sendable () async throws -> T) async throws -> T {
+        while inFlight >= maxConcurrent {
+            try await Task.sleep(nanoseconds: 30_000_000)
+            try Task.checkCancellation()
+        }
+        inFlight += 1
+        defer { inFlight -= 1 }
+        return try await operation()
+    }
+}
+
 struct LMStudioEmbeddingService: EmbeddingService {
     let client: LMStudioClient
     let fallback: EmbeddingService
@@ -53,11 +137,36 @@ struct LMStudioEmbeddingService: EmbeddingService {
     }
 
     func embed(text: String) async throws -> [Float] {
-        do {
-            return try await client.embeddings(input: text)
-        } catch LMStudioError.embeddingsUnavailable {
+        try await EmbeddingRequestGate.shared.withPermit {
+            try await embedGated(text: text)
+        }
+    }
+
+    private func embedGated(text: String) async throws -> [Float] {
+        guard await LMStudioEmbeddingCircuit.shared.shouldAttemptRemote() else {
             return try await fallback.embed(text: text)
+        }
+
+        do {
+            let vector = try await AITaskTimeout.run(
+                seconds: AISafetyLimits.indexingEmbeddingTimeoutSeconds
+            ) {
+                try await client.embeddings(input: text)
+            }
+            await LMStudioEmbeddingCircuit.shared.recordSuccess()
+            return vector
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
+            if let notice = await LMStudioEmbeddingCircuit.shared.recordFailure(error) {
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: .openWriteEmbeddingUnreachable,
+                        object: nil,
+                        userInfo: ["message": notice]
+                    )
+                }
+            }
             return try await fallback.embed(text: text)
         }
     }

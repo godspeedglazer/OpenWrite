@@ -11,6 +11,8 @@ enum OWRoundedRectStyle {
 
 /// Canonical OW Rect surface — see docs/design/OWComponents.md.
 struct OWRoundedRect<Content: View>: View {
+    @Environment(\.openWritePalette) private var palette
+
     let style: OWRoundedRectStyle
     let padding: CGFloat
     @ViewBuilder let content: () -> Content
@@ -55,13 +57,13 @@ struct OWRoundedRect<Content: View>: View {
     private var fillColor: Color {
         switch style {
         case .surface:
-            return DesignTokens.Color.surface
+            return palette.surface
         case .elevated:
-            return DesignTokens.Color.surfaceElevated
+            return palette.surfaceElevated
         case .editorPanel:
-            return DesignTokens.Color.editorCanvas
+            return palette.editorCanvas
         case .sidebarCard:
-            return DesignTokens.Color.surfaceElevated.opacity(0.72)
+            return palette.surfaceElevated.opacity(0.72)
         }
     }
 
@@ -77,9 +79,9 @@ struct OWRoundedRect<Content: View>: View {
     private var borderColor: Color {
         switch style {
         case .editorPanel:
-            return DesignTokens.Color.borderHairline
+            return palette.borderHairline
         default:
-            return DesignTokens.Color.borderSubtle
+            return palette.borderSubtle
         }
     }
 

@@ -34,14 +34,36 @@ struct AgentConfig: Identifiable, Hashable, Sendable, Codable {
     /// Max indexed chunks to retrieve (Reor `dbSearchFilters.limit`).
     var chunkLimit: Int
     var toolFlags: AgentToolFlags
+    /// LM Studio sampling temperature for this preset.
+    var temperature: Double
+    /// Max distinct source excerpts in the system prompt (one chunk per document).
+    var maxReferenceExcerpts: Int
+    /// Per-chunk excerpt character cap (overrides `passFullNoteContext` default when set).
+    var snippetMaxChars: Int?
+    /// Short picker / tooltip copy (not sent to the model).
+    var uiSummary: String
+    /// Extra system instructions appended after excerpts (agent-specific answer shape).
+    var answerInstructions: String
 
     var effectiveChunkLimit: Int {
         guard chunkLimit > 0 else { return 0 }
         return min(chunkLimit, AISafetyLimits.maxContextChunks)
     }
 
+    var effectiveMaxReferenceExcerpts: Int {
+        min(maxReferenceExcerpts, effectiveChunkLimit, AISafetyLimits.maxChatReferenceExcerpts)
+    }
+
+    /// Tooltip / picker subtitle (not sent to the model).
+    var uiHelpText: String {
+        uiSummary
+    }
+
     var snippetCharsPerChunk: Int {
-        toolFlags.passFullNoteContext
+        if let snippetMaxChars {
+            return min(snippetMaxChars, AISafetyLimits.maxSnippetCharsPerChunk * 2)
+        }
+        return toolFlags.passFullNoteContext
             ? min(800, AISafetyLimits.maxSnippetCharsPerChunk * 2)
             : AISafetyLimits.maxSnippetCharsPerChunk
     }

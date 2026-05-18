@@ -130,6 +130,23 @@ Canon: [OWIcons.md](./OWIcons.md). Align [FrontendPriorities.md](./FrontendPrior
 
 ---
 
+## Theme contract (all surfaces)
+
+Every user-visible color must resolve from the **active** theme at render time — never hard-coded cream/white hex, `Color.white`, or `.foregroundStyle(.secondary)` on themed canvases.
+
+| Rule | Implementation |
+|------|----------------|
+| **Source of truth** | `ThemeManager.shared` → `ThemePalette` via `DesignTokens.Color.*` or `@Environment(\.openWritePalette)`. |
+| **SwiftUI refresh** | `ThemeManager.revision` + `.id(revision)` on shell/editor/chat roots; `openWriteThemeAppearance()` on window roots. |
+| **AppKit bridges** | `NSHostingView` canvas via `palette.background` / `editorCanvas`; `OWBlockTextEditor.themeRevision`; scroll hosts repaint on `.openWriteThemeDidChange`. |
+| **Selection contrast** | Selected rows/pills use `selectionPill` fill + `textPrimary` labels (not `accentMuted` alone). |
+| **Window chrome** | `OWWindowChrome` reads `palette.shellChrome` per theme; titlebar accessory only on titled main windows. |
+| **Editor layout** | Measure = read-only (`fittingSize`); apply = async (`applyDocumentLayout` / `scheduleRefreshDocumentSize`). No `layoutSubtreeIfNeeded` during SwiftUI `sizeThatFits` or scroll measure. |
+
+Cycle **≥3 themes** (light, dark, warm) and verify editor canvas, chat panel, rail, and agent picker stay legible.
+
+---
+
 ## Out of scope for this refactor
 
 - Logo final art ([BrandAndLogo.md](./BrandAndLogo.md))
@@ -146,10 +163,12 @@ Phase 0 UI fixes are in Swift sources on `main` (see recent commits `04bffeb`–
 | Topic | Code |
 |-------|------|
 | **Shell layout** | `AnytypeShellView` — rail optional; center `OWRoundedRect.editorPanel`; trailing `AIAssistStripView` when `WorkbenchState.aiAssistExpanded`. |
-| **Titlebar** | `OWWindowChrome` + `OWSolidTitlebarAccessory` — opaque shell chrome behind traffic lights; `AppDelegate` re-applies on resize/focus/theme. |
+| **Titlebar** | `OWWindowChrome` + `OWSolidTitlebarAccessory` — only on titled main windows (`canApplyChrome` / `supportsTitlebarAccessory`); coalesced re-apply in `AppDelegate`. |
 | **Editor width** | `View.openWriteEditorContentWidth()` — centered max ~880pt; banner full-bleed; blocks/toolbars share `openWriteEditorLeadingInset()`. |
 | **Chat composer** | `ChatPanelView.composerActionBoard` — 2×2 toggles (Notes/Web, Attach/Send); field min height = `DesignTokens.Layout.composerBoardHeight`. |
-| **Themed scroll** | `OpenWriteThemedScrollView` — `scrollToBottomOnTokenChange: true` for chat; `scrollToken` remeasure for editor (no spurious scroll-to-bottom). |
+| **Themed scroll** | `OpenWriteThemedScrollView` — `canvasColor` from `openWritePalette`; deferred `scheduleRefreshDocumentSize`; read-only measure (no subtree layout during AG). |
+| **Block paste host** | `measureDocumentSize` in `sizeThatFits`; `applyDocumentLayout` async from `updateNSView` on structure/content/width revision. |
+| **Theme propagation** | `OWRoundedRect`, `GraphView`, `ChatPanelView`, `EditorView`, `OWBlockTextEditor` (`themeRevision`), block paste host (clear layer) — no hardcoded white `NSHostingView` / `labelColor` canvas. |
 | **Graph inline** | `OWRoundedRect` `.editorPanel` uses `maxHeight: .infinity`; `GraphView` empty overlay separated from node layer. |
 | **Create page sheet** | `ContentView.newPageSheet` + `openWriteSheetPresentationChrome()` (not system white). |
 | **Cover preset** | `CoverStyle.solarizedHeader` for Solarized Warm theme. |

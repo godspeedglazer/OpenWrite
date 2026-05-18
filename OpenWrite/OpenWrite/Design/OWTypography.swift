@@ -270,7 +270,7 @@ enum OWTypography {
         [
             .font: editorNSFont,
             .paragraphStyle: editorParagraphStyle,
-            .foregroundColor: NSColor.labelColor
+            .foregroundColor: NSColor(ThemeManager.shared.palette.textPrimary)
         ]
     }
 

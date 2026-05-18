@@ -37,6 +37,8 @@ struct RetrievalHit: Identifiable, Hashable, Sendable {
 /// Orchestrates hybrid search over indexed vault content.
 protocol RetrievalService: Sendable {
     func search(query: String, limit: Int) async throws -> [RetrievalHit]
+    /// Lexical search over the full index (no embedding call) — used when hybrid search times out.
+    func keywordSearch(query: String, limit: Int) async throws -> [RetrievalHit]
     func related(to documentID: UUID, limit: Int) async throws -> [RetrievalHit]
 }
 
@@ -72,8 +74,31 @@ struct HybridRetrievalService: RetrievalService {
         let vectorPool = vectorHits.map(\.chunk)
         let keywordHits = ranker.keywordHits(query: sanitized, in: vectorPool, limit: pool)
 
-        let ranked = ranker.rank(vectorHits: vectorHits, keywordHits: keywordHits, limit: limit)
+        var ranked = ranker.rank(vectorHits: vectorHits, keywordHits: keywordHits, limit: limit)
+        if ranked.isEmpty {
+            let lexical = ranker.keywordHits(
+                query: sanitized,
+                in: await vectorStore.allChunks(),
+                limit: limit
+            )
+            ranked = lexical.map {
+                HybridRankCandidate(
+                    chunk: $0.chunk,
+                    vectorScore: 0,
+                    keywordScore: $0.score,
+                    combinedScore: $0.score
+                )
+            }
+        }
         return ranked.map { RetrievalHit(chunk: $0.chunk, score: $0.combinedScore) }
+    }
+
+    func keywordSearch(query: String, limit: Int) async throws -> [RetrievalHit] {
+        guard let sanitized = AIInput.sanitizeQuery(query) else { return [] }
+        let pool = await vectorStore.allChunks()
+        guard !pool.isEmpty else { return [] }
+        let hits = ranker.keywordHits(query: sanitized, in: pool, limit: limit)
+        return hits.map { RetrievalHit(chunk: $0.chunk, score: $0.score) }
     }
 
     func related(to documentID: UUID, limit: Int) async throws -> [RetrievalHit] {
@@ -90,6 +115,12 @@ struct HybridRetrievalService: RetrievalService {
 
 struct NoOpRetrievalService: RetrievalService {
     func search(query: String, limit: Int) async throws -> [RetrievalHit] {
+        _ = query
+        _ = limit
+        return []
+    }
+
+    func keywordSearch(query: String, limit: Int) async throws -> [RetrievalHit] {
         _ = query
         _ = limit
         return []

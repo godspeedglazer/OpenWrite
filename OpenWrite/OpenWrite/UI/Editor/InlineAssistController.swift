@@ -429,48 +429,26 @@ final class BlockEditorPasteCaptureView: NSView {
         cachedMeasureHeight = 1
     }
 
-    /// Probes hosted height at `width` and restores the live frame (no cache — text growth must not reuse stale height).
-    private func probeDocumentSize(width: CGFloat) -> CGSize {
+    /// Read-only measure — width probe + `fittingSize` only; never forces subtree layout (AttributeGraph-safe).
+    func measureDocumentSize(width: CGFloat) -> CGSize {
         let safeWidth = max(width, 320)
+        if abs(cachedMeasureWidth - safeWidth) < 0.5, cachedMeasureHeight > 0 {
+            return CGSize(width: safeWidth, height: cachedMeasureHeight)
+        }
         let priorFrame = hostedView.frame
         if abs(priorFrame.width - safeWidth) > 0.5 {
             hostedView.frame.size.width = safeWidth
         }
-        hostedView.layoutSubtreeIfNeeded()
         let fitting = hostedView.fittingSize.height
         let intrinsic = hostedView.intrinsicContentSize.height
         hostedView.frame = priorFrame
-        let contentHeight = max(max(fitting, intrinsic), 1)
-        return CGSize(width: safeWidth, height: contentHeight)
-    }
-
-    /// Read-only measure for `intrinsicContentSize` — restores the live frame after probing.
-    func measureDocumentSize(width: CGFloat) -> CGSize {
-        probeDocumentSize(width: width)
-    }
-
-    /// SwiftUI `sizeThatFits` — applies height growth from typing/newlines without a structure revision.
-    func measureAndApplyDocumentSize(width: CGFloat) -> CGSize {
-        applyDocumentLayout(width: width)
-        let safeWidth = max(width, 320)
-        return CGSize(width: safeWidth, height: max(frame.height, cachedMeasureHeight))
-    }
-
-    private func laidOutDocumentSize(width: CGFloat) -> CGSize {
-        let safeWidth = max(width, 320)
-        if abs(hostedView.frame.width - safeWidth) > 0.5 {
-            hostedView.frame.size.width = safeWidth
-        }
-        hostedView.layoutSubtreeIfNeeded()
-        let fitting = hostedView.fittingSize.height
-        let intrinsic = hostedView.intrinsicContentSize.height
         let contentHeight = max(max(fitting, intrinsic), 1)
         cachedMeasureWidth = safeWidth
         cachedMeasureHeight = contentHeight
         return CGSize(width: safeWidth, height: contentHeight)
     }
 
-    /// Applies width + height when width or hosted content changed; skips work when size is unchanged.
+    /// Applies width + height on the next run loop turn; may use subtree layout outside AttributeGraph updates.
     func applyDocumentLayout(width: CGFloat) {
         guard !isApplyingLayout else { return }
         let safeWidth = max(width, 320)
@@ -478,7 +456,17 @@ final class BlockEditorPasteCaptureView: NSView {
         isApplyingLayout = true
         defer { isApplyingLayout = false }
 
-        let target = laidOutDocumentSize(width: safeWidth)
+        if abs(hostedView.frame.width - safeWidth) > 0.5 {
+            hostedView.frame.size.width = safeWidth
+        }
+        hostedView.layoutSubtreeIfNeeded()
+        let fitting = hostedView.fittingSize.height
+        let intrinsic = hostedView.intrinsicContentSize.height
+        let contentHeight = max(max(fitting, intrinsic), 1)
+        let target = CGSize(width: safeWidth, height: contentHeight)
+        cachedMeasureWidth = safeWidth
+        cachedMeasureHeight = contentHeight
+
         let frameUnchanged =
             abs(frame.width - target.width) < 0.5
             && abs(frame.height - target.height) < 0.5
@@ -504,8 +492,10 @@ final class BlockEditorPasteCaptureView: NSView {
         guard bounds.width > 1, !isApplyingLayout else { return }
         let safeWidth = bounds.width
         guard abs(hostedView.frame.width - safeWidth) > 0.5 else { return }
-        invalidateMeasurementCache()
-        applyDocumentLayout(width: safeWidth)
+        let width = safeWidth
+        DispatchQueue.main.async { [weak self] in
+            self?.applyDocumentLayout(width: width)
+        }
     }
 
     @objc func paste(_ sender: Any?) {

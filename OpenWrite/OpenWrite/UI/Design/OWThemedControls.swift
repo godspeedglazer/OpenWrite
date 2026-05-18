@@ -444,7 +444,7 @@ struct OWThemedDropdown<Option: Hashable>: View {
             .padding(.vertical, DesignTokens.Spacing.spacing2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                isSelected ? DesignTokens.Color.accentMuted : DesignTokens.Color.surface,
+                isSelected ? DesignTokens.Color.selectionPill : DesignTokens.Color.surface,
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
             )
         }

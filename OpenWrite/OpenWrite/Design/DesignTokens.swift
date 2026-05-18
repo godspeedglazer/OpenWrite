@@ -77,6 +77,18 @@ enum DesignTokens {
 
         static var graphNodeFocused: SwiftUI.Color { palette.graphNodeFocused }
 
+        // MARK: Scrollbars (NSScrollView overlay scrollers)
+
+        /// Neutral thumb — not brand accent (avoids saturated blue blocks in chat/editor).
+        static var scrollbarKnob: SwiftUI.Color {
+            palette.textTertiary.opacity(Scrollbar.knobAlpha)
+        }
+
+        /// Optional track hint on drag/hover; nearly invisible at rest.
+        static var scrollbarTrack: SwiftUI.Color {
+            palette.borderSubtle.opacity(Scrollbar.trackAlpha)
+        }
+
         // MARK: Private
 
         fileprivate static func adaptive(
@@ -303,6 +315,25 @@ enum DesignTokens {
         static func animation(_ standard: Animation, reduceMotion: Bool) -> Animation? {
             reduceMotion ? nil : standard
         }
+    }
+
+    // MARK: Scrollbar (AppKit overlay scroller geometry)
+
+    enum Scrollbar {
+        /// Total gutter width for `NSScroller.Style.overlay` (knob sits inside).
+        static let overlayWidth: CGFloat = 9
+        static let knobCornerRadius: CGFloat = 4
+        static let trackCornerRadius: CGFloat = 3
+        /// Insets within the scroller bounds so the thumb reads ~7–8pt wide.
+        static let knobHorizontalInset: CGFloat = 1.5
+        static let knobVerticalInset: CGFloat = 1
+        static let trackHorizontalInset: CGFloat = 2.5
+        static let trackVerticalInset: CGFloat = 5
+        /// Thumb opacity — subtle on cream/solarized chrome.
+        static let knobAlpha: CGFloat = 0.40
+        /// Track opacity — invisible at rest; slightly visible while scrolling.
+        static let trackAlpha: CGFloat = 0.10
+        static let trackAlphaWhileActive: CGFloat = 0.14
     }
 
     // MARK: Layout

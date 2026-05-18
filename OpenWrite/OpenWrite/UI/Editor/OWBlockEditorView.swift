@@ -154,6 +154,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         let hosting = NSHostingView(rootView: hosted)
         hosting.openWriteSuppressFocusRing()
         hosting.sizingOptions = [.intrinsicContentSize]
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
         context.coordinator.hostingView = hosting
         context.coordinator.seedHostedBlockIDs(blocks)
         let host = BlockEditorPasteCaptureView(hostedView: hosting)
@@ -176,7 +177,15 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         context.coordinator.onSelectionChange = onSelectionChange
         let previewModeChanged = context.coordinator.lastPreviewMode != previewMode
         context.coordinator.lastPreviewMode = previewMode
-        if (context.coordinator.needsHostedRootRefresh(for: blocks) || previewModeChanged),
+        if let hosting = context.coordinator.hostingView {
+            hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        }
+        let themeRevision = ThemeManager.shared.revision
+        let themeChanged = context.coordinator.lastThemeRevision != themeRevision
+        if themeChanged {
+            context.coordinator.lastThemeRevision = themeRevision
+        }
+        if (context.coordinator.needsHostedRootRefresh(for: blocks) || previewModeChanged || themeChanged),
            let hosting = context.coordinator.hostingView {
             hosting.rootView = BlockEditorHostedContent(
                 blocks: context.coordinator.blocks,
@@ -184,7 +193,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
                 onActivateBlock: onActivateBlock,
                 onSelectionChange: { context.coordinator.onSelectionChange?($0) }
             )
-            if previewModeChanged {
+            if previewModeChanged || themeChanged {
                 host.invalidateMeasurementCache()
             }
         }
@@ -194,14 +203,17 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             320
         )
         let structureRevision = context.coordinator.blocksStructureRevision(blocks)
+        let contentRevision = context.coordinator.blocksContentRevision(blocks)
         let widthChanged = abs((context.coordinator.lastAppliedWidth ?? 0) - layoutWidth) > 0.5
         let structureChanged = structureRevision != context.coordinator.lastStructureRevision
-        guard widthChanged || structureChanged else { return }
+        let contentChanged = contentRevision != context.coordinator.lastContentRevision
+        guard widthChanged || structureChanged || contentChanged else { return }
 
-        if structureChanged || widthChanged {
+        if structureChanged || widthChanged || contentChanged {
             host.invalidateMeasurementCache()
         }
         context.coordinator.lastStructureRevision = structureRevision
+        context.coordinator.lastContentRevision = contentRevision
         context.coordinator.lastAppliedWidth = layoutWidth
         context.coordinator.scheduleLayout(on: host, width: layoutWidth)
     }
@@ -209,7 +221,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BlockEditorPasteCaptureView, context: Context) -> CGSize? {
         let width = max(proposal.width ?? 640, 320)
         context.coordinator.lastProposedWidth = width
-        return nsView.measureAndApplyDocumentSize(width: width)
+        return nsView.measureDocumentSize(width: width)
     }
 
     final class Coordinator {
@@ -219,7 +231,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         var lastProposedWidth: CGFloat?
         var lastAppliedWidth: CGFloat?
         var lastStructureRevision: UInt64 = 0
+        var lastContentRevision: UInt64 = 0
         var lastPreviewMode = false
+        var lastThemeRevision: UInt = 0
         private var lastHostedBlockIDs: [UUID] = []
         private var layoutGeneration = 0
 
@@ -282,8 +296,19 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             }
         }
 
+        /// Text/checkbox changes that affect vertical size without block add/remove.
+        func blocksContentRevision(_ blocks: [NoteBlock]) -> UInt64 {
+            var hasher = Hasher()
+            for block in blocks {
+                hasher.combine(block.id)
+                hasher.combine(block.text)
+                hasher.combine(block.isChecked)
+            }
+            return UInt64(bitPattern: Int64(hasher.finalize()))
+        }
+
         /// Layout-affecting block changes only — excludes `text` and `isChecked` so typing and todo toggles
-        /// update SwiftUI in place without remeasuring the AppKit paste host.
+        /// update SwiftUI in place without rebuilding the hosted root.
         func blocksStructureRevision(_ blocks: [NoteBlock]) -> UInt64 {
             var hasher = Hasher()
             hasher.combine(blocks.count)

@@ -11,9 +11,11 @@
 | **Title bar** | `OWWindowChrome` — transparent unified titlebar, `OWSolidTitlebarAccessory` opaque fill, theme-frame paint, vibrancy strip; reapplied on theme/window events. |
 | **Editor column** | `openWriteEditorContentWidth()` centers readable column (~880pt); `editorScrollLayoutToken` remeasures `OpenWriteThemedScrollView` when assist/rail toggles. |
 | **Chat** | `ChatPanelView` — 2×2 composer board (`composerBoardHeight`), `scrollToBottomOnTokenChange` for transcript only; `OWChatStatusStepper` baseline-aligned rail. |
-| **Scroll** | `OpenWriteThemedScrollContainer` remeasures hosting height on clip resize (fixes assist-strip scroll softlock). |
+| **Scroll** | `OpenWriteThemedScrollContainer` remeasures hosting height on clip resize (deferred apply; read-only measure). |
+| **Editor layout** | Block paste host: measure in `sizeThatFits`, apply on next run loop — fixes example-workspace SIGABRT from `layoutSubtreeIfNeeded` during AttributeGraph update. |
 | **Graph** | `GraphView` + `OWRoundedRect.editorPanel` maxHeight; empty overlay when linkless; layout clamp on resize. |
 | **Sheets** | `openWriteSheetPresentationChrome()` — cream `background` token on Create page / database sheets. |
+| **AI / RAG** | Agent presets differ by topK, excerpt width, temperature, and answer format (`AgentRegistry`). Vault index: active-vault pages + `VaultMarkdownCatalog` `.md`; launch `prepareVaultIndex`; search timeout → lexical fallback. Settings shows index + ingestion status. |
 | **Out of scope** | In-app browser, cloud sync, real vault crypto, voice dictation (`VoiceInputService` stubs). |
 
 Canonical UI spec: [design/UIRefactorBrief.md](./design/UIRefactorBrief.md). Audit rows: [design/CurrentUIAudit.md](./design/CurrentUIAudit.md).

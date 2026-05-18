@@ -56,7 +56,25 @@ enum OWWindowChrome {
 
     private static var titlebarFillAccessories: [ObjectIdentifier: OWSolidTitlebarAccessory] = [:]
 
+    /// Main document windows only — not sheets, panels, or borderless utility chrome.
+    static func canApplyChrome(to window: NSWindow) -> Bool {
+        if window.isSheet { return false }
+        if window is NSPanel { return false }
+        let mask = window.styleMask
+        if mask.contains(.borderless) && !mask.contains(.titled) { return false }
+        if mask.contains(.nonactivatingPanel) { return false }
+        return mask.contains(.titled) || mask.contains(.fullSizeContentView)
+    }
+
+    /// `NSTitlebarAccessoryViewController` is only valid on standard titled app windows.
+    static func supportsTitlebarAccessory(on window: NSWindow) -> Bool {
+        guard canApplyChrome(to: window) else { return false }
+        return window.styleMask.contains(.titled)
+    }
+
     static func apply(to window: NSWindow) {
+        guard canApplyChrome(to: window) else { return }
+
         window.title = "OpenWrite"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -65,7 +83,9 @@ enum OWWindowChrome {
             window.titlebarSeparatorStyle = .none
             window.toolbarStyle = .unifiedCompact
         }
-        window.styleMask.insert(.fullSizeContentView)
+        if window.styleMask.contains(.titled) {
+            window.styleMask.insert(.fullSizeContentView)
+        }
         window.toolbar = nil
 
         let theme = ThemeManager.shared.selectedTheme
@@ -76,13 +96,16 @@ enum OWWindowChrome {
         window.backgroundColor = chrome
         paintThemeFrame(window, color: chrome)
         stripTitlebarVibrancy(in: window, fill: chrome)
-        installSolidTitlebarFill(on: window, color: chrome)
+        if supportsTitlebarAccessory(on: window) {
+            installSolidTitlebarFill(on: window, color: chrome)
+            reorderTitlebarAccessories(on: window)
+        }
         tintHostingRoot(window, color: chrome)
-        reorderTitlebarAccessories(on: window)
     }
 
     /// Keeps the opaque fill behind traffic lights (first accessory wins stacking).
     private static func reorderTitlebarAccessories(on window: NSWindow) {
+        guard supportsTitlebarAccessory(on: window) else { return }
         let key = ObjectIdentifier(window)
         guard let accessory = titlebarFillAccessories[key] else { return }
         var accessories = window.titlebarAccessoryViewControllers
@@ -93,13 +116,14 @@ enum OWWindowChrome {
     }
 
     static func applyToAllWindows() {
-        for window in NSApp.windows where !window.isSheet {
+        for window in NSApp.windows where canApplyChrome(to: window) {
             apply(to: window)
         }
     }
 
     static func reapplyToKeyWindow() {
-        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow,
+              canApplyChrome(to: window) else { return }
         apply(to: window)
     }
 
@@ -125,6 +149,7 @@ enum OWWindowChrome {
     }
 
     private static func installSolidTitlebarFill(on window: NSWindow, color: NSColor) {
+        guard supportsTitlebarAccessory(on: window) else { return }
         let key = ObjectIdentifier(window)
         if let accessory = titlebarFillAccessories[key] {
             accessory.chromeColor = color

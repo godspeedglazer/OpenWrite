@@ -2,6 +2,7 @@ import SwiftUI
 
 struct EditorView: View {
     @Environment(\.openWritePalette) private var palette
+    @Environment(ThemeManager.self) private var themeManager
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var pastWrites: InMemoryPastWritesService
     @EnvironmentObject private var aiServices: OpenWriteAIServices
@@ -36,6 +37,7 @@ struct EditorView: View {
     }
 
     var body: some View {
+        let _ = themeManager.revision
         Group {
             if let document {
                 editorBody(document)
@@ -43,6 +45,7 @@ struct EditorView: View {
                 OWEmptyState(title: "Note missing", icon: .missingNote)
             }
         }
+        .id(themeManager.revision)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .environment(\.blockFormatting, blockFormatting)
         .sheet(isPresented: $inlineAssist.showRefineResult) {
@@ -243,16 +246,19 @@ struct EditorView: View {
     }
 
     private var editorScrollLayoutToken: Int {
-        var token = 0
-        if workbench.aiAssistExpanded { token |= 1 }
-        if !workbench.sidebarVisible { token |= 2 }
-        if workbench.navigationRailCollapsed { token |= 4 }
+        var token = themeManager.selectedTheme.hashValue
+        if workbench.aiAssistExpanded { token |= 1 << 1 }
+        if !workbench.sidebarVisible { token |= 1 << 2 }
+        if workbench.navigationRailCollapsed { token |= 1 << 3 }
         return token
     }
 
     @ViewBuilder
     private func editorScrollSurface(_ document: VaultDocument) -> some View {
-        OpenWriteThemedScrollView(scrollToken: editorScrollLayoutToken) {
+        OpenWriteThemedScrollView(
+            scrollToken: editorScrollLayoutToken,
+            canvasColor: palette.editorCanvas
+        ) {
             VStack(alignment: .leading, spacing: 0) {
                 pageBanner(document)
 
@@ -342,11 +348,11 @@ struct EditorView: View {
                         ProgressView()
                         Text("Refining selection…")
                             .font(OWTypography.callout)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .ready(let text, let sourceHits):
-                    OpenWriteThemedScrollView {
+                    OpenWriteThemedScrollView(canvasColor: palette.editorCanvas) {
                         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                             if !sourceHits.isEmpty {
                                 RAGSourcePillsView(hits: sourceHits) { documentID in
@@ -377,7 +383,7 @@ struct EditorView: View {
                 default:
                     Text("No result")
                         .font(OWTypography.callout)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
                 }
             }
             .navigationTitle("Refine selection")

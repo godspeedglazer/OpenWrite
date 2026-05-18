@@ -102,10 +102,15 @@ struct AISettingsView: View {
 
                         Button("Rebuild index") {
                             commitBaseURL()
-                            Task { await aiServices.reindex(documents: vaultStore.documents) }
+                            Task {
+                                await aiServices.reindex(documents: vaultStore.documentsInActiveVault)
+                            }
                         }
                         .buttonStyle(OWSecondaryRectButtonStyle())
-                        .disabled(aiServices.isIndexing || vaultStore.documents.isEmpty)
+                        .disabled(
+                            aiServices.isIndexing
+                                || !OpenWriteAIServices.hasIndexableContent(documents: vaultStore.documentsInActiveVault)
+                        )
 
                         if aiServices.isIndexing {
                             Button("Cancel indexing") {

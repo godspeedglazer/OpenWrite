@@ -1,5 +1,10 @@
 import SwiftUI
 
+extension Notification.Name {
+    /// Posted after `ThemeManager.select` — AppKit scroll hosts and window chrome listen for this.
+    static let openWriteThemeDidChange = Notification.Name("com.openwrite.themeDidChange")
+}
+
 // MARK: - Environment
 
 private struct OpenWritePaletteKey: EnvironmentKey {
@@ -46,6 +51,9 @@ final class ThemeManager {
     static let storageKey = "com.openwrite.selectedThemeID"
     static let shared = ThemeManager()
 
+    /// Bumps on every theme change so SwiftUI can `.id(revision)` AppKit bridges.
+    private(set) var revision: UInt = 0
+
     private(set) var selectedTheme: ThemeID {
         didSet {
             guard selectedTheme != oldValue else { return }
@@ -67,7 +75,10 @@ final class ThemeManager {
     }
 
     func select(_ theme: ThemeID) {
+        guard theme != selectedTheme else { return }
         selectedTheme = theme
+        revision &+= 1
+        NotificationCenter.default.post(name: .openWriteThemeDidChange, object: nil)
         OWWindowChrome.applyToAllWindows()
     }
 

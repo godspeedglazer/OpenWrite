@@ -6,9 +6,10 @@ enum AISafetyLimits {
     static let maxChatMessageCharacters = 2000
     static let prefilterCandidateCount = 32
     static let rerankCandidateCount = 24
-    static let maxContextChunks = 12
-    /// Hard cap on vault excerpts in chat system context (reduces RAG dominance).
-    static let maxChatReferenceExcerpts = 6
+    /// Upper bound for per-agent `chunkLimit` (summarizer may request more than Q&A).
+    static let maxContextChunks = 20
+    /// Hard cap on distinct source excerpts in chat system context (safety budget).
+    static let maxChatReferenceExcerpts = 10
     static let maxSnippetCharsPerChunk = 400
     static let maxEstimatedPromptTokens = 3000
     static let charsPerTokenEstimate = 4
@@ -30,9 +31,44 @@ enum AISafetyLimits {
     /// Safe web lookup (server-side fetch in app, not in-page JS).
     static let maxWebFetchBytes = 512 * 1024
     static let webFetchTimeoutSeconds: TimeInterval = 10
+    /// Query-time vault embedding call; falls back to local hash vectors on timeout.
+    static let retrievalEmbeddingTimeoutSeconds: TimeInterval = 3
+    /// Indexing / bulk embed attempts against LM Studio (fast-fail before local hash fallback).
+    static let indexingEmbeddingTimeoutSeconds: TimeInterval = 3
+    /// After connection refused, skip remote embeds for this window to avoid log/CPU storms.
+    static let embeddingCircuitCooldownSeconds: TimeInterval = 120
+    /// Minimum spacing for a single in-app “LM Studio unreachable” notice.
+    static let embeddingUnreachableNoticeIntervalSeconds: TimeInterval = 90
+    /// Whole vault search phase in chat (embed + vector scan); then chat continues with no hits.
+    static let vaultSearchTimeoutSeconds: TimeInterval = 15
     static let webFetchMaxRedirects = 3
     static let maxWebURLsPerMessage = 2
     static let maxWebTextChars = 12_000
+}
+
+enum AITaskTimeoutError: Error, Sendable {
+    case timedOut(TimeInterval)
+}
+
+/// Races an async operation against a sleep; cancels the loser.
+enum AITaskTimeout {
+    static func run<T: Sendable>(
+        seconds: TimeInterval,
+        operation: @Sendable @escaping () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(for: .seconds(seconds))
+                throw AITaskTimeoutError.timedOut(seconds)
+            }
+            guard let result = try await group.next() else {
+                throw AITaskTimeoutError.timedOut(seconds)
+            }
+            group.cancelAll()
+            return result
+        }
+    }
 }
 
 enum AIInput {

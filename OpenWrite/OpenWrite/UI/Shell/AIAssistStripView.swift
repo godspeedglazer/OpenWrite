@@ -23,6 +23,7 @@ extension EnvironmentValues {
 }
 
 struct AIAssistStripView: View {
+    @Environment(\.openWritePalette) private var palette
     @EnvironmentObject private var vaultStore: VaultStore
     @ObservedObject var workbench: WorkbenchState
     @ObservedObject var pastWrites: InMemoryPastWritesService
@@ -47,7 +48,7 @@ struct AIAssistStripView: View {
 
             stripContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(DesignTokens.Color.background)
+                .background(palette.background)
         }
         .frame(
             minWidth: DesignTokens.Layout.assistStripMinWidth,
@@ -70,7 +71,7 @@ struct AIAssistStripView: View {
             }
         }
         .environment(\.aiAssistStripWidth, measuredWidth)
-        .background(DesignTokens.Color.surface)
+        .background(palette.surface)
         .aiAssistKeyboardBack(navigation)
     }
 
@@ -228,11 +229,12 @@ struct AIAssistBottomBar: View {
 // MARK: - Related detail
 
 struct RelatedNoteDetailView: View {
+    @Environment(\.openWritePalette) private var palette
     @EnvironmentObject private var vaultStore: VaultStore
     let hit: RetrievalHit
 
     var body: some View {
-        OpenWriteThemedScrollView {
+        OpenWriteThemedScrollView(canvasColor: palette.background) {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 Text(hit.documentTitle)
                     .font(OWTypography.calloutEmphasis)
@@ -254,6 +256,6 @@ struct RelatedNoteDetailView: View {
             .padding(DesignTokens.Spacing.assistStripContentPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(DesignTokens.Color.background)
+        .background(palette.background)
     }
 }
