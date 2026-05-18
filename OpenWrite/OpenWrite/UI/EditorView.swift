@@ -255,10 +255,8 @@ struct EditorView: View {
 
     @ViewBuilder
     private func editorScrollSurface(_ document: VaultDocument) -> some View {
-        OpenWriteThemedScrollView(
-            scrollToken: editorScrollLayoutToken,
-            canvasColor: palette.editorCanvas
-        ) {
+        // SwiftUI ScrollView avoids NSScrollView ↔ block-host measure feedback (Welcome CPU/RAM loop).
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
                 pageBanner(document)
 
@@ -319,6 +317,7 @@ struct EditorView: View {
             }
             .frame(maxWidth: .infinity, alignment: .top)
         }
+        .id(editorScrollLayoutToken)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(palette.editorCanvas)
     }

@@ -204,9 +204,11 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         scrollView.documentView = hosting
         context.coordinator.installScrollTracking(on: scrollView)
 
-        scrollView.onClipViewLayout = { [weak coordinator = context.coordinator, weak scrollView] in
-            guard let coordinator, let scrollView else { return }
-            coordinator.scheduleRefreshDocumentSize(in: scrollView)
+        if scrollToBottomOnTokenChange {
+            scrollView.onClipViewLayout = { [weak coordinator = context.coordinator, weak scrollView] in
+                guard let coordinator, let scrollView else { return }
+                coordinator.scheduleRefreshDocumentSize(in: scrollView)
+            }
         }
 
         return scrollView
@@ -247,7 +249,7 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         // Remeasure only when theme/scroll token changes or read-only probe shows height drift.
         if themeChanged || scrollTokenChanged {
             context.coordinator.scheduleRefreshDocumentSize(in: scrollView)
-        } else {
+        } else if scrollToBottomOnTokenChange {
             context.coordinator.scheduleRefreshDocumentSizeIfContentGrew(in: scrollView)
         }
     }

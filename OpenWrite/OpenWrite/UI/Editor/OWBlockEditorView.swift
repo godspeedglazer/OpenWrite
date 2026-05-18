@@ -173,6 +173,12 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         host.onDropImageFile = { url in
             context.coordinator.ingestImageFile(url)
         }
+        let initialWidth = Coordinator.roundedLayoutWidth(640)
+        let initialRevision = context.coordinator.blocksContentRevision(blocks)
+        context.coordinator.lastStructureRevision = context.coordinator.blocksStructureRevision(blocks)
+        context.coordinator.lastContentRevision = initialRevision
+        context.coordinator.lastAppliedWidth = initialWidth
+        host.applyDocumentLayout(width: initialWidth, contentRevision: initialRevision)
         return host
     }
 
@@ -222,19 +228,22 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         let contentChanged = contentRevision != context.coordinator.lastContentRevision
         guard widthChanged || structureChanged || contentChanged else { return }
 
-        // Only bust width-keyed measure cache on structure/width changes — not per keystroke.
-        // Content growth is handled by deferred `applyDocumentLayout` without collapsing intrinsic height.
         if structureChanged || widthChanged {
-            host.invalidateMeasurementCache()
+            host.invalidateMeasurementCache(resetContentRevision: false)
+            context.coordinator.lastStructureRevision = structureRevision
+            context.coordinator.lastContentRevision = contentRevision
+            context.coordinator.lastAppliedWidth = layoutWidth
+            context.coordinator.scheduleLayout(
+                on: host,
+                width: layoutWidth,
+                contentRevision: contentRevision
+            )
+            return
         }
-        context.coordinator.lastStructureRevision = structureRevision
+
+        // Keystrokes: NSTextViews grow in place; SwiftUI ScrollView re-measures via `sizeThatFits` only.
         context.coordinator.lastContentRevision = contentRevision
-        context.coordinator.lastAppliedWidth = layoutWidth
-        context.coordinator.scheduleLayout(
-            on: host,
-            width: layoutWidth,
-            contentRevision: contentRevision
-        )
+        host.notifyContentHeightMayHaveChanged()
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BlockEditorPasteCaptureView, context: Context) -> CGSize? {

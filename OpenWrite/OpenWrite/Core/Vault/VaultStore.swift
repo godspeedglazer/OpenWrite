@@ -284,9 +284,12 @@ final class VaultStore: ObservableObject {
             _ = installDemoVault(selectHub: false)
         }
         reconcileSelections()
-        if selectedDocumentID == nil,
-           documents.contains(where: { $0.id == VaultDocument.welcomeDocumentID && $0.belongsToVault(activeVaultID) }) {
-            selectedDocumentID = VaultDocument.welcomeDocumentID
+        if selectedDocumentID == nil {
+            if documents.contains(where: { $0.id == VaultDocument.welcomeDocumentID && $0.belongsToVault(activeVaultID) }) {
+                selectedDocumentID = VaultDocument.welcomeDocumentID
+            } else if let first = documents(in: activeVaultID).first {
+                selectedDocumentID = first.id
+            }
         }
     }
 

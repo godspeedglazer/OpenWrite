@@ -1,9 +1,21 @@
 # Editor and AI panel placement
 
-**Version:** 1.2  
+**Version:** 1.3  
 **Last updated:** 2026-05-17  
 **Status:** Decided — implemented in workbench v2 (assist strip)  
 **Code:** `ContentView.swift`, `AnytypeShellView.swift`, `AIAssistStripView.swift`, `ChatPanelView.swift`, `EditorView.swift`
+
+---
+
+## KNOWN BROKEN / verify (2026-05-17)
+
+| Issue | Mitigation in code |
+|-------|-------------------|
+| Welcome CPU ~99%, RAM GB+ (layout fork-bomb) | **Do not** wrap `EditorView` body in `OpenWriteThemedScrollView`; use SwiftUI `ScrollView`. Chat keeps themed NSScrollView. |
+| Blank white editor | Block host `intrinsicContentSize` must keep last `cachedMeasureHeight` when width cache clears; initial `applyDocumentLayout` in `makeNSView`. |
+| User sees no fix after agent commit | Old binary — **Clean Build Folder**, quit running app, confirm `git log -1`. |
+
+See [../HANDOFF.md](../HANDOFF.md) for Activity Monitor thresholds and agent vs shipped table.
 
 ---
 
@@ -106,16 +118,21 @@ Future: collapse inspector below ~900pt window width per [Components.md § Workb
 
 | Phase | Where | Rules |
 |-------|--------|--------|
-| **Measure (read-only)** | `BlockEditorPasteHost.sizeThatFits`, `measureDocumentSize`, scroll height probe | Width probe + `fittingSize` / `intrinsicContentSize` only — **never** `layoutSubtreeIfNeeded` or `scheduleLayout` (AttributeGraph precondition). |
-| **Apply (async)** | `BlockEditorPasteHost.updateNSView` → `scheduleLayout` → `applyDocumentLayout` | Full subtree layout on next run-loop turn only; early-outs when width/height unchanged. |
-| **Revisions** | `blocksStructureRevision` (kind/attrs/id), `blocksContentRevision` (text/checked) | Structure rebuilds hosted root; content schedules apply without rebuilding rows. |
+| **Measure (read-only)** | `BlockEditorPasteHost.sizeThatFits`, `measureDocumentSize` | Width probe + `fittingSize` / `intrinsicContentSize` only — **never** `layoutSubtreeIfNeeded` in `sizeThatFits`. |
+| **Apply (async)** | `updateNSView` → `scheduleLayout` → `applyDocumentLayout` | **Structure/width only** — not every keystroke. |
+| **Content growth** | `notifyContentHeightMayHaveChanged()` | Invalidates intrinsic for SwiftUI re-measure; NSTextViews grow in place. |
+| **Revisions** | `blocksStructureRevision`, `blocksContentRevision` | Structure rebuilds hosted root; content does not bust width measure cache. |
 
 | Piece | Role |
 |-------|------|
-| `EditorView` | `OpenWriteThemedScrollView(scrollToken: editorScrollLayoutToken)` — remeasures on assist/rail width changes; **does not** scroll-to-bottom on token change (chat-only). |
-| `OWBlockEditorView` | `BlockEditorPasteCaptureView` + inner `NSHostingView` — block rows stay alive across keystrokes; typing bumps **content revision** for async height apply. |
-| `OWBlockTextEditor` | Per-block `NSTextView`; strikethrough for todos applied in-place when only checkbox state changes. |
-| `OpenWriteThemedScrollView` | Read-only measure in `refreshDocumentSize` (deferred via `scheduleRefreshDocumentSize`); preserves scroll origin on document resize. |
+| `EditorView` | **SwiftUI `ScrollView`** for page + blocks; `.id(editorScrollLayoutToken)` when rail/assist chrome changes. |
+| `OWBlockEditorView` | `BlockEditorPasteCaptureView` + `NSHostingView`; initial layout in `makeNSView`. |
+| `OWBlockTextEditor` | Per-block `NSTextView`; **right-click** refine presets when selection non-empty. |
+| `OpenWriteThemedScrollView` | **Chat / sheets only** (`scrollToBottomOnTokenChange: true`); clip-layout remeasure gated to chat. |
+
+**Writing core:** stability patches to this stack only — not an Affine BlockSuite port.
+
+**Inline AI:** selection context menu refine + toolbar Refine → `InlineAssistController` sheet ([InlineAIEditing.md](./InlineAIEditing.md)).
 
 ---
 

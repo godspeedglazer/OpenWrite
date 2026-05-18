@@ -497,6 +497,11 @@ final class BlockEditorPasteCaptureView: NSView {
         }
     }
 
+    /// Typing / checkbox toggles — ask SwiftUI to re-query `sizeThatFits` without busting height cache.
+    func notifyContentHeightMayHaveChanged() {
+        invalidateIntrinsicContentSize()
+    }
+
     /// Read-only measure — width probe + `fittingSize` only; never forces subtree layout (AttributeGraph-safe).
     func measureDocumentSize(width: CGFloat, contentRevision: UInt64) -> CGSize {
         let safeWidth = max(width, 320)
@@ -565,8 +570,13 @@ final class BlockEditorPasteCaptureView: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        if cachedMeasureWidth > 0, cachedMeasureHeight > 0 {
-            return NSSize(width: cachedMeasureWidth, height: cachedMeasureHeight)
+        let height = max(cachedMeasureHeight, 1)
+        if cachedMeasureHeight > 1 {
+            let width = cachedMeasureWidth > 0 ? cachedMeasureWidth : NSView.noIntrinsicMetric
+            return NSSize(width: width, height: height)
+        }
+        if cachedMeasureWidth > 0 {
+            return NSSize(width: cachedMeasureWidth, height: height)
         }
         return NSSize(width: NSView.noIntrinsicMetric, height: 1)
     }

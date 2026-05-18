@@ -77,6 +77,7 @@ struct ContentView: View {
         }
         .onAppear {
             workbench.applyVaultContext(vaultStore.activeVaultID)
+            workbench.showEditor()
             rebuildBacklinkIndex()
         }
     }

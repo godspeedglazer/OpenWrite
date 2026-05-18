@@ -1,11 +1,61 @@
 # OpenWrite — Project Handoff
 
-**Version:** 1.0  
+**Version:** 1.1  
 **Date:** 2026-05-17  
-**Branch:** `main` (HEAD `706218e` — Welcome/chat stability; incremental vault index on edit)  
+**Branch:** `main` — see `git log -1` after your last pull (emergency editor fix lands after `99d9da1`)  
 **Audience:** Next engineer, designer, or Cursor agent taking ownership
 
-This document is the **single honest snapshot** of OpenWrite as it exists today. Read it before touching code. For the mandated next workstream, start with **[AGENT_PROMPT_UI_REFACTOR.md](./AGENT_PROMPT_UI_REFACTOR.md)**.
+This document is the **single honest snapshot** of OpenWrite as it exists today. Read it before touching code. For the mandated next workstream, start with **[AGENT_PROMPT_UI_REFACTOR.md](./AGENT_PROMPT_UI_REFACTOR.md)** (root) or **[docs/AGENT_PROMPT_UI_REFACTOR.md](./docs/AGENT_PROMPT_UI_REFACTOR.md)**.
+
+---
+
+## KNOWN BROKEN (verify after every rebuild)
+
+| Symptom | Root cause (2026-05-17) | Fix in tree |
+|---------|-------------------------|-------------|
+| **Welcome / editor: CPU ~99%, RAM 2GB+**, comments about 23GB fork-bomb | `OpenWriteThemedScrollView` + `BlockEditorPasteCaptureView` measure/apply feedback: `invalidateMeasurementCache` cleared width cache → `intrinsicContentSize` fell to **1pt** → relayout loop | Editor column uses **SwiftUI `ScrollView`**; block host keeps last height in intrinsic; keystrokes no longer call `applyDocumentLayout` |
+| **Blank white center editor on launch** | Same loop collapsed host height; or `selectedDocumentID` nil / Graph tab | `bootstrapOnLaunch` + `ContentView.onAppear` → `showEditor()`; initial `applyDocumentLayout` in `makeNSView` |
+| **User still broken after agent “fix”** | Running **old binary** (diff tab not committed, or no Clean Build) | Quit app, **Product → Clean Build Folder**, rebuild Debug, confirm `git log -1` |
+
+**Not fixed in this pass:** Affine-style block suite, real vault crypto, font banner on Release if fonts missing, block text clipping in cards, emoji popover polish.
+
+---
+
+## What agents did vs what shipped
+
+| Claim / commit | Reality |
+|----------------|---------|
+| `cfcff62`, `706218e` “Welcome layout fixed” | Partial — measure/apply split helped; **NSScrollView remeasure on every SwiftUI tick** still fought the block host |
+| `99d9da1` “23GB RAM spike fixed” | Partial — coalescing + read-only measure; **intrinsic height still dropped to 1pt** when width cache invalidated; user machines could still loop |
+| Docs “HANDOFF updated” | Often **stale HEAD hash** (`706218e` while `99d9da1` on `main`); root `AGENT_PROMPT_UI_REFACTOR.md` was deleted locally |
+| This emergency pass | **Behavior change:** `EditorView` → SwiftUI scroll; block host intrinsic stability; chat-only themed scroll remeasure |
+
+---
+
+## How to verify (operator)
+
+1. **Quit OpenWrite** (Activity Monitor — no `OpenWrite` process).
+2. **Clean build:** Xcode → Product → **Clean Build Folder**, then build **Debug** (`OpenWrite` scheme).
+3. Launch: center tab **Editor** (not Graph); **Welcome to OpenWrite** selected in rail; body blocks visible (callout + headings), not empty white.
+4. **Activity Monitor** (60s idle on Welcome): CPU **&lt; 15%** sustained; memory **&lt; 500 MB** (not climbing toward GB).
+5. Type in a paragraph: CPU may spike briefly; memory should **not** climb continuously.
+6. `git log -1 --oneline` matches the commit you pulled.
+
+---
+
+## Writing core (scope for agents)
+
+- **In scope:** NDL block model, `OWBlockEditorView` / AppKit fields, layout stability, vault selection on launch, inline selection refine.
+- **Out of scope:** Porting AFFiNE BlockSuite, Electron shell, or rewriting the editor as a web view.
+- **Rule:** Stability patches only — do not reintroduce `scheduleRefreshDocumentSize` on every editor `updateNSView` or `applyDocumentLayout` on every keystroke.
+
+---
+
+## Inline AI
+
+- **Right-click refine:** Select text in a block → context menu presets (`InlineRefinePreset`) → `InlineAssistController` + result sheet.
+- **Toolbar:** Editor header **Refine** when selection captured.
+- **Not wired:** Apply-to-selection from sheet in all paths — see `docs/design/InlineAIEditing.md`.
 
 ---
 
@@ -23,9 +73,9 @@ OpenWrite is a **local macOS app-of-apps**: one encrypted vault where you **writ
 
 | Area | Status |
 |------|--------|
-| **Welcome editor** | **Fixed (in progress on user machines)** — `cfcff62` removed async `layout()` re-entry on `BlockEditorPasteCaptureView`; measure is read-only in `sizeThatFits`; apply only from `updateNSView`. If CPU still spikes, verify no local diff re-added `scheduleLayout` in `sizeThatFits`. |
+| **Welcome editor** | **Fix landed post-`99d9da1`** — SwiftUI `ScrollView` for document column; block host intrinsic keeps last height; no per-keystroke `applyDocumentLayout`. **Must clean-rebuild** to pick up. |
 | **Chat connect** | **Improved** — connect step stays honest until first token; **30s** cap (`AISafetyLimits.chatStreamTimeoutSeconds`) fails connect + runs `diagnoseChatFailure` when LM Studio is off. Vault search already has 15s timeout → lexical fallback. |
-| **Launch selection** | Primary vault opens **Welcome to OpenWrite** when nothing else is selected (`VaultStore.bootstrapOnLaunch`). |
+| **Launch selection** | `VaultStore.bootstrapOnLaunch` selects Welcome (or first doc); `ContentView.onAppear` forces **Editor** center tab. |
 
 ### Current state (honest)
 
