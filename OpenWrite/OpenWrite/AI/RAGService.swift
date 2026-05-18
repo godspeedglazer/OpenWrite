@@ -228,16 +228,19 @@ struct LiveRAGService: RAGService {
         """
     }
 
+    private static let ragAnswerInstructions = """
+    The latest user message (role: user) contains the question you must answer directly and first.
+    Address the user's profession, goals, scenario, or constraints when they state them — even if vault excerpts do not mention that topic.
+    Use reference excerpts only as optional supporting examples; do not summarize the vault, list note titles, or recite welcome/onboarding copy unless the user asked for that.
+    If excerpts are generic or off-topic, still explain how OpenWrite's local notes, graph links, and search help knowledge workers and researchers in general.
+    Do not quote marketing copy or welcome-note boilerplate verbatim.
+  """
+
     private static func systemAndCitations(context: RAGContext, agent: AgentConfig) -> (String, [UUID]) {
         let (excerptBlock, ids) = excerptBlock(context: context, agent: agent)
         var parts = [agent.systemPrompt]
         parts.append("")
-        parts.append(
-            """
-            The latest user message (role: user) contains the question to answer. \
-            Reference excerpts below are supporting evidence only — do not summarize them by default.
-            """
-        )
+        parts.append(ragAnswerInstructions)
         if !excerptBlock.isEmpty {
             parts.append("")
             parts.append(excerptBlock)
@@ -276,10 +279,11 @@ struct LiveRAGService: RAGService {
         var ids: [UUID] = []
         var usedTokens = AISafetyLimits.systemPromptReservedTokens
         let maxSnippet = agent.snippetCharsPerChunk
-        let excerptCap = min(agent.effectiveChunkLimit, AISafetyLimits.maxChatReferenceExcerpts)
+        let excerptCap = effectiveExcerptCap(context: context, agent: agent)
+        let hitsForExcerpt = dedupedHitsForExcerpt(context: context, cap: excerptCap)
 
         var blockIndex = 0
-        for hit in context.allHits.prefix(excerptCap) {
+        for hit in hitsForExcerpt {
             let header = "[chunk:\(hit.id.uuidString)] \(hit.sourcePillTitle)"
             let body = AIInput.sanitizeSnippet(hit.snippet, maxChars: maxSnippet)
             blockIndex += 1
@@ -296,6 +300,41 @@ struct LiveRAGService: RAGService {
         }
 
         return (lines.joined(separator: "\n\n"), ids)
+    }
+
+    /// One chunk per vault document (drops duplicate Welcome vs Welcome.md index rows).
+    private static func dedupedHitsForExcerpt(context: RAGContext, cap: Int) -> [RetrievalHit] {
+        context.allHits.uniqueDocumentSources(limit: max(1, cap))
+    }
+
+    private static func effectiveExcerptCap(context: RAGContext, agent: AgentConfig) -> Int {
+        let base = min(agent.effectiveChunkLimit, AISafetyLimits.maxChatReferenceExcerpts)
+        guard !context.allHits.isEmpty, queryLooksOffVaultTopic(query: context.query, hits: context.allHits) else {
+            return base
+        }
+        return min(base, 3)
+    }
+
+    private static func queryLooksOffVaultTopic(query: String, hits: [RetrievalHit]) -> Bool {
+        let terms = significantQueryTerms(query)
+        guard terms.count >= 2 else { return false }
+        let corpus = hits.prefix(8).map(\.snippet).joined(separator: " ").lowercased()
+        let matched = terms.filter { corpus.contains($0) }.count
+        return Double(matched) / Double(terms.count) < 0.25
+    }
+
+    private static func significantQueryTerms(_ query: String) -> [String] {
+        let stop: Set<String> = [
+            "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
+            "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does",
+            "did", "will", "would", "could", "should", "may", "might", "must", "shall", "can",
+            "this", "that", "these", "those", "it", "its", "i", "me", "my", "we", "our", "you",
+            "your", "how", "what", "when", "where", "why", "who", "which", "app", "openwrite",
+            "help", "use", "using", "notes", "note", "take", "taking"
+        ]
+        return query.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { $0.count >= 4 && !stop.contains($0) }
     }
 }
 

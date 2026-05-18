@@ -58,32 +58,36 @@ struct OWChatStatusStepper: View {
 
     @ViewBuilder
     private func stepIndicator(_ status: ChatPipelineStep.Status) -> some View {
-        switch status {
-        case .pending:
-            Circle()
-                .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: 1.5)
-                .background(Circle().fill(DesignTokens.Color.surface))
-                .frame(width: 10, height: 10)
-        case .active:
-            Circle()
-                .strokeBorder(DesignTokens.Color.accent, lineWidth: 2)
-                .background(Circle().fill(DesignTokens.Color.background))
-                .frame(width: 12, height: 12)
-        case .completed:
-            Circle()
-                .fill(DesignTokens.Color.accent)
-                .frame(width: 10, height: 10)
-        case .failed:
-            Circle()
-                .fill(DesignTokens.Color.warning)
-                .frame(width: 10, height: 10)
+        Group {
+            switch status {
+            case .pending:
+                Circle()
+                    .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: 1.5)
+                    .background(Circle().fill(DesignTokens.Color.surface))
+                    .frame(width: 10, height: 10)
+            case .active:
+                Circle()
+                    .strokeBorder(DesignTokens.Color.accent, lineWidth: 2)
+                    .background(Circle().fill(DesignTokens.Color.background))
+                    .frame(width: 12, height: 12)
+            case .completed:
+                Circle()
+                    .fill(DesignTokens.Color.accent)
+                    .frame(width: 10, height: 10)
+            case .failed:
+                Circle()
+                    .fill(DesignTokens.Color.warning)
+                    .frame(width: 10, height: 10)
+            }
         }
+        .animation(.easeInOut(duration: 0.32), value: status)
     }
 
-  private func connector(from status: ChatPipelineStep.Status) -> some View {
+    private func connector(from status: ChatPipelineStep.Status) -> some View {
         Rectangle()
             .fill(status == .completed ? DesignTokens.Color.accent.opacity(0.55) : DesignTokens.Color.borderSubtle)
             .frame(width: 2, height: 18)
+            .animation(.easeInOut(duration: 0.38), value: status)
     }
 
     private func labelColor(for status: ChatPipelineStep.Status) -> Color {
