@@ -29,9 +29,7 @@ struct TypePickerView: View {
             }
 
             if mode == .create {
-                TextField("Title", text: $newTitle)
-                    .textFieldStyle(.roundedBorder)
-                    .font(OWTypography.body)
+                OWThemedTextField(placeholder: "Title", text: $newTitle)
             }
 
             typePickerRow
@@ -101,12 +99,17 @@ struct TypePickerView: View {
             .frame(minWidth: minWidth)
             .padding(.horizontal, compact ? 6 : 8)
             .padding(.vertical, verticalPad)
-            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
-                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+            .background(
+                isSelected ? DesignTokens.Color.accentMuted : DesignTokens.Color.surface,
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? DesignTokens.Color.accent.opacity(0.45) : DesignTokens.Color.borderSubtle,
+                        lineWidth: isSelected ? 1.5 : DesignTokens.Layout.borderWidth
+                    )
+            }
         }
         .buttonStyle(.plain)
         .openWriteFocusChrome()

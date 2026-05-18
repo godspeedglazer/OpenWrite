@@ -101,6 +101,8 @@ private struct OpenWriteSuppressSystemFocusEffectModifier: ViewModifier {
 /// Themed settings / modal shell — `shellChrome` header, `background` body, accent Done.
 struct OWSettingsSheet<Content: View>: View {
     let title: String
+    var dismissButtonTitle: String = "Done"
+    var dismissButtonUsesSecondaryStyle: Bool = false
     let onDone: () -> Void
     @ViewBuilder let content: () -> Content
 
@@ -111,8 +113,7 @@ struct OWSettingsSheet<Content: View>: View {
                     .font(DesignTokens.Typography.heading3)
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                 Spacer(minLength: 0)
-                Button("Done", action: onDone)
-                    .buttonStyle(OWAccentCapsuleButtonStyle())
+                dismissButton
             }
             .padding(.horizontal, DesignTokens.Spacing.spacing4)
             .padding(.vertical, DesignTokens.Spacing.spacing3)
@@ -126,6 +127,17 @@ struct OWSettingsSheet<Content: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(DesignTokens.Color.background)
+    }
+
+    @ViewBuilder
+    private var dismissButton: some View {
+        if dismissButtonUsesSecondaryStyle {
+            Button(dismissButtonTitle, action: onDone)
+                .buttonStyle(OWSecondaryRectButtonStyle())
+        } else {
+            Button(dismissButtonTitle, action: onDone)
+                .buttonStyle(OWAccentCapsuleButtonStyle())
+        }
     }
 }
 

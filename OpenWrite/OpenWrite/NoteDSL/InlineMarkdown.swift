@@ -6,6 +6,8 @@ import Foundation
 enum InlineMarkdown {
     static let underlineOpen = "<u>"
     static let underlineClose = "</u>"
+    /// Faux italic for bundled serif faces that ship without an italic cut.
+    private static let fauxItalicObliqueness = 0.25
 
     enum FontFamily: String {
         case serif
@@ -75,7 +77,7 @@ enum InlineMarkdown {
                 wrapped = "\(underlineOpen)\(wrapped)\(underlineClose)"
             }
             let fragmentBase = (attrs[.font] as? NSFont) ?? baseNSFont(family: nil, pointSize: nil)
-            if isItalic(attrs, baseFont: fragmentBase) {
+            if isItalic(attrs, baseFont: fragmentBase, obliqueness: attrs[.obliqueness]) {
                 wrapped = "*\(wrapped)*"
             }
             if isBold(attrs, baseFont: fragmentBase) {
@@ -117,7 +119,7 @@ enum InlineMarkdown {
         var state = FormatState()
         storage.enumerateAttributes(in: range) { attrs, _, _ in
             if isBold(attrs, baseFont: baseFont) { state.isBold = true }
-            if isItalic(attrs, baseFont: baseFont) { state.isItalic = true }
+            if isItalic(attrs, baseFont: baseFont, obliqueness: attrs[.obliqueness]) { state.isItalic = true }
             if attrs[.underlineStyle] != nil { state.isUnderline = true }
             if attrs[.strikethroughStyle] != nil { state.isStrikethrough = true }
         }
@@ -129,7 +131,29 @@ enum InlineMarkdown {
     }
 
     static func toggleItalic(in textView: NSTextView, baseFont: NSFont) {
-        toggleFontTrait(in: textView, trait: .italicFontMask, baseFont: baseFont)
+        guard let storage = textView.textStorage else { return }
+        let range = selectionOrAll(in: textView)
+        guard range.length > 0 else { return }
+        storage.enumerateAttributes(in: range) { attrs, subrange, _ in
+            let current = (attrs[.font] as? NSFont) ?? baseFont
+            if isItalic(attrs, baseFont: baseFont, obliqueness: attrs[.obliqueness]) {
+                var cleared = attrs
+                cleared.removeValue(forKey: .obliqueness)
+                let plain = NSFontManager.shared.convert(current, toNotHaveTrait: .italicFontMask)
+                cleared[.font] = plain
+                storage.setAttributes(cleared, range: subrange)
+            } else if let italicFace = resolvedItalicFont(from: current) {
+                var updated = attrs
+                updated[.font] = italicFace
+                updated.removeValue(forKey: .obliqueness)
+                storage.setAttributes(updated, range: subrange)
+            } else {
+                var updated = attrs
+                updated[.obliqueness] = fauxItalicObliqueness
+                storage.setAttributes(updated, range: subrange)
+            }
+        }
+        textView.setSelectedRange(range)
     }
 
     static func toggleUnderline(in textView: NSTextView) {
@@ -245,7 +269,11 @@ enum InlineMarkdown {
         case .bold:
             attrs[.font] = boldFont(from: base)
         case .italic:
-            attrs[.font] = italicFont(from: base)
+            if let italicFace = resolvedItalicFont(from: base) {
+                attrs[.font] = italicFace
+            } else {
+                attrs[.obliqueness] = fauxItalicObliqueness
+            }
         case .strike:
             attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
         case .underline:
@@ -263,9 +291,12 @@ enum InlineMarkdown {
         return converted.pointSize > 0 ? converted : NSFont.boldSystemFont(ofSize: base.pointSize)
     }
 
-    private static func italicFont(from base: NSFont) -> NSFont {
+    private static func resolvedItalicFont(from base: NSFont) -> NSFont? {
         let converted = NSFontManager.shared.convert(base, toHaveTrait: .italicFontMask)
-        return converted.pointSize > 0 ? converted : NSFontManager.shared.convert(base, toHaveTrait: .italicFontMask)
+        guard converted.pointSize > 0,
+              converted.fontDescriptor.symbolicTraits.contains(.italic),
+              converted.fontName != base.fontName else { return nil }
+        return converted
     }
 
     private static func isBold(_ attrs: [NSAttributedString.Key: Any], baseFont: NSFont) -> Bool {
@@ -273,8 +304,14 @@ enum InlineMarkdown {
         return font.fontDescriptor.symbolicTraits.contains(.bold)
     }
 
-    private static func isItalic(_ attrs: [NSAttributedString.Key: Any], baseFont: NSFont) -> Bool {
+    private static func isItalic(
+        _ attrs: [NSAttributedString.Key: Any],
+        baseFont: NSFont,
+        obliqueness: Any?
+    ) -> Bool {
+        if let obliqueness = obliqueness as? NSNumber, obliqueness.doubleValue != 0 { return true }
         let font = (attrs[.font] as? NSFont) ?? baseFont
-        return font.fontDescriptor.symbolicTraits.contains(.italic)
+        guard font.fontDescriptor.symbolicTraits.contains(.italic) else { return false }
+        return font.fontName != baseFont.fontName
     }
 }

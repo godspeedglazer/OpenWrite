@@ -12,6 +12,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
     let selectionHighlight: Color
     let selectionForeground: Color
     @ObservedObject var formatting: BlockFormattingState
+    var strikethrough: Bool = false
     var onSelectionChange: ((String?) -> Void)?
 
     func makeCoordinator() -> Coordinator {
@@ -31,7 +32,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.drawsBackground = false
         textView.backgroundColor = .clear
-        textView.textContainerInset = NSSize(width: 0, height: 2)
+        textView.textContainerInset = NSSize(width: 2, height: 2)
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
@@ -57,16 +58,17 @@ struct OWBlockTextEditor: NSViewRepresentable {
         guard !context.coordinator.isProgrammaticUpdate else { return }
 
         let attributesChanged = context.coordinator.lastAppliedAttributes != blockAttributes
+        let strikethroughChanged = context.coordinator.lastAppliedStrikethrough != strikethrough
         let markdownEcho = markdown == context.coordinator.lastEmittedMarkdown
-        if context.coordinator.isActivelyEditing(textView), !attributesChanged {
+        if context.coordinator.isActivelyEditing(textView), !attributesChanged, !strikethroughChanged {
             return
         }
-        if markdownEcho, !attributesChanged {
+        if markdownEcho, !attributesChanged, !strikethroughChanged {
             return
         }
 
         let current = InlineMarkdown.markdown(from: textView.textStorage ?? NSAttributedString())
-        if current != markdown || attributesChanged {
+        if current != markdown || attributesChanged || strikethroughChanged {
             context.coordinator.applyContent(preserveSelection: context.coordinator.isActivelyEditing(textView))
         }
     }
@@ -88,6 +90,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
         private var lastLayoutWidth: CGFloat = 0
         private var lastLayoutHeight: CGFloat = 24
         var lastAppliedAttributes: [String: String] = [:]
+        var lastAppliedStrikethrough = false
 
         init(parent: OWBlockTextEditor) {
             self.parent = parent
@@ -142,7 +145,15 @@ struct OWBlockTextEditor: NSViewRepresentable {
                 textColor: NSColor(parent.textColor)
             )
             isProgrammaticUpdate = true
-            textView.textStorage?.setAttributedString(parsed)
+            let storage = NSMutableAttributedString(attributedString: parsed)
+            if parent.strikethrough, storage.length > 0 {
+                storage.addAttribute(
+                    .strikethroughStyle,
+                    value: NSUnderlineStyle.single.rawValue,
+                    range: NSRange(location: 0, length: storage.length)
+                )
+            }
+            textView.textStorage?.setAttributedString(storage)
             if preserveSelection {
                 let length = (textView.string as NSString).length
                 if length > 0 {
@@ -154,6 +165,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
             isProgrammaticUpdate = false
             lastEmittedMarkdown = parent.markdown
             lastAppliedAttributes = parent.blockAttributes
+            lastAppliedStrikethrough = parent.strikethrough
             layout(toWidth: textView.frame.width > 1 ? textView.frame.width : textView.bounds.width)
         }
 

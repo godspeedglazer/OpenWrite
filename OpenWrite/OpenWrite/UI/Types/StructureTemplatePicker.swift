@@ -8,14 +8,17 @@ struct StructureTemplatePicker: View {
     @State private var newTitle: String = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
             Text("Structure template")
-                .font(.headline)
+                .font(OWTypography.panelTitle)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
 
-            TextField("Title", text: $newTitle)
-                .textFieldStyle(.roundedBorder)
+            OWThemedTextField(placeholder: "Title", text: $newTitle)
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], spacing: 10) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 140), spacing: DesignTokens.Spacing.spacing2)],
+                spacing: DesignTokens.Spacing.spacing2
+            ) {
                 ForEach(StructureTemplate.allCases) { structure in
                     structureButton(structure)
                 }
@@ -31,22 +34,33 @@ struct StructureTemplatePicker: View {
             onCreated?(doc.id)
             newTitle = ""
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    OWUnicodeIconView(pageType: structure.pageType, size: 24, color: DesignTokens.ObjectType.accent(for: structure.pageType))
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                HStack(spacing: DesignTokens.Spacing.spacing2) {
+                    OWUnicodeIconView(
+                        pageType: structure.pageType,
+                        size: 24,
+                        color: DesignTokens.ObjectType.accent(for: structure.pageType)
+                    )
                     Text(structure.displayName)
-                        .font(.subheadline.weight(.semibold))
+                        .font(OWTypography.bodyEmphasis)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
                 }
                 Text(structure.summary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(Color.secondary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(DesignTokens.Spacing.spacing3)
+            .background(
+                DesignTokens.Color.surface,
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+            }
         }
         .buttonStyle(.plain)
         .openWriteFocusChrome()

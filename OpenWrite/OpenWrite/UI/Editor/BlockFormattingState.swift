@@ -102,6 +102,7 @@ final class BlockFormattingState: ObservableObject {
 struct OWBlockFormattingToolbar: View {
     @ObservedObject var formatting: BlockFormattingState
     @Binding var blockAttributes: [String: String]
+    @Binding var isPreviewMode: Bool
 
     private let fontSizes: [CGFloat] = [12, 14, 16, 18, 20, 24]
 
@@ -142,7 +143,28 @@ struct OWBlockFormattingToolbar: View {
             )
             .disabled(!formatting.canApplyFormatting)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: DesignTokens.Spacing.spacing2)
+
+            Button {
+                isPreviewMode.toggle()
+            } label: {
+                Text(isPreviewMode ? "Edit" : "Preview")
+                    .font(OWTypography.captionEmphasis)
+                    .foregroundStyle(
+                        isPreviewMode ? DesignTokens.Color.accent : DesignTokens.Color.textSecondary
+                    )
+                    .padding(.horizontal, DesignTokens.Spacing.spacing2)
+                    .padding(.vertical, 6)
+                    .background(
+                        isPreviewMode
+                            ? DesignTokens.Color.accent.opacity(0.18)
+                            : DesignTokens.Color.surfaceElevated.opacity(0.9),
+                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                    )
+            }
+            .buttonStyle(.plain)
+            .openWriteFocusChrome()
+            .help(isPreviewMode ? "Return to editing" : "Hide editing chrome and show rendered blocks")
         }
         .font(OWTypography.captionEmphasis)
         .foregroundStyle(DesignTokens.Color.textSecondary)

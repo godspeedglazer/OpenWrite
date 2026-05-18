@@ -19,6 +19,7 @@ struct EditorView: View {
     @State private var appliedEditorPresentation = false
     @StateObject private var inlineAssist = InlineAssistController()
     @StateObject private var blockFormatting = BlockFormattingState()
+    @State private var isEditorPreviewMode = false
     @State private var blocksCommitTask: Task<Void, Never>?
 
     init(document: VaultDocument) {
@@ -189,7 +190,8 @@ struct EditorView: View {
     private var blockFormattingBar: some View {
         OWBlockFormattingToolbar(
             formatting: blockFormatting,
-            blockAttributes: focusedBlockAttributesBinding
+            blockAttributes: focusedBlockAttributesBinding,
+            isPreviewMode: $isEditorPreviewMode
         )
         .openWriteEditorContentWidth()
         .openWriteEditorLeadingInset()
@@ -214,14 +216,6 @@ struct EditorView: View {
 
     private func editorActionBar(_ document: VaultDocument) -> some View {
         HStack(spacing: DesignTokens.Spacing.spacing3) {
-            Button {
-                insertImageFromPicker(document: document)
-            } label: {
-                OWLabel(title: "Insert image", icon: .document)
-            }
-            .buttonStyle(OWToolbarActionButtonStyle(isEnabled: true))
-            .help("Choose an image file or paste with ⌘V")
-
             Spacer()
 
             Button {
@@ -253,13 +247,37 @@ struct EditorView: View {
             VStack(alignment: .leading, spacing: 0) {
                 pageBanner(document)
 
-                blockFormattingBar
-                    .padding(.top, DesignTokens.Spacing.spacing2)
+                if !isEditorPreviewMode {
+                    blockFormattingBar
+                        .padding(.top, DesignTokens.Spacing.spacing2)
 
-                editorActionBar(document)
+                    editorActionBar(document)
+                        .padding(.top, DesignTokens.Spacing.spacing2)
+                } else {
+                    HStack {
+                        Spacer()
+                        Button {
+                            isEditorPreviewMode = false
+                        } label: {
+                            Text("Edit")
+                                .font(OWTypography.captionEmphasis)
+                                .foregroundStyle(DesignTokens.Color.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .openWriteFocusChrome()
+                        .help("Return to editing")
+                    }
+                    .openWriteEditorLeadingInset()
                     .padding(.top, DesignTokens.Spacing.spacing2)
+                }
 
-                OWBlockEditorView(blocks: $editingBlocks) { selectedText in
+                OWBlockEditorView(
+                    blocks: $editingBlocks,
+                    previewMode: isEditorPreviewMode,
+                    onActivateBlock: { _ in
+                        isEditorPreviewMode = false
+                    }
+                ) { selectedText in
                     inlineAssist.scheduleSelectionCapture(
                         documentID: document.id,
                         blockID: blockFormatting.focusedBlockID,
@@ -414,28 +432,6 @@ struct EditorView: View {
             noteTitle: noteTitle,
             plainText: excerpt
         )
-    }
-
-    private func insertImageFromPicker(document: VaultDocument) {
-        ImagePasteSupport.presentImagePicker { url in
-            guard let url else { return }
-            let placeholder = ImagePasteSupport.placeholderBlock(alt: url.deletingPathExtension().lastPathComponent)
-            let blockID = placeholder.id
-            editingBlocks.append(placeholder)
-            commitBlocks(document: document, blocks: editingBlocks)
-            Task {
-                let finalized = await ImagePasteSupport.finalizeImage(at: url)
-                await MainActor.run {
-                    guard let index = editingBlocks.firstIndex(where: { $0.id == blockID }) else { return }
-                    if let finalized {
-                        editingBlocks[index] = finalized
-                    } else {
-                        editingBlocks.removeAll { $0.id == blockID }
-                    }
-                    commitBlocks(document: document, blocks: editingBlocks)
-                }
-            }
-        }
     }
 
 }

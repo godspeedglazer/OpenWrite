@@ -68,6 +68,7 @@ final class ThemeManager {
 
     func select(_ theme: ThemeID) {
         selectedTheme = theme
+        OWWindowChrome.applyToAllWindows()
     }
 
     /// Cycles through all themes — used by the sidebar quick toggle.

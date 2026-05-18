@@ -12,6 +12,8 @@ struct OWPreviewBlockRow: View {
     var language: Binding<String>? = nil
     var calloutType: Binding<String>? = nil
     var onSelectionChange: ((String?) -> Void)? = nil
+    var previewMode: Bool = false
+    var onActivate: (() -> Void)? = nil
 
     @Environment(\.openWritePalette) private var palette
     @Environment(\.blockFormatting) private var blockFormatting
@@ -45,6 +47,11 @@ struct OWPreviewBlockRow: View {
             case .image:
                 imageRow
             }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard previewMode else { return }
+            onActivate?()
         }
     }
 
@@ -87,14 +94,17 @@ struct OWPreviewBlockRow: View {
     }
 
     private var todoRow: some View {
-        HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
+        HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Spacing.spacing2) {
             todoCheckbox
+                .alignmentGuide(.firstTextBaseline) { dimensions in
+                    dimensions[.bottom] - 3
+                }
             inlineText(
                 font: DesignTokens.Typography.body,
                 lineSpacing: DesignTokens.Typography.bodyLineSpacing,
-                foreground: isTodoChecked ? DesignTokens.Color.textSecondary : DesignTokens.Color.textPrimary
+                foreground: isTodoChecked ? DesignTokens.Color.textSecondary : DesignTokens.Color.textPrimary,
+                strikethrough: isTodoChecked
             )
-            .strikethrough(isTodoChecked && !isEditing)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .owBlockCardPadding()
@@ -113,12 +123,9 @@ struct OWPreviewBlockRow: View {
             }
             .buttonStyle(.plain)
             .openWriteFocusChrome()
-            .frame(width: 28, height: 28, alignment: .topLeading)
             .contentShape(Rectangle())
-            .padding(.top, 0)
         } else {
             todoCheckboxGlyph(filled: filled)
-                .padding(.top, 2)
         }
     }
 
@@ -273,7 +280,7 @@ struct OWPreviewBlockRow: View {
                         Text("Adding image…")
                             .font(DesignTokens.Typography.captionEmphasis)
                             .foregroundStyle(DesignTokens.Color.textSecondary)
-                        Text("Paste with ⌘V, drop a file, or use Insert image in the toolbar.")
+                        Text("Paste with ⌘V or drop an image file onto the note.")
                             .font(DesignTokens.Typography.caption)
                             .foregroundStyle(DesignTokens.Color.textTertiary)
                     }
@@ -318,8 +325,13 @@ struct OWPreviewBlockRow: View {
     }
 
     @ViewBuilder
-    private func inlineText(font: Font, lineSpacing: CGFloat = 0, foreground: Color) -> some View {
-        if let text, let blockAttributes {
+    private func inlineText(
+        font: Font,
+        lineSpacing: CGFloat = 0,
+        foreground: Color,
+        strikethrough: Bool = false
+    ) -> some View {
+        if let text, let blockAttributes, !previewMode {
             OWBlockTextEditor(
                 markdown: text,
                 blockAttributes: blockAttributes,
@@ -330,6 +342,7 @@ struct OWPreviewBlockRow: View {
                 selectionHighlight: palette.selectionHighlight,
                 selectionForeground: palette.textPrimary,
                 formatting: blockFormatting,
+                strikethrough: strikethrough,
                 onSelectionChange: onSelectionChange
             )
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -338,6 +351,7 @@ struct OWPreviewBlockRow: View {
                 .font(font)
                 .lineSpacing(lineSpacing)
                 .foregroundStyle(foreground)
+                .strikethrough(strikethrough)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -425,8 +439,8 @@ struct OWPreviewBlockRow: View {
 private extension View {
     /// Inner card breathing room; pairs with `openWriteEditorLeadingInset` on the block column.
     func owBlockCardPadding() -> some View {
-        padding(.top, DesignTokens.Spacing.spacing3)
-            .padding(.bottom, DesignTokens.Spacing.spacing3)
+        padding(.top, DesignTokens.Spacing.spacing2)
+            .padding(.bottom, DesignTokens.Spacing.spacing2)
             .padding(.leading, DesignTokens.Spacing.spacing3)
             .padding(.trailing, DesignTokens.Spacing.spacing3)
     }

@@ -12,6 +12,8 @@ enum CoverStyle: String, Codable, CaseIterable, Identifiable, Hashable, Sendable
     case midnight
     /// Warm paper + restrained blue — matches `ThemeID.anytypeCalm` banner feel.
     case anytypeCalm
+    /// Light Solarized hero — matches `ThemeID.solarizedWarm` canvas.
+    case solarizedHeader
     case teal
     case plum
     case sunset
@@ -56,6 +58,7 @@ enum CoverStyle: String, Codable, CaseIterable, Identifiable, Hashable, Sendable
         case .amber: return "Amber"
         case .midnight: return "Midnight"
         case .anytypeCalm: return "Calm"
+        case .solarizedHeader: return "Solarized Header"
         case .teal: return "Teal"
         case .plum: return "Plum"
         case .sunset: return "Sunset"
@@ -79,6 +82,13 @@ enum CoverStyle: String, Codable, CaseIterable, Identifiable, Hashable, Sendable
                 Color(red: 0.72, green: 0.80, blue: 0.92),
                 Color(red: 0.94, green: 0.91, blue: 0.86),
                 Color(red: 0.99, green: 0.98, blue: 0.95)
+            ]
+        case .solarizedHeader:
+            return [
+                Color(red: 0.40, green: 0.62, blue: 0.62),
+                Color(red: 0.58, green: 0.72, blue: 0.68),
+                Color(red: 0.93, green: 0.91, blue: 0.84),
+                Color(red: 0.99, green: 0.97, blue: 0.89)
             ]
         case .coral:
             return [Color(red: 0.98, green: 0.45, blue: 0.42), Color(red: 0.95, green: 0.62, blue: 0.38)]

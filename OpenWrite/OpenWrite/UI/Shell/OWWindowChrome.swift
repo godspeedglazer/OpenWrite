@@ -68,11 +68,14 @@ enum OWWindowChrome {
         window.styleMask.insert(.fullSizeContentView)
         window.toolbar = nil
 
+        let theme = ThemeManager.shared.selectedTheme
         let palette = ThemeManager.shared.palette
         let chrome = NSColor(palette.shellChrome)
+        window.appearance = NSAppearance(named: theme.prefersDarkAppearance ? .darkAqua : .aqua)
         window.isOpaque = true
         window.backgroundColor = chrome
         paintThemeFrame(window, color: chrome)
+        stripTitlebarVibrancy(in: window, fill: chrome)
         installSolidTitlebarFill(on: window, color: chrome)
         tintHostingRoot(window, color: chrome)
     }
@@ -113,11 +116,56 @@ enum OWWindowChrome {
         let key = ObjectIdentifier(window)
         if let accessory = titlebarFillAccessories[key] {
             accessory.chromeColor = color
+            accessory.syncHeightToTitlebar()
             return
         }
         let accessory = OWSolidTitlebarAccessory(color: color)
         window.addTitlebarAccessoryViewController(accessory)
         titlebarFillAccessories[key] = accessory
+        accessory.syncHeightToTitlebar()
+    }
+
+    /// Replaces titlebar vibrancy materials with opaque shell chrome (Manuscripts-style flush strip).
+    private static func stripTitlebarVibrancy(in window: NSWindow, fill chrome: NSColor) {
+        guard let root = window.contentView?.superview else { return }
+        var view: NSView? = root
+        while let current = view {
+            let typeName = String(describing: type(of: current))
+            if let effect = current as? NSVisualEffectView {
+                effect.material = .windowBackground
+                effect.blendingMode = .withinWindow
+                effect.state = .active
+                effect.isEmphasized = false
+                effect.wantsLayer = true
+                effect.layer?.backgroundColor = chrome.cgColor
+            } else if typeName.contains("Titlebar") || typeName.contains("TitleBar") || typeName.contains("ThemeFrame") {
+                current.wantsLayer = true
+                current.layer?.backgroundColor = chrome.cgColor
+            }
+            view = current.superview
+        }
+        for effect in visualEffectViews(in: root) {
+            effect.material = .windowBackground
+            effect.blendingMode = .withinWindow
+            effect.state = .active
+            effect.isEmphasized = false
+            effect.wantsLayer = true
+            effect.layer?.backgroundColor = chrome.cgColor
+        }
+    }
+
+    private static func visualEffectViews(in root: NSView) -> [NSVisualEffectView] {
+        var found: [NSVisualEffectView] = []
+        func walk(_ view: NSView) {
+            if let effect = view as? NSVisualEffectView {
+                found.append(effect)
+            }
+            for child in view.subviews {
+                walk(child)
+            }
+        }
+        walk(root)
+        return found
     }
 }
 
@@ -131,6 +179,17 @@ private final class OWSolidTitlebarFillView: NSView {
         }
     }
 
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        autoresizingMask = [.width, .height]
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     override func updateLayer() {
         super.updateLayer()
         layer?.backgroundColor = chromeColor.cgColor
@@ -138,7 +197,7 @@ private final class OWSolidTitlebarFillView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         chromeColor.setFill()
-        dirtyRect.fill()
+        bounds.fill()
     }
 }
 
@@ -165,6 +224,10 @@ private final class OWSolidTitlebarAccessory: NSTitlebarAccessoryViewController 
 
     override func viewDidLayout() {
         super.viewDidLayout()
+        syncHeightToTitlebar()
+    }
+
+    func syncHeightToTitlebar() {
         let titlebarHeight = view.window?.standardWindowButton(.closeButton)?
             .superview?
             .frame
@@ -172,6 +235,9 @@ private final class OWSolidTitlebarAccessory: NSTitlebarAccessoryViewController 
         let height = max(titlebarHeight, DesignTokens.Layout.shellChromeSafeAreaTop)
         if abs(view.frame.height - height) > 0.5 {
             view.frame.size.height = height
+        }
+        if let window = view.window {
+            view.frame.size.width = window.frame.width
         }
     }
 }

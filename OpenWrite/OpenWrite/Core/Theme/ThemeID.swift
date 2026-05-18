@@ -67,6 +67,15 @@ enum ThemeID: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    /// Page hero gradient preset that matches this theme, when one exists.
+    var suggestedPageCover: CoverStyle? {
+        switch self {
+        case .solarizedWarm: return .solarizedHeader
+        case .anytypeCalm: return .anytypeCalm
+        default: return nil
+        }
+    }
+
     /// Drives system control chrome where themes are predominantly dark.
     var prefersDarkAppearance: Bool {
         switch self {

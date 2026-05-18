@@ -371,7 +371,7 @@ enum DesignTokens {
         /// Vertical gap between page header stack and block list.
         static let editorHeaderToBodySpacing: CGFloat = Spacing.spacing4
         /// Vertical gap between block rows in the WYSIWYG editor.
-        static let editorBlockStackSpacing: CGFloat = Spacing.spacing4
+        static let editorBlockStackSpacing: CGFloat = Spacing.spacing2
         static let editorMetadataToToolbarSpacing: CGFloat = Spacing.spacing3
         static let captureSheetWidth: CGFloat = 520
         static let captureSheetMinHeight: CGFloat = 200

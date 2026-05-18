@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSWindow.didBecomeKeyNotification,
             NSWindow.didBecomeMainNotification,
             NSWindow.didResizeNotification,
+            NSApplication.didBecomeActiveNotification,
         ]
         for name in names {
             let observer = center.addObserver(

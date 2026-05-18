@@ -30,6 +30,9 @@ struct ContentView: View {
         .openWriteWindowChrome()
         .sheet(isPresented: $showNewPageSheet) {
             newPageSheet
+                .environment(themeManager)
+                .environmentObject(vaultStore)
+                .openWriteThemeAppearance()
         }
         .sheet(isPresented: $showCreateDatabaseSheet) {
             CreateDatabaseSheet(workbench: workbench, isPresented: $showCreateDatabaseSheet)
@@ -100,32 +103,32 @@ struct ContentView: View {
     }
 
     private var newPageSheet: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing5) {
-                Text("Create page")
-                    .font(DesignTokens.Typography.heading2)
+        OWSettingsSheet(
+            title: "Create page",
+            dismissButtonTitle: "Cancel",
+            dismissButtonUsesSecondaryStyle: true,
+            onDone: { showNewPageSheet = false }
+        ) {
+            OpenWriteThemedScrollView {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing5) {
+                    StructureTemplatePicker { newID in
+                        vaultStore.selectedDocumentID = newID
+                        showNewPageSheet = false
+                    }
 
-                StructureTemplatePicker { newID in
-                    vaultStore.selectedDocumentID = newID
-                    showNewPageSheet = false
+                    Rectangle()
+                        .fill(DesignTokens.Color.separator)
+                        .frame(height: DesignTokens.Layout.borderWidth)
+
+                    TypePickerView(documentID: nil, mode: .create) { newID in
+                        vaultStore.selectedDocumentID = newID
+                        showNewPageSheet = false
+                    }
                 }
-
-                Divider()
-
-                TypePickerView(documentID: nil, mode: .create) { newID in
-                    vaultStore.selectedDocumentID = newID
-                    showNewPageSheet = false
-                }
-
-                HStack {
-                    Spacer()
-                    Button("Cancel") { showNewPageSheet = false }
-                        .openWriteFocusChrome(.themedKeyboard)
-                }
+                .padding(DesignTokens.Spacing.spacing5)
             }
-            .padding(DesignTokens.Spacing.spacing6)
         }
-        .frame(minWidth: 400, minHeight: 420)
+        .frame(minWidth: 420, minHeight: 460)
     }
 }
 

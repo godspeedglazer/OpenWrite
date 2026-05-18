@@ -6,88 +6,18 @@ import SwiftUI
 /// Stacked WYSIWYG block editor — each NDL block is a filled card with inline editing.
 struct OWBlockEditorView: View {
     @Binding var blocks: [NoteBlock]
+    var previewMode: Bool = false
+    var onActivateBlock: ((UUID) -> Void)? = nil
     var onSelectionChange: ((String?) -> Void)? = nil
     var body: some View {
-        BlockEditorPasteHost(blocks: $blocks, onSelectionChange: onSelectionChange)
+        BlockEditorPasteHost(
+            blocks: $blocks,
+            previewMode: previewMode,
+            onActivateBlock: onActivateBlock,
+            onSelectionChange: onSelectionChange
+        )
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    @ViewBuilder
-    private func blockRow(for block: Binding<NoteBlock>) -> some View {
-        let editableText = block.text
-        switch block.wrappedValue.kind {
-        case .todo:
-            OWPreviewBlockRow(
-                block: block.wrappedValue,
-                text: editableText,
-                blockAttributes: attributesBinding(block),
-                checked: todoCheckedBinding(block),
-                onSelectionChange: onSelectionChange
-            )
-        case .callout:
-            OWPreviewBlockRow(
-                block: block.wrappedValue,
-                text: editableText,
-                blockAttributes: attributesBinding(block),
-                calloutType: attributeBinding(block, key: "callout"),
-                onSelectionChange: onSelectionChange
-            )
-        case .code:
-            OWPreviewBlockRow(
-                block: block.wrappedValue,
-                text: editableText,
-                blockAttributes: attributesBinding(block),
-                language: attributeBinding(block, key: "language"),
-                onSelectionChange: onSelectionChange
-            )
-        case .heading1, .heading2, .heading3, .paragraph, .bullet, .quote, .wikilink:
-            OWPreviewBlockRow(
-                block: block.wrappedValue,
-                text: editableText,
-                blockAttributes: attributesBinding(block),
-                onSelectionChange: onSelectionChange
-            )
-        case .image:
-            OWPreviewBlockRow(
-                block: block.wrappedValue,
-                text: editableText,
-                blockAttributes: attributesBinding(block)
-            )
-        default:
-            OWPreviewBlockRow(block: block.wrappedValue)
-        }
-    }
-
-    private func todoCheckedBinding(_ block: Binding<NoteBlock>) -> Binding<Bool> {
-        Binding(
-            get: { block.wrappedValue.isChecked },
-            set: { newValue in
-                var updated = block.wrappedValue
-                updated.isChecked = newValue
-                block.wrappedValue = updated
-            }
-        )
-    }
-
-    private func attributesBinding(_ block: Binding<NoteBlock>) -> Binding<[String: String]> {
-        Binding(
-            get: { block.wrappedValue.attributes },
-            set: { block.wrappedValue.attributes = $0 }
-        )
-    }
-
-    private func attributeBinding(_ block: Binding<NoteBlock>, key: String) -> Binding<String> {
-        Binding(
-            get: { block.wrappedValue.attributes[key] ?? "" },
-            set: { newValue in
-                if newValue.isEmpty {
-                    block.wrappedValue.attributes.removeValue(forKey: key)
-                } else {
-                    block.wrappedValue.attributes[key] = newValue
-                }
-            }
-        )
     }
 }
 
@@ -96,6 +26,8 @@ struct OWBlockEditorView: View {
 /// Stable SwiftUI root for `NSHostingView` — keeps `NSTextView` instances alive across keystrokes.
 private struct BlockEditorHostedContent: View {
     @Binding var blocks: [NoteBlock]
+    var previewMode: Bool
+    var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
 
     var body: some View {
@@ -109,7 +41,8 @@ private struct BlockEditorHostedContent: View {
 
     @ViewBuilder
     private func blockRow(for block: Binding<NoteBlock>) -> some View {
-        let editableText = block.text
+        let editableText = previewMode ? nil : block.text
+        let activate = { onActivateBlock?(block.wrappedValue.id) }
         switch block.wrappedValue.kind {
         case .todo:
             OWPreviewBlockRow(
@@ -117,7 +50,9 @@ private struct BlockEditorHostedContent: View {
                 text: editableText,
                 blockAttributes: attributesBinding(block),
                 checked: todoCheckedBinding(block),
-                onSelectionChange: onSelectionChange
+                onSelectionChange: onSelectionChange,
+                previewMode: previewMode,
+                onActivate: activate
             )
         case .callout:
             OWPreviewBlockRow(
@@ -125,7 +60,9 @@ private struct BlockEditorHostedContent: View {
                 text: editableText,
                 blockAttributes: attributesBinding(block),
                 calloutType: attributeBinding(block, key: "callout"),
-                onSelectionChange: onSelectionChange
+                onSelectionChange: onSelectionChange,
+                previewMode: previewMode,
+                onActivate: activate
             )
         case .code:
             OWPreviewBlockRow(
@@ -133,23 +70,33 @@ private struct BlockEditorHostedContent: View {
                 text: editableText,
                 blockAttributes: attributesBinding(block),
                 language: attributeBinding(block, key: "language"),
-                onSelectionChange: onSelectionChange
+                onSelectionChange: onSelectionChange,
+                previewMode: previewMode,
+                onActivate: activate
             )
         case .heading1, .heading2, .heading3, .paragraph, .bullet, .quote, .wikilink:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
                 text: editableText,
                 blockAttributes: attributesBinding(block),
-                onSelectionChange: onSelectionChange
+                onSelectionChange: onSelectionChange,
+                previewMode: previewMode,
+                onActivate: activate
             )
         case .image:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
                 text: editableText,
-                blockAttributes: attributesBinding(block)
+                blockAttributes: attributesBinding(block),
+                previewMode: previewMode,
+                onActivate: activate
             )
         default:
-            OWPreviewBlockRow(block: block.wrappedValue)
+            OWPreviewBlockRow(
+                block: block.wrappedValue,
+                previewMode: previewMode,
+                onActivate: activate
+            )
         }
     }
 
@@ -187,6 +134,8 @@ private struct BlockEditorHostedContent: View {
 
 private struct BlockEditorPasteHost: NSViewRepresentable {
     @Binding var blocks: [NoteBlock]
+    var previewMode: Bool
+    var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
 
     func makeCoordinator() -> Coordinator {
@@ -196,6 +145,8 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     func makeNSView(context: Context) -> BlockEditorPasteCaptureView {
         let hosted = BlockEditorHostedContent(
             blocks: context.coordinator.blocks,
+            previewMode: previewMode,
+            onActivateBlock: onActivateBlock,
             onSelectionChange: onSelectionChange
         )
         let hosting = NSHostingView(rootView: hosted)
@@ -225,6 +176,8 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
            let hosting = context.coordinator.hostingView {
             hosting.rootView = BlockEditorHostedContent(
                 blocks: context.coordinator.blocks,
+                previewMode: previewMode,
+                onActivateBlock: onActivateBlock,
                 onSelectionChange: { context.coordinator.onSelectionChange?($0) }
             )
         }
