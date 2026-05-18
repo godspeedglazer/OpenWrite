@@ -3,34 +3,45 @@
 **Last updated:** 2026-05-17  
 **Scope:** Frontend perception pass (Refactor Phase 0) — not backend, NDL grammar, or vault crypto.
 
-**Full project handoff:** [../HANDOFF.md](../HANDOFF.md) (KNOWN BROKEN, verify steps, writing-core scope).
+**Full project handoff:** [../HANDOFF.md](../HANDOFF.md) (known issues, verify steps, writing-core scope).
 
 ---
 
-## KNOWN BROKEN (verify after rebuild)
+## KNOWN ISSUES (verify after rebuild)
 
-| Symptom | Status |
-|---------|--------|
-| Welcome editor CPU/RAM fork-bomb | **Addressed** — SwiftUI `ScrollView`; no per-keystroke block `applyDocumentLayout` |
-| Blank editor body (header only) | **Addressed** — `laidOutHeight` + `.frame(minHeight:)` on `OWBlockEditorView` |
-| Sheets hide shell / Refine dead | **Addressed** — fitted sheets + cover popover; Refine opens guidance sheet |
-| Source Serif fallback banner (Release) | **Open** — font target membership |
-| Block text clipping in cards | **Open** — `OWPreviewBlockRow` |
-| P0 header polish (emoji popover, cover gallery) | **Open** — UI refactor backlog |
-
----
-
-## What agents did vs what shipped
-
-Several commits (`cfcff62`, `706218e`, `99d9da1`) improved measure/apply separation but **did not stop the loop on all machines** because NSScrollView remeasure and 1pt intrinsic height collapse remained. Documentation often cited an older HEAD. Treat **clean rebuild + Activity Monitor** as the acceptance gate, not commit messages alone.
+| Symptom | Current reality | Status |
+|---------|-----------------|--------|
+| Welcome/editor CPU-RAM fork-bomb | Editor is SwiftUI `ScrollView`; block host keeps measured height and coalesced apply | **Addressed** |
+| Chat transcript clipping | `ChatTranscriptScrollView` uses SwiftUI scroll + bottom pin sentinel | **Addressed** |
+| Chat state retention | In-memory transcript trimmed to 48 messages; archived threads are read-only restores | **Open risk** |
+| Titlebar alignment gaps | `OWShellTitleBar` uses dynamic insets (`brandAlignsWithNavigationRail`, compact breakpoints) and still needs edge-width QA | **Open risk** |
+| Theme propagation to AppKit bridges | Debounced selection + revision notification shipped, but bridge refreshes are still explicit and easy to miss | **Open risk** |
+| Writing-engine correctness | Inline refine apply still uses string/range fallback; full outliner interactions remain unshipped | **Open risk** |
 
 ---
 
-## How to verify
+## What shipped vs planned
 
-1. Quit app → Clean Build Folder → Debug build.  
-2. Launch: Editor tab, Welcome body visible, CPU &lt; 15% idle, RAM stable &lt; ~500 MB.  
-3. `git log -1` matches your pull.
+| Area | Shipped on `main` | Planned / not done |
+|------|-------------------|--------------------|
+| Editor layout safety | SwiftUI editor scroll + measured AppKit host (`OWBlockEditorView`) | Outliner-style editing feature set |
+| Chat transcript behavior | Scroll clipping fix (`efd890b`), stepper/error refinements (`d24845a`, `0d1933c`) | Durable conversation persistence beyond capped in-memory chat |
+| Theme switching | Debounced select + revision-aware chrome apply (`aeaebc2`) | Fully automatic propagation for every AppKit-backed surface |
+| Shell chrome | Custom titlebar controls and themed chrome in `OWWindowChrome` | Final visual parity/alignment across all window states |
+| Inline AI | Selection refine from menu/toolbar with result sheet + apply action | Robust apply semantics in all selection/range edge cases |
+
+---
+
+## Contributor verification checklist
+
+1. Quit app, clean build folder, build Debug, relaunch.
+2. Open Welcome in Editor and confirm full body renders and scrolls.
+3. Idle 60s on Welcome and verify CPU/memory are stable.
+4. Test chat with LM Studio off (timeout + diagnosis) and on (stream + stepper progression).
+5. Scroll chat upward, then send another prompt and confirm auto-scroll only occurs when re-pinned.
+6. Cycle all 13 themes from sidebar/settings and verify editor/chat/titlebar update coherently.
+7. Check titlebar alignment with rail expanded, rail collapsed, and narrow window widths.
+8. Confirm `git log -1 --oneline` matches expected head before reporting.
 
 ---
 
@@ -52,10 +63,11 @@ Selection **right-click** → refine presets; toolbar **Refine**; result sheet (
 |------|-----------------|
 | **Shell** | `AnytypeShellView` — custom `OWNavigationRail` + resizable center card; `OWShellTitleBar` tabs; AI assist **collapsed by default** (`AIAssistBottomBar` to expand). |
 | **Editor column** | `EditorView` — **SwiftUI `ScrollView`** for document body; `editorScrollLayoutToken` on scroll `.id` for chrome toggles. |
-| **Chat** | `ChatPanelView` — `OpenWriteThemedScrollView(scrollToBottomOnTokenChange: true)`; 2×2 composer board; honest connect + 30s timeout. |
+| **Chat** | `ChatPanelView` — `ChatTranscriptScrollView` (SwiftUI) with pinned-bottom auto-scroll, 2×2 composer board, honest connect timeout. |
 | **Editor layout** | Block paste host: read-only `sizeThatFits`; apply on structure/width only; keystrokes → `notifyContentHeightMayHaveChanged`. |
 | **Graph** | `GraphView` — layout clamp, empty overlay. |
 | **Out of scope** | In-app browser, cloud sync, real vault crypto. |
+| **Themes** | 13 palettes via `ThemeID`; debounced `ThemeManager.select`; AppKit surfaces rely on explicit revision/notification refresh hooks. |
 
 Canonical UI spec: [design/UIRefactorBrief.md](./design/UIRefactorBrief.md). Audit: [design/CurrentUIAudit.md](./design/CurrentUIAudit.md).
 
@@ -98,5 +110,5 @@ Canonical UI spec: [design/UIRefactorBrief.md](./design/UIRefactorBrief.md). Aud
 | Shell | `OpenWrite/OpenWrite/UI/Shell/AnytypeShellView.swift` |
 | Editor | `OpenWrite/OpenWrite/UI/EditorView.swift` |
 | Block host | `OpenWrite/OpenWrite/UI/Editor/OWBlockEditorView.swift` |
-| Scroll (chat) | `OpenWrite/OpenWrite/UI/Design/OpenWriteThemedScrollView.swift` |
+| Scroll (chat) | `OpenWrite/OpenWrite/UI/AI/ChatPanelView.swift` (`ChatTranscriptScrollView`) |
 | Page header | `OpenWrite/OpenWrite/UI/Design/OWPageHeaderEditor.swift` |

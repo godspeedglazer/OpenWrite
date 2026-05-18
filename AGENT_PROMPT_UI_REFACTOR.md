@@ -8,11 +8,11 @@ Paste or attach this when starting a UI refactor session. Mirror: [docs/AGENT_PR
 
 **Do not claim “fixed” without a clean rebuild and Activity Monitor check.**
 
-### KNOWN BROKEN (until verified on machine)
+### Current reality (verify on machine)
 
-- Welcome / editor **layout fork-bomb** (CPU 99%, RAM GB+) — was NSScrollView ↔ block host + 1pt intrinsic collapse.
-- **Blank white editor** on launch — same loop or nil selection / wrong center tab.
-- **Commits `99d9da1` / `706218e` were insufficient alone** on user builds — editor now uses SwiftUI `ScrollView`.
+- Welcome/editor layout loop was mitigated by moving the editor body to SwiftUI `ScrollView` and stabilizing block-host height (`dbb8f66`, `efd890b`).
+- Chat transcript clipping was addressed by `ChatTranscriptScrollView` (SwiftUI scroll + bottom sentinel pin).
+- Remaining risks are **state and polish**, not the old fork-bomb path: titlebar alignment gaps, chat state retention limits, and writing-engine edge correctness.
 
 ### How to verify
 
@@ -24,9 +24,9 @@ Paste or attach this when starting a UI refactor session. Mirror: [docs/AGENT_PR
 
 | Agents said | Shipped truth |
 |-------------|----------------|
-| “HANDOFF updated” | Often stale HEAD; root prompt was deleted locally |
-| “99d9da1 fixes 23GB” | Partial — loop could persist until editor scroll + intrinsic fix |
-| “Welcome stable” | Required **behavior** change, not comments only |
+| “Theme changes are done” | Partially true — 13 themes shipped, but AppKit bridge propagation still needs explicit verification |
+| “Chat scroll is fixed” | True for transcript clipping; conversation state is still capped in-memory + archived snapshot restore |
+| “UI polish complete” | Not true — titlebar alignment and writing-surface edge behavior still need QA |
 
 ### Writing core (in scope)
 
@@ -51,10 +51,10 @@ Fix OpenWrite’s **download-ready perception**: Anytype **aesthetics** on **nat
 
 ## Fix these P0 failures first
 
-1. **Fonts:** Source Serif 4 in Xcode target; no Release fallback banner.
-2. **Blocks:** Stop clipping in `OWPreviewBlockRow`.
-3. **Page header:** emoji popover, cover gallery, draggable icon.
-4. **Editor stability:** never reintroduce `OpenWriteThemedScrollView` around `EditorView` document body.
+1. **Titlebar alignment:** verify `OWShellTitleBar` alignment for expanded rail, collapsed rail, and compact/narrow windows.
+2. **Writing-engine safety:** preserve current measure/apply contract in `OWBlockEditorView`; avoid new per-keystroke layout loops.
+3. **Chat state quality:** keep transcript scroll behavior stable while improving thread/state continuity.
+4. **Theme propagation:** preserve 13-theme behavior and ensure AppKit-backed controls update on every theme switch.
 
 ## Rules
 

@@ -1,6 +1,6 @@
 # OpenWrite — Project Handoff
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Date:** 2026-05-17  
 **Branch:** `main` — see `git log -1` after your last pull  
 **Audience:** Next engineer, designer, or Cursor agent taking ownership
@@ -9,20 +9,18 @@ This document is the **single honest snapshot** of OpenWrite as it exists today.
 
 ---
 
-## KNOWN BROKEN (verify after every rebuild)
+## KNOWN ISSUES (verify after every rebuild)
 
-| Symptom | Root cause (2026-05-17) | Fix in tree |
-|---------|-------------------------|-------------|
-| **Welcome / editor: CPU ~99%, RAM 2GB+** | `OpenWriteThemedScrollView` + block host measure/apply loop | Editor column uses **SwiftUI `ScrollView`**; block host does not zero height on cache bust; no per-keystroke `applyDocumentLayout` |
-| **Blank editor body (header only)** | SwiftUI `ScrollView` ignores AppKit intrinsic height → `OWBlockEditorView` collapsed to ~0pt | `laidOutHeight` binding + `.frame(minHeight:)` synced from `measureDocumentSize` |
-| **Sheets hide entire app** | macOS sheet filled window; cover used `.sheet` | `openWriteSheetPresentationChrome()` → `.presentationSizing(.fitted)` (macOS 15+); cover picker → **popover** |
-| **Refine button appears dead** | Toolbar disabled when no selection captured | Refine always opens sheet; guidance when no selection; LM Studio errors in sheet |
-| **User still broken after agent “fix”** | Old binary / no clean build | Quit app, Clean Build Folder, rebuild Debug, confirm `git log -1` |
-| **Chat stepper overlap / yellow errors** | Connect fail left **Responding** active; rail rows collapsed; warning tint read as yellow body text | **`d24845a`**: fixed row heights; token-only error card; dots only on active **respond** |
-| **Chat scroll clips history** | `OpenWriteThemedScrollView` document height drift in assist strip | **`ChatTranscriptScrollView`**: SwiftUI `ScrollView` + bottom sentinel pin |
-| **Theme toggle lag** | `ContentView.id(revision)` rebuilt tree; double `applyToAllWindows` | Debounced `ThemeManager.select` (200ms); chrome apply on revision/window change only |
+| Symptom | Current reality | Status |
+|---------|-----------------|--------|
+| **Welcome/editor CPU-RAM loop** | Editor body is now SwiftUI `ScrollView`; AppKit block host uses measured `minHeight` and coalesced apply (`OWBlockEditorView` / `BlockEditorPasteCaptureView`) | **Shipped** (`dbb8f66`, `efd890b`) |
+| **Chat transcript clipping** | Transcript now uses `ChatTranscriptScrollView` (SwiftUI `ScrollView` + bottom sentinel) and only auto-scrolls while pinned to bottom | **Shipped** (`efd890b`) |
+| **Chat state retention limits** | In-memory transcript is capped (`maxInMemoryMessages = 48`), archived threads are read-only snapshots loaded via `ChatSessionStore` | **Open risk** |
+| **Titlebar alignment drift in edge widths** | `OWShellTitleBar` tab centering uses `brandAlignsWithNavigationRail` and compact insets; still needs visual QA on collapsed rail/fullscreen/very narrow windows | **Open risk** |
+| **Theme propagation caveats** | Theme switches are debounced and broadcast (`ThemeManager.revision` + `openWriteThemeDidChange`), but AppKit-backed surfaces still rely on explicit refresh hooks | **Partially mitigated** (`aeaebc2`) |
+| **Writing-engine correctness risks** | Inline refine apply uses string/range fallback in `InlineAssistController`; no outliner ops/BlockSuite parity; disk vault + real crypto still not shipped | **Open risk** |
 
-**Not fixed in this pass:** Affine-style block suite, real vault crypto, font banner on Release if fonts missing, block text clipping in cards, emoji popover polish.
+**Still not shipped:** production on-disk vault package + crypto, full outliner ops (indent/outdent/slash/drag), and remaining page-header polish (emoji/cover UX).
 
 ### Runtime warnings (2026-05-17)
 
@@ -30,25 +28,28 @@ Idle launch: benign **AttributeGraph** / **NSHostingView** measure messages are 
 
 ---
 
-## What agents did vs what shipped
+## What shipped vs planned (recent merges)
 
-| Claim / commit | Reality |
-|----------------|---------|
-| `cfcff62`, `706218e` “Welcome layout fixed” | Partial — measure/apply split helped; **NSScrollView remeasure on every SwiftUI tick** still fought the block host |
-| `99d9da1` “23GB RAM spike fixed” | Partial — coalescing + read-only measure; **intrinsic height still dropped to 1pt** when width cache invalidated; user machines could still loop |
-| Docs “HANDOFF updated” | Often **stale HEAD hash** (`706218e` while `99d9da1` on `main`); root `AGENT_PROMPT_UI_REFACTOR.md` was deleted locally |
-| This emergency pass | **Behavior change:** `EditorView` → SwiftUI scroll; block host intrinsic stability; chat-only themed scroll remeasure |
+| Area | Shipped on `main` | Still planned / not done |
+|------|-------------------|-------------------------|
+| Editor layout stability | SwiftUI editor scroll + AppKit height bridge; no per-keystroke `applyDocumentLayout` | Outliner-grade interactions and richer block operations |
+| Chat rail behavior | Scroll clipping fix, connect-step honesty, stepper/error cleanup, 30s connect timeout | Full conversation persistence model beyond capped in-memory + archived snapshots |
+| Window chrome | Titlebar controls integrated into custom shell bar; chrome reapply gated by theme revision/window binding | Pixel-perfect alignment parity across all macOS window modes |
+| Themes | 13 palettes, debounced theme selection, sidebar quick cycle, palette in environment | Zero-manual-refresh propagation for every AppKit bridge |
+| Writing/AI bridge | Selection refine flow (menu + toolbar + sheet) with apply path | Hard-guarantee range replacement semantics in all block-edit cases |
 
 ---
 
-## How to verify (operator)
+## Contributor verification checklist
 
-1. **Quit OpenWrite** (Activity Monitor — no `OpenWrite` process).
-2. **Clean build:** Xcode → Product → **Clean Build Folder**, then build **Debug** (`OpenWrite` scheme).
-3. Launch: center tab **Editor** (not Graph); **Welcome to OpenWrite** selected in rail; body blocks visible (callout + headings), not empty white.
-4. **Activity Monitor** (60s idle on Welcome): CPU **&lt; 15%** sustained; memory **&lt; 500 MB** (not climbing toward GB).
-5. Type in a paragraph: CPU may spike briefly; memory should **not** climb continuously.
-6. `git log -1 --oneline` matches the commit you pulled.
+1. **Clean run:** quit app, Clean Build Folder, build Debug, relaunch.
+2. **Editor baseline:** open Welcome in center **Editor** tab; body blocks render and scroll end-to-end.
+3. **Resource sanity:** idle on Welcome 60s; CPU/memory remain stable (no continuous climb).
+4. **Chat (LM Studio off):** send prompt; connect fails within timeout with actionable diagnosis.
+5. **Chat (LM Studio on):** first token advances connect step; transcript auto-scrolls only when pinned to bottom.
+6. **Themes:** cycle all 13 palettes from sidebar/settings; editor/chat/titlebar remain readable with no stale colors.
+7. **Titlebar QA:** check expanded rail, collapsed rail, and narrow window widths for tab/brand/control alignment.
+8. **Commit traceability:** `git log -1 --oneline` matches pulled head before reporting status.
 
 ---
 
@@ -297,8 +298,8 @@ Earlier: **0ce1c1c** (window on launch), **ad26135** (initial scaffold).
 
 ### Themes
 
-- **13 palettes** via `ThemeManager` / `ThemePickerView` — see [docs/design/Themes.md](docs/design/Themes.md).
-- **Known gaps:** titlebar vibrancy on some builds; Source Serif banner if PostScript names mismatch; not all tokens propagate to AppKit text views until `themeRevision` bump.
+- **13 palettes** via `ThemeManager` / `ThemePickerView` (`ThemeID.allCases.count == 13`) — see [docs/design/Themes.md](docs/design/Themes.md).
+- **Propagation caveat:** SwiftUI surfaces follow `openWritePalette` immediately; AppKit-backed views depend on explicit refresh paths (`themeRevision`/notification observers) and should be re-verified after theme merges.
 
 ### QA checklist (agents)
 

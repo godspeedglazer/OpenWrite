@@ -1,6 +1,6 @@
 # OpenWrite Visual Themes
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Implementation:** `OpenWrite/Core/Theme/` · **Picker:** `OpenWrite/UI/Settings/ThemePickerView.swift`
 
 OpenWrite ships **thirteen** clean-room palettes inspired by the *feel* of other knowledge tools (Anytype’s calm object chrome, Reor’s dark assist rail, Logseq’s green outliner shell, MassCode’s mono editor, Solarized warmth, plus Lavender Mist, Parchment Studio, Nord Frost, Ember Dusk). We do **not** copy assets, CSS, or trademarked branding from those products.
@@ -19,7 +19,7 @@ OpenWrite ships **thirteen** clean-room palettes inspired by the *feel* of other
 | `ThemePickerView` | Grid preview in **Settings** (gear sheet) and **OpenWrite → Settings** |
 | `ThemeQuickToggle` | Cycle + menu in the gear sheet; **sparkles** button in the sidebar cycles themes |
 
-Theme changes bump `ThemeManager.revision` and refresh `DesignTokens.Color` / `openWritePalette` without tearing down chat scroll or editor state (avoid `.id(themeManager.revision)` on `ChatPanelView` / `EditorView`). `ContentView` may still refresh chrome via revision. Object-type chip accents (`DesignTokens.ObjectType`) stay consistent across themes so type color language remains recognizable.
+Theme changes are debounced in `ThemeManager.select(_:)` (200ms quiet period), then bump `ThemeManager.revision` and post `openWriteThemeDidChange`. SwiftUI token consumers update through `openWritePalette`; AppKit-backed surfaces update only when their bridge reads revision/notification hooks. Avoid adding broad `.id(themeManager.revision)` resets on `ChatPanelView` or `EditorView`.
 
 Legacy persisted IDs `reorDark` and `logseqGreen` map to `reorSlate` and `logseqInk` on launch.
 
@@ -42,6 +42,8 @@ Legacy persisted IDs `reorDark` and `logseqGreen` map to `reorSlate` and `logseq
 | `parchmentStudio` | Parchment Studio | Warm editorial paper with terracotta highlights |
 | `nordFrost` | Nord Frost | Cool polar night with ice-blue links |
 | `emberDusk` | Ember Dusk | Smoky plum canvas with ember orange accents |
+
+**Count check (code):** `ThemeID.allCases.count == 13`.
 
 ---
 
@@ -74,6 +76,27 @@ Shell views apply `DesignTokens.Color.background` on the split root; sidebar and
 3. Set `prefersDarkAppearance` if system chrome should follow dark aqua.
 4. Document the mood here (one short paragraph + inspiration note).
 5. Confirm contrast for `textPrimary` on `editorCanvas` and `sidebarBackground`.
+
+---
+
+## Shipped vs planned
+
+| Area | Shipped | Planned / caveat |
+|------|---------|------------------|
+| **Theme inventory** | 13 palettes with persisted `ThemeID` and legacy ID remap | Additional palettes only when semantic contrast passes |
+| **Propagation model** | Debounced selection + revision + notification broadcast | Some AppKit bridges still require explicit refresh plumbing |
+| **Window chrome** | `OWWindowChrome` applies palette to titlebar and frame | Alignment/vibrancy edge QA across all macOS window states |
+| **Quick switching** | Sidebar cycle + Settings picker are both live | No accidental state resets during rapid theme cycling |
+
+---
+
+## Contributor verification checklist
+
+1. Cycle all 13 themes from sidebar and Settings picker.
+2. Confirm editor canvas, assist strip, rail, and titlebar all update in one pass.
+3. Open chat and editor after switching; ensure no transcript or editor state reset.
+4. Verify AppKit-backed text inputs pick up palette/selection colors after each switch.
+5. Check narrow, normal, and fullscreen window widths for titlebar/chrome consistency.
 
 ---
 
