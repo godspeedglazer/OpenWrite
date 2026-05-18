@@ -42,7 +42,9 @@ private struct BlockEditorHostedContent: View {
     @ViewBuilder
     private func blockRow(for block: Binding<NoteBlock>) -> some View {
         let editableText = previewMode ? nil : block.text
-        let activate = { onActivateBlock?(block.wrappedValue.id) }
+        let activate: () -> Void = {
+            onActivateBlock?(block.wrappedValue.id)
+        }
         switch block.wrappedValue.kind {
         case .todo:
             OWPreviewBlockRow(
@@ -172,7 +174,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             context.coordinator.ingestImageFile(url)
         }
         context.coordinator.onSelectionChange = onSelectionChange
-        if context.coordinator.needsHostedRootRefresh(for: blocks),
+        let previewModeChanged = context.coordinator.lastPreviewMode != previewMode
+        context.coordinator.lastPreviewMode = previewMode
+        if (context.coordinator.needsHostedRootRefresh(for: blocks) || previewModeChanged),
            let hosting = context.coordinator.hostingView {
             hosting.rootView = BlockEditorHostedContent(
                 blocks: context.coordinator.blocks,
@@ -180,6 +184,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
                 onActivateBlock: onActivateBlock,
                 onSelectionChange: { context.coordinator.onSelectionChange?($0) }
             )
+            if previewModeChanged {
+                host.invalidateMeasurementCache()
+            }
         }
 
         let layoutWidth = max(context.coordinator.lastProposedWidth ?? host.bounds.width, 320)
@@ -209,6 +216,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         var lastProposedWidth: CGFloat?
         var lastAppliedWidth: CGFloat?
         var lastStructureRevision: UInt64 = 0
+        var lastPreviewMode = false
         private var lastHostedBlockIDs: [UUID] = []
         private var layoutGeneration = 0
 
