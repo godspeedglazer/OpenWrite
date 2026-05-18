@@ -1,6 +1,8 @@
 # Agent prompt — UI refactor (Phase 0)
 
-Paste or attach this when starting a UI refactor session.
+Paste or attach this when starting a UI refactor session. Root copy: [../AGENT_PROMPT_UI_REFACTOR.md](../AGENT_PROMPT_UI_REFACTOR.md).
+
+**Source of truth for all open issues (P0–P3):** [HANDOFF.md](../HANDOFF.md) · [handoff index](./HANDOFF.md)
 
 ---
 
@@ -10,11 +12,12 @@ Fix OpenWrite’s **download-ready perception**: Anytype **aesthetics** (filled 
 
 ## Read first (in order)
 
-1. [design/UIRefactorBrief.md](./design/UIRefactorBrief.md) — canonical spec, component order, acceptance
-2. [design/CurrentUIAudit.md](./design/CurrentUIAudit.md) — area | status | fix
-3. [design/FrontendPriorities.md](./design/FrontendPriorities.md) — P0 failed/partial checklist
-4. [design/OWIcons.md](./design/OWIcons.md) — **Unicode only**
-5. [design/Typography.md](./design/Typography.md) — Source Serif bundling
+1. [HANDOFF.md](../HANDOFF.md) — Opus 4.7 execution handoff (P0 blockers, acceptance criteria, file map)
+2. [design/UIRefactorBrief.md](./design/UIRefactorBrief.md) — canonical spec, component order, acceptance
+3. [design/CurrentUIAudit.md](./design/CurrentUIAudit.md) — area | status | fix
+4. [design/FrontendPriorities.md](./design/FrontendPriorities.md) — P0 failed/partial checklist
+5. [design/OWIcons.md](./design/OWIcons.md) — **Unicode only**
+6. [design/Typography.md](./design/Typography.md) — Source Serif bundling
 
 ## Fix these P0 failures first
 

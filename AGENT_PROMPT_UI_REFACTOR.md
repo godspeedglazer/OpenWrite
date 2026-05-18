@@ -2,6 +2,8 @@
 
 Paste or attach this when starting a UI refactor session. Mirror: [docs/AGENT_PROMPT_UI_REFACTOR.md](./docs/AGENT_PROMPT_UI_REFACTOR.md).
 
+**Source of truth for all open issues (P0–P3), file paths, and acceptance criteria:** [HANDOFF.md](./HANDOFF.md) — *OpenWrite — Opus 4.7 Execution Handoff*. Index: [docs/HANDOFF.md](./docs/HANDOFF.md).
+
 ---
 
 ## EMERGENCY context (2026-05-17)
@@ -10,9 +12,8 @@ Paste or attach this when starting a UI refactor session. Mirror: [docs/AGENT_PR
 
 ### Current reality (verify on machine)
 
-- Welcome/editor layout loop was mitigated by moving the editor body to SwiftUI `ScrollView` and stabilizing block-host height (`dbb8f66`, `efd890b`).
-- Chat transcript clipping was addressed by `ChatTranscriptScrollView` (SwiftUI scroll + bottom sentinel pin).
-- Remaining risks are **state and polish**, not the old fork-bomb path: titlebar alignment gaps, chat state retention limits, and writing-engine edge correctness.
+- **User reports P0 still open:** empty editor body, chat scroll broken, layout/RAM regressions possible — see [HANDOFF.md § Priority 0](./HANDOFF.md#priority-0--app-unusable-fix-in-order).
+- Commits (`dbb8f66`, `efd890b`, `8c228e4`, etc.) are **claims**, not verification — see [What's already committed](./HANDOFF.md#whats-already-committed-honest--may-not-work-for-user).
 
 ### How to verify
 
@@ -44,7 +45,7 @@ Fix OpenWrite’s **download-ready perception**: Anytype **aesthetics** on **nat
 
 ## Read first (in order)
 
-1. [HANDOFF.md](./HANDOFF.md) — KNOWN BROKEN + verify steps
+1. [HANDOFF.md](./HANDOFF.md) — **Opus 4.7 execution handoff** (P0–P3, acceptance criteria, file map)
 2. [docs/design/UIRefactorBrief.md](./docs/design/UIRefactorBrief.md)
 3. [docs/design/CurrentUIAudit.md](./docs/design/CurrentUIAudit.md)
 4. [docs/design/FrontendPriorities.md](./docs/design/FrontendPriorities.md)

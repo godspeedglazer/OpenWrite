@@ -1,114 +1,50 @@
-# OpenWrite — UI refactor handoff
+# OpenWrite — Handoff index
 
-**Last updated:** 2026-05-17  
-**Scope:** Frontend perception pass (Refactor Phase 0) — not backend, NDL grammar, or vault crypto.
+**Canonical execution brief (Opus 4.7 xhigh):** [../HANDOFF.md](../HANDOFF.md)
 
-**Full project handoff:** [../HANDOFF.md](../HANDOFF.md) (known issues, verify steps, writing-core scope).
-
----
-
-## KNOWN ISSUES (verify after rebuild)
-
-| Symptom | Current reality | Status |
-|---------|-----------------|--------|
-| Welcome/editor CPU-RAM fork-bomb | Editor is SwiftUI `ScrollView`; block host keeps measured height and coalesced apply | **Addressed** |
-| Chat transcript clipping | `ChatTranscriptScrollView` uses SwiftUI scroll + bottom pin sentinel | **Addressed** |
-| Chat state retention | In-memory transcript trimmed to 48 messages; archived threads are read-only restores | **Open risk** |
-| Titlebar alignment gaps | `OWShellTitleBar` uses dynamic insets (`brandAlignsWithNavigationRail`, compact breakpoints) and still needs edge-width QA | **Open risk** |
-| Theme propagation to AppKit bridges | Debounced selection + revision notification shipped, but bridge refreshes are still explicit and easy to miss | **Open risk** |
-| Writing-engine correctness | Inline refine apply still uses string/range fallback; full outliner interactions remain unshipped | **Open risk** |
+This page is a **short router** — all issue detail, acceptance criteria, and file paths live in the root document.
 
 ---
 
-## What shipped vs planned
+## Quick links by anchor
 
-| Area | Shipped on `main` | Planned / not done |
-|------|-------------------|--------------------|
-| Editor layout safety | SwiftUI editor scroll + measured AppKit host (`OWBlockEditorView`) | Outliner-style editing feature set |
-| Chat transcript behavior | Scroll clipping fix (`efd890b`), stepper/error refinements (`d24845a`, `0d1933c`) | Durable conversation persistence beyond capped in-memory chat |
-| Theme switching | Debounced select + revision-aware chrome apply (`aeaebc2`) | Fully automatic propagation for every AppKit-backed surface |
-| Shell chrome | Custom titlebar controls and themed chrome in `OWWindowChrome` | Final visual parity/alignment across all window states |
-| Inline AI | Selection refine from menu/toolbar with result sheet + apply action | Robust apply semantics in all selection/range edge cases |
-
----
-
-## Contributor verification checklist
-
-1. Quit app, clean build folder, build Debug, relaunch.
-2. Open Welcome in Editor and confirm full body renders and scrolls.
-3. Idle 60s on Welcome and verify CPU/memory are stable.
-4. Test chat with LM Studio off (timeout + diagnosis) and on (stream + stepper progression).
-5. Scroll chat upward, then send another prompt and confirm auto-scroll only occurs when re-pinned.
-6. Cycle all 13 themes from sidebar/settings and verify editor/chat/titlebar update coherently.
-7. Check titlebar alignment with rail expanded, rail collapsed, and narrow window widths.
-8. Confirm `git log -1 --oneline` matches expected head before reporting.
-
----
-
-## Writing core
-
-Stability-only changes to `EditorView`, `OWBlockEditorView`, `BlockEditorPasteCaptureView`, `OpenWriteThemedScrollView` (chat path). No Affine rewrite.
+| Topic | Section in [../HANDOFF.md](../HANDOFF.md) |
+|-------|------------------------------------------|
+| Mission & scope | [Mission](../HANDOFF.md#mission) |
+| Git HEAD & verify commands | [Current git state](../HANDOFF.md#current-git-state-how-to-verify) |
+| SF Symbols, tokens, editor safety | [Non-negotiable constraints](../HANDOFF.md#non-negotiable-constraints) |
+| **P0** empty body | [P0.1 Writing engine](../HANDOFF.md#p01--writing-engine-empty-body--blocks-not-rendering) |
+| **P0** fork-bomb / RAM | [P0.2 Layout fork-bomb](../HANDOFF.md#p02--layout-fork-bomb-23-gb-ram-99-cpu) |
+| **P0** chat scroll | [P0.3 Chat scroll](../HANDOFF.md#p03--chat-transcript-scroll-cannot-scroll-top-to-bottom) |
+| **P0** blank launch / tab | [P0.4 Launch tab](../HANDOFF.md#p04--blank-editor-on-launch--wrong-center-tab-graph-vs-editor) |
+| **P1** LM Studio / gemma caption | [P1.1–P1.2](../HANDOFF.md#p11--model-caption-shows-googlegemma-4-e4b--not-checked-need-live-lm-studio-detection) |
+| **P1** stepper / connect lies | [P1.3–P1.4](../HANDOFF.md#p13--chat-stepper-overlap--yellow-errors) |
+| **P1** Refine | [P1.5](../HANDOFF.md#p15--refine-sheet--menu-glitchy-select-text-inside-block) |
+| **P1** composer icons / paste | [P1.6–P1.7](../HANDOFF.md#p16--chat-composer-icons-too-small-search-doesnt-look-like-search-mystery-second-button) |
+| **P1** traffic lights / tab height | [P1.8–P1.9](../HANDOFF.md#p18--traffic-lights-misplaced-gray-void-where-system-lights-were) |
+| **P1** sheets / themes | [P1.11–P1.12](../HANDOFF.md#p111--sheets-cover-settings-hide-entire-app--lavender-void) |
+| **P2** RAG / indexing | [Priority 2 — RAG](../HANDOFF.md#priority-2--rag--ingestion) |
+| **P2** themes / ObjectType | [Priority 2 — Themes](../HANDOFF.md#priority-2--themes) |
+| **P3** dead code / Affine | [Priority 3](../HANDOFF.md#priority-3--dead-code--tech-debt) |
+| File map | [Per-area file map](../HANDOFF.md#per-area-file-map) |
+| Committed vs user truth | [What's already committed](../HANDOFF.md#whats-already-committed-honest--may-not-work-for-user) |
+| QA checklist | [Regression checklist](../HANDOFF.md#regression-checklist-run-before-declaring-done) |
+| 1–2 week plan | [Suggested implementation order](../HANDOFF.md#suggested-implementation-order-12-week-plan) |
+| Deduped issue table | [Appendix A](../HANDOFF.md#appendix-a--user-reported-issue-consolidation-deduped) |
 
 ---
 
-## Inline AI
+## Other entry points
 
-Selection **right-click** → refine presets; toolbar **Refine**; result sheet (`InlineAssistController`). See [design/InlineAIEditing.md](./design/InlineAIEditing.md).
-
----
-
-### Implementation snapshot (2026-05-17)
-
-| Area | Shipped in code |
-|------|-----------------|
-| **Shell** | `AnytypeShellView` — custom `OWNavigationRail` + resizable center card; `OWShellTitleBar` tabs; AI assist **collapsed by default** (`AIAssistBottomBar` to expand). |
-| **Editor column** | `EditorView` — **SwiftUI `ScrollView`** for document body; `editorScrollLayoutToken` on scroll `.id` for chrome toggles. |
-| **Chat** | `ChatPanelView` — `ChatTranscriptScrollView` (SwiftUI) with pinned-bottom auto-scroll, 2×2 composer board, honest connect timeout. |
-| **Editor layout** | Block paste host: read-only `sizeThatFits`; apply on structure/width only; keystrokes → `notifyContentHeightMayHaveChanged`. |
-| **Graph** | `GraphView` — layout clamp, empty overlay. |
-| **Out of scope** | In-app browser, cloud sync, real vault crypto. |
-| **Themes** | 13 palettes via `ThemeID`; debounced `ThemeManager.select`; AppKit surfaces rely on explicit revision/notification refresh hooks. |
-
-Canonical UI spec: [design/UIRefactorBrief.md](./design/UIRefactorBrief.md). Audit: [design/CurrentUIAudit.md](./design/CurrentUIAudit.md).
+| Role | Document |
+|------|----------|
+| UI refactor agent (Phase 0) | [AGENT_PROMPT_UI_REFACTOR.md](./AGENT_PROMPT_UI_REFACTOR.md) |
+| Visual spec | [design/UIRefactorBrief.md](./design/UIRefactorBrief.md) |
+| Brutal UI audit | [design/CurrentUIAudit.md](./design/CurrentUIAudit.md) |
+| P0 product checklist | [design/FrontendPriorities.md](./design/FrontendPriorities.md) |
+| Bug sweep log | [../BUGFIXES.md](../BUGFIXES.md) |
+| Doc hub | [README.md](./README.md) |
 
 ---
 
-## Start here
-
-| Role | Read |
-|------|------|
-| Implementing agent | [AGENT_PROMPT_UI_REFACTOR.md](./AGENT_PROMPT_UI_REFACTOR.md) |
-| Canonical spec | [design/UIRefactorBrief.md](./design/UIRefactorBrief.md) |
-| Honest status | [design/CurrentUIAudit.md](./design/CurrentUIAudit.md) |
-| P0 checklist | [design/FrontendPriorities.md](./design/FrontendPriorities.md) |
-| Recent fixes | [../BUGFIXES.md](../BUGFIXES.md) |
-
----
-
-## What “done” looks like
-
-1. Bundled serif loads on macOS Release builds (no warning banner).
-2. Block editor shows full multi-line text inside rounded cards.
-3. Page header: cover gallery, draggable icon, stable emoji picker.
-4. Welcome/editor **stable** under Activity Monitor after clean rebuild.
-5. [CurrentUIAudit.md](./design/CurrentUIAudit.md) P0 rows updated where applicable.
-
----
-
-## Constraints
-
-- **Native SwiftUI** — no Anytype Electron/TS stack.
-- **Unicode icons only** — [design/OWIcons.md](./design/OWIcons.md).
-- Match `DesignTokens` / `OWTypography`; no drive-by refactors.
-
----
-
-## Code hubs
-
-| Area | Path |
-|------|------|
-| Shell | `OpenWrite/OpenWrite/UI/Shell/AnytypeShellView.swift` |
-| Editor | `OpenWrite/OpenWrite/UI/EditorView.swift` |
-| Block host | `OpenWrite/OpenWrite/UI/Editor/OWBlockEditorView.swift` |
-| Scroll (chat) | `OpenWrite/OpenWrite/UI/AI/ChatPanelView.swift` (`ChatTranscriptScrollView`) |
-| Page header | `OpenWrite/OpenWrite/UI/Design/OWPageHeaderEditor.swift` |
+**Last updated:** 2026-05-17 · **HEAD:** see `git log -1` on `main`

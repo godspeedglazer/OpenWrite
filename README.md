@@ -4,7 +4,7 @@ Native macOS local-first writer: encrypted vault, Note Design Language (NDL), an
 
 ## Handoff (new owners & agents)
 
-**Start here:** [HANDOFF.md](HANDOFF.md) — executive summary, repo map, honest maturity, broken list, build/run, license policy, and next priorities.
+**Start here:** [HANDOFF.md](HANDOFF.md) — **Opus 4.7 execution handoff** (P0–P3 issues, acceptance criteria, file map, regression checklist). Short index: [docs/HANDOFF.md](docs/HANDOFF.md).
 
 **UI refactor mission:** [AGENT_PROMPT_UI_REFACTOR.md](AGENT_PROMPT_UI_REFACTOR.md) — copy-paste Cursor agent brief for Anytype-level polish (no vendor code).
 
