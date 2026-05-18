@@ -209,7 +209,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BlockEditorPasteCaptureView, context: Context) -> CGSize? {
         let width = max(proposal.width ?? 640, 320)
         context.coordinator.lastProposedWidth = width
-        return nsView.measureDocumentSize(width: width)
+        return nsView.measureAndApplyDocumentSize(width: width)
     }
 
     final class Coordinator {

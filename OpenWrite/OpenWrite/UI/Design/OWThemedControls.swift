@@ -405,18 +405,22 @@ struct OWThemedDropdown<Option: Hashable>: View {
                         .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
                 }
                 .presentationBackground(DesignTokens.Color.surfaceElevated)
+                .onDisappear { isOpen = false }
         }
     }
 
     private var dropdownList: some View {
-        OpenWriteThemedScrollView {
+        ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
                 ForEach(options, id: \.self) { option in
                     dropdownRow(option)
                 }
             }
+            .frame(minWidth: max(minWidth, 160), alignment: .leading)
         }
-        .frame(minWidth: max(minWidth, 160), maxHeight: 280)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(maxHeight: 280)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func dropdownRow(_ option: Option) -> some View {
