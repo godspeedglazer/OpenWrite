@@ -719,12 +719,13 @@ final class ChatPanelModel: ObservableObject {
                 switch message.pipelineSteps[stepIndex].status {
                 case .active:
                     if connectFailed, stepID == "respond" || stepID == "done" {
-                        message.pipelineSteps[stepIndex].status = .pending
+                        message.pipelineSteps[stepIndex].status = .failed
                     } else {
                         message.pipelineSteps[stepIndex].status = .failed
                     }
                 case .pending:
                     if connectFailed, stepID == "respond" || stepID == "done" {
+                        message.pipelineSteps[stepIndex].status = .failed
                         continue
                     }
                     message.pipelineSteps[stepIndex].status = .failed
@@ -875,6 +876,8 @@ struct ChatPanelView: View {
     @Environment(\.aiAssistStripWidth) private var assistStripWidth
     @StateObject private var model = ChatPanelModel()
     @State private var showFileImporter = false
+    /// True when the transcript bottom sentinel is visible — auto-scroll only while pinned.
+    @State private var chatPinnedToBottom = true
 
     private var navigation: AIAssistNavigationState { workbench.aiAssistNavigation }
 
@@ -1023,10 +1026,10 @@ struct ChatPanelView: View {
     }
 
     private var messageList: some View {
-        OpenWriteThemedScrollView(
+        ChatTranscriptScrollView(
             scrollToken: chatScrollToken,
-            canvasColor: palette.background,
-            scrollToBottomOnTokenChange: true
+            background: palette.background,
+            isPinnedToBottom: $chatPinnedToBottom
         ) {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 if model.messages.isEmpty {
@@ -1050,7 +1053,7 @@ struct ChatPanelView: View {
             }
             .padding(DesignTokens.Spacing.assistStripMessageListPadding)
         }
-        .background(palette.background)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// Drives stick-to-bottom only on structural chat changes — not every streamed token.
@@ -1458,5 +1461,54 @@ struct ChatPanelView: View {
 
     private func agentHelp(_ agent: AgentConfig) -> String {
         agent.uiHelpText
+    }
+}
+
+// MARK: - Chat transcript scroll (SwiftUI)
+
+private enum ChatTranscriptScrollAnchor {
+    static let bottom = "openwrite.chat.transcript.bottom"
+}
+
+/// Native SwiftUI scroll for chat — avoids NSScrollView document height drift that clipped history.
+private struct ChatTranscriptScrollView<Content: View>: View {
+    let scrollToken: Int
+    let background: Color
+    @Binding var isPinnedToBottom: Bool
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 0) {
+                    content()
+                    Color.clear
+                        .frame(height: 1)
+                        .id(ChatTranscriptScrollAnchor.bottom)
+                        .onAppear { isPinnedToBottom = true }
+                        .onDisappear { isPinnedToBottom = false }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .background(background)
+            .onAppear {
+                scrollToBottom(using: proxy, animated: false)
+            }
+            .onChange(of: scrollToken) { _, _ in
+                guard isPinnedToBottom else { return }
+                scrollToBottom(using: proxy, animated: true)
+            }
+        }
+    }
+
+    private func scrollToBottom(using proxy: ScrollViewProxy, animated: Bool) {
+        let scroll = {
+            proxy.scrollTo(ChatTranscriptScrollAnchor.bottom, anchor: .bottom)
+        }
+        if animated {
+            withAnimation(.easeOut(duration: 0.2), scroll)
+        } else {
+            DispatchQueue.main.async(execute: scroll)
+        }
     }
 }

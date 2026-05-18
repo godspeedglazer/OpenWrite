@@ -66,7 +66,10 @@ struct EditorView: View {
         .onChange(of: document?.updatedAt) { _, _ in
             guard let doc = self.document else { return }
             let body = doc.rootBlocks.filter { $0.kind != .property }
-            if body != editingBlocks {
+            if editingBlocks.isEmpty, !body.isEmpty {
+                syncFromDocument(doc)
+                syncHeaderFromDocument(doc)
+            } else if body != editingBlocks {
                 syncFromDocument(doc)
             }
         }
