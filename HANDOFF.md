@@ -11,8 +11,9 @@ That document is the single source of truth: product intent, P0/P1 blockers (use
 | Field | Value |
 |-------|--------|
 | **Branch** | `main` |
-| **HEAD** | `5d3e21a` (handoff doc; app code baseline `8c228e4`) |
-| **Latest commit** | `5d3e21a` — docs: add Opus 4.7 resolution handoff for OpenWrite blockers |
+| **HEAD** | see `git rev-parse HEAD` |
+| **App fixes** | `282c0b7` — Opus P0/P1 evening sweep (chrome, editor, chat, LM Studio) |
+| **Swarm** | [docs/SWARM.md](docs/SWARM.md) · agent defs `38449e0` in `.cursor/agents/` |
 
 ```bash
 cd /Users/erichspringer/Downloads/OpenWrite
@@ -22,4 +23,4 @@ git log -5 --oneline
 
 **Do not** assume commits fix user-reported P0 issues until [docs/HANDOFF.md §G](docs/HANDOFF.md#g-acceptance-tests-manual-qa) passes on a clean Debug build.
 
-**Also:** [AGENT_PROMPT_UI_REFACTOR.md](AGENT_PROMPT_UI_REFACTOR.md) · [docs/design/UIRefactorBrief.md](docs/design/UIRefactorBrief.md)
+**Also:** [docs/SWARM.md](docs/SWARM.md) (parallel bug hunts) · [AGENT_PROMPT_UI_REFACTOR.md](AGENT_PROMPT_UI_REFACTOR.md) · [docs/design/UIRefactorBrief.md](docs/design/UIRefactorBrief.md) · [BUGFIXES.md](BUGFIXES.md) (Opus checklist table)

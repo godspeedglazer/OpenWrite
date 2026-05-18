@@ -10,6 +10,8 @@
 
 **Pointer:** Short index at [../HANDOFF.md](../HANDOFF.md).
 
+**Parallel agents / swarm:** [SWARM.md](./SWARM.md) — blackboard phases, coordinator rules, when to use 50-agent mode. In-repo Task stubs: `.cursor/agents/` (commit `38449e0`). Personal coordinator skill: `~/.cursor/skills/swarm-coordinator/SKILL.md`.
+
 ---
 
 ## A. Product intent
@@ -462,11 +464,13 @@ curl -s http://127.0.0.1:1234/v1/models | head
 
 | Area | Commit(s) | Trust |
 |------|-----------|-------|
-| Editor SwiftUI scroll + measure split | `dbb8f66`, `6822254` | **Low** — empty body |
+| Opus evening sweep (chrome, editor init, stepper, LM, sheets) | `282c0b7` | **Medium** — Debug build passes; §G manual QA **not** verified |
+| Swarm agent stubs (scout / builder / verifier) | `38449e0` | **N/A** — orchestration defs only |
+| Editor SwiftUI scroll + measure split | `dbb8f66`, `6822254` | **Low** — empty body (partially addressed `282c0b7`) |
 | Chat ScrollView | `efd890b`, `5108811` | **Low** — user 50+ failures |
-| LM live + any model | `8c228e4` | **Medium** — gemma persistence remains |
-| Stepper / token errors | `d24845a`, `0d1933c` | **Medium** |
-| Sheet presentation | `da0d314` | **Low** — lavender void |
+| LM live + any model | `8c228e4`, `282c0b7` | **Medium** — gemma default removed in `282c0b7`; caption needs user verify |
+| Stepper / token errors | `d24845a`, `0d1933c`, `282c0b7` | **Medium** — continuous rail in `282c0b7` |
+| Sheet presentation | `da0d314`, `282c0b7` | **Medium** — `.regularMaterial` in `282c0b7`; user verify dimmed shell |
 | Theme debounce | `aeaebc2` | **Medium** |
 | Image paste | `8c228e4` | **Medium** |
 | Inline refine menu | `c3035e7` | **Low** |
@@ -479,6 +483,7 @@ curl -s http://127.0.0.1:1234/v1/models | head
 
 | Doc | Use |
 |-----|-----|
+| [SWARM.md](./SWARM.md) | Correctness swarm orchestration (blackboard, roles, coordinator rules) |
 | [design/UIRefactorBrief.md](./design/UIRefactorBrief.md) | Visual spec |
 | [design/FrontendPriorities.md](./design/FrontendPriorities.md) | P0 checklist (verify) |
 | [design/CurrentUIAudit.md](./design/CurrentUIAudit.md) | Brutal audit |
