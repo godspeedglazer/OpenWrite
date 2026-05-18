@@ -31,7 +31,7 @@ struct OWRailSearchField: View {
         HStack(spacing: DesignTokens.Spacing.spacing2) {
             OWUnicodeIconView(
                 icon: .search,
-                size: 14,
+                size: 18,
                 color: isFocused ? DesignTokens.Color.textSecondary : DesignTokens.Color.textTertiary
             )
 

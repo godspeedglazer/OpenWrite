@@ -417,6 +417,8 @@ enum DesignTokens {
         static let blockCardListExtraLeadingInset: CGFloat = Spacing.spacing1
         /// Vertical gap between page header stack and block list.
         static let editorHeaderToBodySpacing: CGFloat = Spacing.spacing4
+        /// Extra scroll slack below the block editor (SwiftUI ScrollView + AppKit measure under-report).
+        static let editorScrollBottomCushion: CGFloat = 96
         /// Vertical gap between block rows in the WYSIWYG editor.
         static let editorBlockStackSpacing: CGFloat = Spacing.spacing2
         static let editorMetadataToToolbarSpacing: CGFloat = Spacing.spacing3
@@ -428,13 +430,14 @@ enum DesignTokens {
         static let graphNodeCardHeight: CGFloat = 56
         static let graphNodeMinSpacing: CGFloat = 20
         static let toolbarHeight: CGFloat = 52
-        /// Top reserved titlebar band; kept compact so content starts higher.
-        static let shellChromeSafeAreaTop: CGFloat = 20
+        /// Top reserved titlebar band above tab row (traffic lights sit in this band).
+        /// Kept minimal — SwiftUI paints from y=0 via `ignoresSafeArea`; excess inset pushed controls below the visible titlebar.
+        static let shellChromeSafeAreaTop: CGFloat = 0
         /// Muted rounded-square close / minimize / zoom in the shell strip.
         static let windowControlSize: CGFloat = 14
         static let windowControlSpacing: CGFloat = 6
         static let windowControlLeadingInset: CGFloat = 12
-        static let windowControlTopInset: CGFloat = 6
+        static let windowControlTopInset: CGFloat = 10
         /// Title + tabs row inside the filled chrome strip.
         static let shellChromeBarHeight: CGFloat = 36
         /// Leading inset clearing custom window controls (derived from control metrics + padding).

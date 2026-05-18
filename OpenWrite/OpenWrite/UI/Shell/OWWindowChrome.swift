@@ -69,6 +69,11 @@ struct OWWindowChromeConfigurator: NSViewRepresentable {
             DispatchQueue.main.async { [weak view] in
                 guard let view, view.window === window else { return }
                 OWWindowChrome.apply(to: window)
+                // Second pass after AppKit lays out ThemeFrame / titlebar accessories.
+                DispatchQueue.main.async {
+                    guard view.window === window else { return }
+                    OWWindowChrome.apply(to: window)
+                }
             }
         }
 
@@ -211,10 +216,15 @@ enum OWWindowChrome {
         window.backgroundColor = chrome
         paintThemeFrame(window, color: chrome)
         stripTitlebarVibrancy(in: window, fill: chrome)
-        if supportsTitlebarAccessory(on: window) {
-            installSolidTitlebarFill(on: window, color: chrome)
-            reorderTitlebarAccessories(on: window)
-        }
+        // NOTE: Previously we installed an `OWSolidTitlebarAccessory` at `layoutAttribute = .top`
+        // to fill the title-bar with cream. With `AnytypeShellView` now applying
+        // `.ignoresSafeArea(edges: .top)`, the SwiftUI shell chrome already paints y=0…57 cream,
+        // and the accessory was layered ON TOP of the content view — which made it paint over
+        // the custom `OWShellWindowControls` traffic lights, causing them to disappear from the
+        // window. We rely on `paintThemeFrame` + `stripTitlebarVibrancy` + the SwiftUI background
+        // to cover the title-bar zone instead; the accessory must NOT be re-introduced unless the
+        // SwiftUI hierarchy stops ignoring the top safe area.
+        removeLegacyTitlebarFill(from: window)
         tintHostingRoot(window, color: chrome)
         hideSystemTrafficLights(in: window)
     }
@@ -228,16 +238,14 @@ enum OWWindowChrome {
         }
     }
 
-    /// Keeps the opaque fill behind traffic lights (first accessory wins stacking).
-    private static func reorderTitlebarAccessories(on window: NSWindow) {
-        guard supportsTitlebarAccessory(on: window) else { return }
+    /// Removes legacy solid titlebar fill accessories (see `apply` — we no longer install them).
+    private static func removeSolidTitlebarFill(from window: NSWindow) {
         let key = ObjectIdentifier(window)
-        guard let accessory = titlebarFillAccessories[key] else { return }
-        var accessories = window.titlebarAccessoryViewControllers
-        guard let index = accessories.firstIndex(where: { $0 === accessory }), index > 0 else { return }
-        accessories.remove(at: index)
-        accessories.insert(accessory, at: 0)
-        window.titlebarAccessoryViewControllers = accessories
+        if let accessory = titlebarFillAccessories.removeValue(forKey: key) {
+            if let index = window.titlebarAccessoryViewControllers.firstIndex(where: { $0 === accessory }) {
+                window.removeTitlebarAccessoryViewController(at: index)
+            }
+        }
     }
 
     static func applyToAllWindows() {
@@ -271,6 +279,23 @@ enum OWWindowChrome {
         guard let contentView = window.contentView else { return }
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = color.cgColor
+    }
+
+    /// Detaches any `OWSolidTitlebarAccessory` previously installed for this window. The accessory
+    /// is no longer used (see `apply(to:)` rationale) but legacy state may still be present.
+    private static func removeLegacyTitlebarFill(from window: NSWindow) {
+        let key = ObjectIdentifier(window)
+        if let accessory = titlebarFillAccessories.removeValue(forKey: key),
+           let index = window.titlebarAccessoryViewControllers.firstIndex(where: { $0 === accessory }) {
+            window.removeTitlebarAccessoryViewController(at: index)
+        }
+        // Also sweep up any orphans that aren't tracked in our dictionary (e.g. from older builds).
+        let orphans = window.titlebarAccessoryViewControllers.enumerated().filter { _, vc in
+            vc is OWSolidTitlebarAccessory
+        }
+        for (index, _) in orphans.reversed() {
+            window.removeTitlebarAccessoryViewController(at: index)
+        }
     }
 
     /// `NSTitlebarAccessoryViewController` crashes on unsupported windows — always guard first.
@@ -584,6 +609,7 @@ struct OWShellTitleBar: View {
                         HStack(spacing: DesignTokens.Spacing.spacing3) {
                             OWShellWindowControls()
                                 .padding(.leading, DesignTokens.Layout.windowControlLeadingInset)
+                                .zIndex(2)
 
                             if !brandAlignsWithNavigationRail {
                                 HStack(spacing: DesignTokens.Spacing.spacing2) {

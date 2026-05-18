@@ -446,6 +446,7 @@ final class PasteAwareTextView: NSTextView {
 /// `NSView` (not `NSControl`) so hit-testing reaches SwiftUI checklist buttons and fields.
 final class BlockEditorPasteCaptureView: NSView {
     var onPasteImage: (() -> Void)?
+    var onAttachedToWindow: (() -> Void)?
     let hostedView: NSView
 
     private var cachedMeasureWidth: CGFloat = 0
@@ -469,7 +470,14 @@ final class BlockEditorPasteCaptureView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override var acceptsFirstResponder: Bool { true }
+    /// Do not steal first responder from block fields / todo checkboxes (was causing scroll jumps).
+    override var acceptsFirstResponder: Bool { false }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
+        onAttachedToWindow?()
+    }
 
     var onDropImageFile: ((URL) -> Void)?
 

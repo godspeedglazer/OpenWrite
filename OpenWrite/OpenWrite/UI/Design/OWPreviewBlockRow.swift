@@ -19,6 +19,8 @@ struct OWPreviewBlockRow: View {
     @Environment(\.openWritePalette) private var palette
     @Environment(ThemeManager.self) private var themeManager
     @Environment(\.blockFormatting) private var blockFormatting
+    @EnvironmentObject private var vaultStore: VaultStore
+    @EnvironmentObject private var workbench: WorkbenchState
 
     private var isEditing: Bool { text != nil }
 
@@ -96,11 +98,8 @@ struct OWPreviewBlockRow: View {
     }
 
     private var todoRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Spacing.spacing2) {
+        HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
             todoCheckbox
-                .alignmentGuide(.firstTextBaseline) { dimensions in
-                    dimensions[.bottom] - 3
-                }
             inlineText(
                 font: DesignTokens.Typography.body,
                 lineSpacing: DesignTokens.Typography.bodyLineSpacing,
@@ -251,21 +250,54 @@ struct OWPreviewBlockRow: View {
     }
 
     private var linkRow: some View {
-        HStack(spacing: DesignTokens.Spacing.spacing2) {
-            OWUnicodeIconView(icon: .link, size: 14, color: DesignTokens.Color.wikilink)
+        Group {
             if isEditing, let text {
-                TextField("Link title", text: text)
-                    .textFieldStyle(.plain)
-                    .font(DesignTokens.Typography.bodyEmphasis)
-                    .foregroundStyle(DesignTokens.Color.wikilink)
+                linkRowContent {
+                    TextField("Link title", text: text)
+                        .textFieldStyle(.plain)
+                        .font(DesignTokens.Typography.bodyEmphasis)
+                        .foregroundStyle(DesignTokens.Color.wikilink)
+                }
             } else {
-                Text(block.text)
-                    .font(DesignTokens.Typography.bodyEmphasis)
-                    .foregroundStyle(DesignTokens.Color.wikilink)
+                Button {
+                    openWikilinkTarget(named: block.text)
+                } label: {
+                    linkRowContent {
+                        Text(block.text)
+                            .font(DesignTokens.Typography.bodyEmphasis)
+                            .foregroundStyle(DesignTokens.Color.wikilink)
+                    }
+                }
+                .buttonStyle(.plain)
+                .openWriteFocusChrome()
+                .help("Open linked page")
             }
         }
+    }
+
+    private func linkRowContent<Label: View>(@ViewBuilder label: () -> Label) -> some View {
+        HStack(spacing: DesignTokens.Spacing.spacing2) {
+            OWUnicodeIconView(icon: .link, size: 14, color: DesignTokens.Color.wikilink)
+            label()
+        }
         .owBlockCardPadding()
-        .background(DesignTokens.Color.wikilink.opacity(0.08), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            DesignTokens.Color.wikilink.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+        )
+    }
+
+    private func openWikilinkTarget(named title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let match = vaultStore.documentsInActiveVault.first {
+            $0.displayTitle.compare(trimmed, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        }
+        if let match {
+            vaultStore.selectedDocumentID = match.id
+            workbench.showEditor()
+        }
     }
 
     private var isImagePending: Bool {

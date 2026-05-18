@@ -595,11 +595,21 @@ struct OWThemedToggleButton: View {
     @ViewBuilder
     private var toggleGlyph: some View {
         if let icon {
-            OWUnicodeIconView(
-                icon,
-                size: DesignTokens.Layout.composerBoardIconSize,
-                color: isOn ? DesignTokens.Color.accent : DesignTokens.Color.textSecondary
-            )
+            // Path-drawn glyphs for shapes where unicode rendered tiny / unfamiliar at composer scale
+            // (the original `⌕` looked like a slash, `◍` like a dot). Rest keep unicode for parity.
+            let tint = isOn ? DesignTokens.Color.accent : DesignTokens.Color.textSecondary
+            switch icon {
+            case .search:
+                OWSearchGlyph(size: DesignTokens.Layout.composerBoardIconSize, color: tint)
+            case .wiki:
+                OWGlobeGlyph(size: DesignTokens.Layout.composerBoardIconSize, color: tint)
+            default:
+                OWUnicodeIconView(
+                    icon,
+                    size: DesignTokens.Layout.composerBoardIconSize,
+                    color: tint
+                )
+            }
         }
     }
 

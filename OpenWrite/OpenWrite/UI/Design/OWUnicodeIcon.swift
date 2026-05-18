@@ -340,3 +340,84 @@ extension InspectorTab {
 extension StructureTemplate {
   var unicodeIcon: OWUnicodeIcon { pageType.unicodeIcon }
 }
+
+// MARK: - Path-drawn glyphs
+//
+// Vector replacements for unicode characters that render too small or too unfamiliar at
+// composer scale (the chat 2×2 toggle board). 1.5pt strokes scaled to size, .round caps —
+// matches Lucide / Anytype simple-icon density and stays crisp at 16–24pt.
+
+/// Magnifying glass — replaces unicode `⌕` for search affordances.
+struct OWSearchGlyph: View {
+    var size: CGFloat = 20
+    var color: Color = DesignTokens.Color.textSecondary
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let scale = min(canvasSize.width, canvasSize.height) / 24
+            let stroke = max(1.4, 1.6 * scale)
+            let lensCenter = CGPoint(x: 10 * scale, y: 10 * scale)
+            let lensRadius = 6 * scale
+            let lensRect = CGRect(
+                x: lensCenter.x - lensRadius,
+                y: lensCenter.y - lensRadius,
+                width: lensRadius * 2,
+                height: lensRadius * 2
+            )
+            context.stroke(
+                Path(ellipseIn: lensRect),
+                with: .color(color),
+                style: StrokeStyle(lineWidth: stroke, lineCap: .round)
+            )
+            var handle = Path()
+            handle.move(to: CGPoint(x: 14.5 * scale, y: 14.5 * scale))
+            handle.addLine(to: CGPoint(x: 20 * scale, y: 20 * scale))
+            context.stroke(
+                handle,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: stroke, lineCap: .round)
+            )
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Globe / web — replaces unicode `⌁` / `◍` for the chat composer's "fetch web pages" toggle.
+struct OWGlobeGlyph: View {
+    var size: CGFloat = 20
+    var color: Color = DesignTokens.Color.textSecondary
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            let scale = min(canvasSize.width, canvasSize.height) / 24
+            let stroke = max(1.3, 1.5 * scale)
+            let style = StrokeStyle(lineWidth: stroke, lineCap: .round, lineJoin: .round)
+            let center = CGPoint(x: 12 * scale, y: 12 * scale)
+            let radius = 9 * scale
+
+            let circle = CGRect(
+                x: center.x - radius,
+                y: center.y - radius,
+                width: radius * 2,
+                height: radius * 2
+            )
+            context.stroke(Path(ellipseIn: circle), with: .color(color), style: style)
+
+            var equator = Path()
+            equator.move(to: CGPoint(x: center.x - radius, y: center.y))
+            equator.addLine(to: CGPoint(x: center.x + radius, y: center.y))
+            context.stroke(equator, with: .color(color), style: style)
+
+            let meridianRect = CGRect(
+                x: center.x - radius * 0.45,
+                y: center.y - radius,
+                width: radius * 0.9,
+                height: radius * 2
+            )
+            context.stroke(Path(ellipseIn: meridianRect), with: .color(color), style: style)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}

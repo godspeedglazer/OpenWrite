@@ -51,5 +51,18 @@ struct OpenWriteApp: App {
                 .environmentObject(vaultStore)
                 .environmentObject(aiServices)
         }
+        .commands {
+            CommandGroup(replacing: .undoRedo) {
+                Button("Undo") {
+                    NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
+                }
+                .keyboardShortcut("z", modifiers: .command)
+
+                Button("Redo") {
+                    NSApp.sendAction(Selector(("redo:")), to: nil, from: nil)
+                }
+                .keyboardShortcut("z", modifiers: [.command, .shift])
+            }
+        }
     }
 }

@@ -109,9 +109,13 @@ struct EditorView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(DesignTokens.Color.background)
         .environment(\.blockFormatting, blockFormatting)
-        .sheet(isPresented: $inlineAssist.showRefineResult) {
+        // Popover (not `.sheet`) so the editor + shell stay visible while reading the refine result.
+        // Sheets darken/blur the entire parent window on macOS — user feedback: "very strange
+        // washing over everything". Popover anchors to the editor body and dismisses on outside tap.
+        .popover(isPresented: $inlineAssist.showRefineResult, arrowEdge: .top) {
             refineResultSheet
-                .openWriteSheetPresentationChrome()
+                .frame(minWidth: 360, idealWidth: 460, maxWidth: 540, minHeight: 220, idealHeight: 320, maxHeight: 520)
+                .padding(DesignTokens.Spacing.spacing3)
         }
         .onAppear {
             syncFromDocument(document)
@@ -122,6 +126,12 @@ struct EditorView: View {
             if let doc = self.document {
                 syncFromDocument(doc)
                 syncHeaderFromDocument(doc)
+            }
+        }
+        .onChange(of: isEditorPreviewMode) { _, preview in
+            if preview {
+                showProperties = false
+                showTypePicker = false
             }
         }
         .onChange(of: document?.updatedAt) { _, _ in
@@ -380,7 +390,7 @@ struct EditorView: View {
                         }
                 }
                 .openWriteEditorContentWidth()
-                .padding(.bottom, DesignTokens.Spacing.spacing4)
+                .padding(.bottom, DesignTokens.Layout.editorScrollBottomCushion)
             }
             .frame(maxWidth: .infinity, alignment: .top)
         }
@@ -474,7 +484,7 @@ struct EditorView: View {
                 }
             }
         }
-        .frame(minWidth: 420, minHeight: 280)
+        .background(DesignTokens.Color.background)
     }
 
     private func requestInlineRefine(

@@ -179,7 +179,7 @@ struct OWBlockFormattingToolbar: View {
                 .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
         }
         .focusable(false)
-        .opacity(formatting.focusedBlockID == nil ? 0.55 : 1)
+        .opacity(formatting.focusedBlockID == nil ? 0.88 : 1)
     }
 
     private var fontFamilyBinding: Binding<InlineMarkdown.FontFamily> {

@@ -1074,6 +1074,8 @@ struct ChatPanelView: View {
                 }
             }
             .padding(DesignTokens.Spacing.assistStripMessageListPadding)
+            // Reserve space so the last transcript row isn't covered by the bottom safeAreaInset composer.
+            .padding(.bottom, DesignTokens.Layout.composerBoardHeight + DesignTokens.Spacing.spacing6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -1344,24 +1346,48 @@ struct ChatPanelView: View {
 
     private var composerInputRow: some View {
         ChatComposerPasteHost(onPasteImage: { model.importImageFromPasteboard() }) {
-            HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
-                OWThemedComposerField(
-                    placeholder: stripIsCompact ? "Ask…" : "Ask about your notes…",
-                    text: $model.draft,
-                    lineLimit: 1 ... 6,
-                    minHeight: DesignTokens.Layout.composerBoardHeight
-                ) {
-                    if !model.isBusy {
-                        model.send(services: aiServices, agent: aiServices.selectedAgent)
+            Group {
+                if stripIsCompact {
+                    VStack(alignment: .leading, spacing: DesignTokens.Layout.composerBoardSpacing) {
+                        OWThemedComposerField(
+                            placeholder: "Ask…",
+                            text: $model.draft,
+                            lineLimit: 1 ... 6,
+                            minHeight: DesignTokens.Layout.composerActionSize
+                        ) {
+                            if !model.isBusy {
+                                model.send(services: aiServices, agent: aiServices.selectedAgent)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .disabled(model.isBusy)
+                        .onPasteCommand(of: [.image]) { _ in
+                            model.importImageFromPasteboard()
+                        }
+
+                        composerActionBoard
+                    }
+                } else {
+                    HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
+                        OWThemedComposerField(
+                            placeholder: "Ask about your notes…",
+                            text: $model.draft,
+                            lineLimit: 1 ... 6,
+                            minHeight: DesignTokens.Layout.composerBoardHeight
+                        ) {
+                            if !model.isBusy {
+                                model.send(services: aiServices, agent: aiServices.selectedAgent)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .disabled(model.isBusy)
+                        .onPasteCommand(of: [.image]) { _ in
+                            model.importImageFromPasteboard()
+                        }
+
+                        composerActionBoard
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .disabled(model.isBusy)
-                .onPasteCommand(of: [.image]) { _ in
-                    model.importImageFromPasteboard()
-                }
-
-                composerActionBoard
             }
         }
         .fixedSize(horizontal: false, vertical: true)

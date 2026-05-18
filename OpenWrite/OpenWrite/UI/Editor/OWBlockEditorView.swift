@@ -177,6 +177,10 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         host.onDropImageFile = { url in
             context.coordinator.ingestImageFile(url)
         }
+        host.onAttachedToWindow = { [weak host, weak coordinator = context.coordinator] in
+            guard let host, let coordinator else { return }
+            coordinator.scheduleRefreshDocumentSizeIfContentGrew(on: host)
+        }
         let initialWidth = Coordinator.roundedLayoutWidth(640)
         let initialRevision = context.coordinator.blocksContentRevision(blocks)
         context.coordinator.lastStructureRevision = context.coordinator.blocksStructureRevision(blocks)
@@ -186,6 +190,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         context.coordinator.publishDocumentHeight(
             host.measureDocumentSize(width: initialWidth, contentRevision: initialRevision).height
         )
+        DispatchQueue.main.async {
+            context.coordinator.scheduleRefreshDocumentSizeIfContentGrew(on: host)
+        }
         return host
     }
 
@@ -209,7 +216,8 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             context.coordinator.lastThemeRevision = themeRevision
         }
         if themeChanged, let hosting = context.coordinator.hostingView {
-            hosting.layer?.backgroundColor = NSColor(DesignTokens.Color.background).cgColor
+            let canvas = ThemeManager.shared.palette.editorCanvas
+            hosting.layer?.backgroundColor = NSColor(canvas).cgColor
         }
         if (context.coordinator.needsHostedRootRefresh(for: blocks) || previewModeChanged || themeChanged),
            let hosting = context.coordinator.hostingView {
@@ -255,6 +263,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         )
         let measured = host.measureDocumentSize(width: measureWidth, contentRevision: contentRevision)
         context.coordinator.publishDocumentHeight(measured.height)
+        context.coordinator.scheduleRefreshDocumentSizeIfContentGrew(on: host)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BlockEditorPasteCaptureView, context: Context) -> CGSize? {
@@ -282,6 +291,8 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         private var lastHostedBlockIDs: [UUID] = []
         private var layoutGeneration = 0
         private var layoutFlushScheduled = false
+        private var contentGrowthRefreshScheduled = false
+        private var lastPublishedHeight: CGFloat = 0
         private var pendingLayoutWidth: CGFloat?
         private var pendingContentRevision: UInt64 = 0
 
@@ -292,8 +303,26 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
 
         func publishDocumentHeight(_ height: CGFloat) {
             let safe = max(Self.roundedLayoutHeight(height), 120)
+            lastPublishedHeight = safe
             guard abs(laidOutHeight.wrappedValue - safe) > 0.5 else { return }
             laidOutHeight.wrappedValue = safe
+        }
+
+        /// After static Welcome content settles, re-apply layout if measure grew (mirrors chat scroll host).
+        func scheduleRefreshDocumentSizeIfContentGrew(on host: BlockEditorPasteCaptureView) {
+            let width = roundedLayoutWidth(max(host.bounds.width, lastProposedWidth ?? 0))
+            let revision = blocksContentRevision(blocks.wrappedValue)
+            let probe = host.measureDocumentSize(width: width, contentRevision: revision).height
+            guard probe > lastPublishedHeight + 0.5 else { return }
+            guard !contentGrowthRefreshScheduled else { return }
+            contentGrowthRefreshScheduled = true
+            DispatchQueue.main.async { [weak self, weak host] in
+                guard let self, let host else { return }
+                self.contentGrowthRefreshScheduled = false
+                let width = self.roundedLayoutWidth(max(host.bounds.width, self.lastProposedWidth ?? 0))
+                let revision = self.blocksContentRevision(self.blocks.wrappedValue)
+                self.scheduleLayout(on: host, width: width, contentRevision: revision)
+            }
         }
 
         /// Pixel-stable width — subpixel oscillation in `host.bounds` was re-triggering apply every frame.
@@ -370,7 +399,6 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             for block in blocks {
                 hasher.combine(block.id)
                 hasher.combine(block.text)
-                hasher.combine(block.isChecked)
             }
             return UInt64(bitPattern: Int64(hasher.finalize()))
         }
