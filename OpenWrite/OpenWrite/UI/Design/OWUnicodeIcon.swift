@@ -66,7 +66,9 @@ enum OWUnicodeIcon: String, CaseIterable, Sendable {
     case .collection: return "⊞"
     case .book: return "▤"
     case .document: return "▢"
-    case .wiki: return "⌁"
+    // "◍" reads as a small globe/meridian — far clearer than the old "⌁" (electric arrow)
+    // which rendered as gibberish in the chat composer's web-fetch toggle.
+    case .wiki: return "◍"
     case .graph: return "◉"
     case .search: return "⌕"
     case .settings: return "⚙"

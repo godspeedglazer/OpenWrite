@@ -60,6 +60,11 @@ struct ContentView: View {
             markdownVaultWatcher.start {
                 scheduleDebouncedReindex()
             }
+            // Resolve the loaded chat model from /v1/models before the user opens the chat panel,
+            // so the composer caption never shows a stale id like "gemma-4-e4b · not checked".
+            Task.detached { @MainActor in
+                await aiServices.checkConnection()
+            }
             await aiServices.prepareVaultIndex(documents: vaultStore.documentsInActiveVault)
         }
         .onDisappear {

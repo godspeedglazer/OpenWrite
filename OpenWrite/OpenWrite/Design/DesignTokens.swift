@@ -385,7 +385,7 @@ enum DesignTokens {
         static let composerFieldLeadingInset: CGFloat = Spacing.spacing3
         static let composerFieldTrailingInset: CGFloat = Spacing.spacing2
         /// Glyph size for composer 2×2 board icons (Notes, Web, attach, send).
-        static let composerBoardIconSize: CGFloat = 18
+        static let composerBoardIconSize: CGFloat = 20
         /// Max height for multiline chat composer before internal scroll.
         static let composerFieldMaxHeight: CGFloat = 120
         static let centerCardOuterPadding: CGFloat = Spacing.spacing2

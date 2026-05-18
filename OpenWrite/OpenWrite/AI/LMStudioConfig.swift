@@ -75,8 +75,10 @@ struct LMStudioConfig: Codable, Hashable, Sendable {
     var timeoutSeconds: TimeInterval
     var streamingEnabled: Bool
 
-    /// Default chat model id when nothing is saved yet (LM Studio local id; override in Settings).
-    static let defaultChatModelID = "gemma-4-e4b"
+    /// Default chat model id when nothing is saved yet. **Intentionally empty** so the composer caption
+    /// reads "Not set" until `/v1/models` resolves the actually-loaded model in `checkConnection`.
+    /// A hardcoded id like `gemma-4-e4b` was misleading users into thinking a non-loaded model was active.
+    static let defaultChatModelID = ""
 
     init(
         backendPreset: AIBackendPreset = .lmStudio,

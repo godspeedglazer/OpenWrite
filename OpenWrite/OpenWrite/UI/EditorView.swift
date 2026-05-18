@@ -9,15 +9,15 @@ struct EditorView: View {
     @EnvironmentObject private var workbench: WorkbenchState
 
     let documentID: UUID
-    @State private var editingBlocks: [NoteBlock] = []
+    @State private var editingBlocks: [NoteBlock]
     @State private var showProperties: Bool = false
     @State private var showTypePicker: Bool = false
-    @State private var headerTitle: String = ""
-    @State private var headerPageIcon: String = ""
+    @State private var headerTitle: String
+    @State private var headerPageIcon: String
     @State private var headerCoverStyle: CoverStyle?
     @State private var headerCoverImagePath: String?
-    @State private var headerIconOffsetX: CGFloat = 0
-    @State private var headerIconOffsetY: CGFloat = 0
+    @State private var headerIconOffsetX: CGFloat
+    @State private var headerIconOffsetY: CGFloat
     @State private var appliedEditorPresentation = false
     @StateObject private var inlineAssist = InlineAssistController()
     @StateObject private var blockFormatting = BlockFormattingState()
@@ -26,10 +26,71 @@ struct EditorView: View {
 
     init(document: VaultDocument) {
         self.documentID = document.id
+        let bodyBlocks = Self.bodyBlocks(for: document)
+        self._editingBlocks = State(initialValue: bodyBlocks)
+        self._headerTitle = State(initialValue: document.displayTitle)
+        self._headerPageIcon = State(initialValue: document.pageIcon)
+        self._headerCoverStyle = State(initialValue: document.coverStyle)
+        self._headerCoverImagePath = State(initialValue: document.coverImagePath)
+        self._headerIconOffsetX = State(initialValue: document.pageIconOffsetX)
+        self._headerIconOffsetY = State(initialValue: document.pageIconOffsetY)
     }
 
     init(documentID: UUID) {
         self.documentID = documentID
+        // Snapshot the document at view-init time so the first render already shows blocks.
+        // Falls back to the welcome sample's body for the welcome id, otherwise an empty paragraph.
+        let snapshot = Self.bodySnapshot(forDocumentID: documentID)
+        self._editingBlocks = State(initialValue: snapshot.blocks)
+        self._headerTitle = State(initialValue: snapshot.title)
+        self._headerPageIcon = State(initialValue: snapshot.icon)
+        self._headerCoverStyle = State(initialValue: snapshot.coverStyle)
+        self._headerCoverImagePath = State(initialValue: snapshot.coverImagePath)
+        self._headerIconOffsetX = State(initialValue: snapshot.iconOffsetX)
+        self._headerIconOffsetY = State(initialValue: snapshot.iconOffsetY)
+    }
+
+    private static func bodyBlocks(for document: VaultDocument) -> [NoteBlock] {
+        let body = document.rootBlocks.filter { $0.kind != .property }
+        return body.isEmpty ? [NoteBlock(kind: .paragraph, text: "")] : body
+    }
+
+    private struct EditorHeaderSnapshot {
+        var blocks: [NoteBlock]
+        var title: String
+        var icon: String
+        var coverStyle: CoverStyle?
+        var coverImagePath: String?
+        var iconOffsetX: CGFloat
+        var iconOffsetY: CGFloat
+
+        static let empty = EditorHeaderSnapshot(
+            blocks: [NoteBlock(kind: .paragraph, text: "")],
+            title: "",
+            icon: "",
+            coverStyle: nil,
+            coverImagePath: nil,
+            iconOffsetX: 0,
+            iconOffsetY: 0
+        )
+    }
+
+    /// Seeds initial state without an env-object dependency. Uses welcomeSample when the documentID
+    /// matches; falls back to an empty paragraph so the body always renders something.
+    private static func bodySnapshot(forDocumentID id: UUID) -> EditorHeaderSnapshot {
+        if id == VaultDocument.welcomeDocumentID {
+            let doc = VaultDocument.welcomeSample
+            return EditorHeaderSnapshot(
+                blocks: bodyBlocks(for: doc),
+                title: doc.displayTitle,
+                icon: doc.pageIcon,
+                coverStyle: doc.coverStyle,
+                coverImagePath: doc.coverImagePath,
+                iconOffsetX: doc.pageIconOffsetX,
+                iconOffsetY: doc.pageIconOffsetY
+            )
+        }
+        return .empty
     }
 
     private var document: VaultDocument? {

@@ -55,8 +55,10 @@ enum LMStudioConfigPersistence {
     private static func decode(_ data: Data) -> LMStudioConfig? {
         guard var config = try? JSONDecoder().decode(LMStudioConfig.self, from: data) else { return nil }
         let chat = config.chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        if chat.isEmpty || chat == "local-model" {
-            config.chatModel = LMStudioConfig.defaultChatModelID
+        // Clear legacy placeholders so `resolveChatModelID` adopts the first loaded /v1/models entry,
+        // rather than asserting a hardcoded id that may not be loaded on this machine.
+        if chat == "local-model" || chat == "gemma-4-e4b" {
+            config.chatModel = ""
         }
         return config
     }

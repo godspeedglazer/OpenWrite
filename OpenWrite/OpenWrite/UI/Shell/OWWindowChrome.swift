@@ -14,11 +14,22 @@ extension NSView {
 // MARK: - NSWindow configuration
 
 /// Applies unified transparent titlebar so custom shell chrome can sit behind traffic lights.
+///
+/// **Why this is more aggressive than a simple "apply once on theme revision":**
+/// The previous implementation gated on `revision != lastAppliedRevision`, but the very first
+/// `updateNSView` after a fresh launch fires with `revision == lastAppliedRevision == 0` AND
+/// `nsView.window == nil`, so we bailed out without ever scheduling an apply. By the time
+/// SwiftUI inserted the view into the window hierarchy, no further `updateNSView` was triggered
+/// (no state change), leaving macOS to render its default vibrant grey title strip — the
+/// "gray void" above the custom traffic lights. We now:
+///   • apply once `nsView.window` resolves (window-attach observer), and
+///   • react to `NSWindow.didBecomeKey` / `didChangeOcclusionState` so fullscreen and re-keying
+///     never strand the title bar in the system grey appearance.
 struct OWWindowChromeConfigurator: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
+        let view = OWWindowChromeProbeView(coordinator: context.coordinator)
         view.openWriteSuppressFocusRing()
         view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         view.setContentHuggingPriority(.defaultLow, for: .vertical)
@@ -26,24 +37,94 @@ struct OWWindowChromeConfigurator: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        let revision = ThemeManager.shared.revision
-        let windowID = nsView.window.map(ObjectIdentifier.init)
-        let coordinator = context.coordinator
-        let needsApply = revision != coordinator.lastAppliedRevision
-            || windowID != coordinator.boundWindowID
-        guard needsApply else { return }
-        coordinator.lastAppliedRevision = revision
-        coordinator.boundWindowID = windowID
-        guard let window = nsView.window else { return }
-        DispatchQueue.main.async {
-            guard nsView.window === window else { return }
-            OWWindowChrome.apply(to: window)
-        }
+        context.coordinator.refresh(view: nsView)
     }
 
     final class Coordinator {
-        var lastAppliedRevision: UInt = 0
+        var lastAppliedRevision: UInt = .max
         var boundWindowID: ObjectIdentifier?
+        private var observers: [NSObjectProtocol] = []
+
+        deinit {
+            observers.forEach(NotificationCenter.default.removeObserver)
+        }
+
+        func refresh(view: NSView) {
+            let revision = ThemeManager.shared.revision
+            let windowID = view.window.map(ObjectIdentifier.init)
+            let windowChanged = windowID != boundWindowID
+            let revisionChanged = revision != lastAppliedRevision
+
+            if windowChanged {
+                rebindObservers(for: view.window)
+                boundWindowID = windowID
+            }
+
+            guard revisionChanged || windowChanged else { return }
+            lastAppliedRevision = revision
+
+            guard let window = view.window else { return }
+            // Apply on the next runloop turn so AppKit has finished installing the content view
+            // (paintThemeFrame walks superviews — those are nil during the synchronous SwiftUI pass).
+            DispatchQueue.main.async { [weak view] in
+                guard let view, view.window === window else { return }
+                OWWindowChrome.apply(to: window)
+            }
+        }
+
+        private func rebindObservers(for window: NSWindow?) {
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers.removeAll()
+            guard let window else { return }
+            let center = NotificationCenter.default
+            let notifications: [Notification.Name] = [
+                NSWindow.didBecomeKeyNotification,
+                NSWindow.didChangeOcclusionStateNotification,
+                NSWindow.didEnterFullScreenNotification,
+                NSWindow.didExitFullScreenNotification,
+                NSWindow.didChangeBackingPropertiesNotification
+            ]
+            for name in notifications {
+                let token = center.addObserver(forName: name, object: window, queue: .main) { _ in
+                    OWWindowChrome.apply(to: window)
+                }
+                observers.append(token)
+            }
+            // Theme cycles can outlive the configurator's last `updateNSView` (e.g. quick rebind);
+            // listen here too so the chrome refreshes even if SwiftUI does not redraw the probe.
+            let themeToken = center.addObserver(
+                forName: .openWriteThemeDidChange,
+                object: nil,
+                queue: .main
+            ) { [weak self, weak window] _ in
+                guard let self, let window else { return }
+                self.lastAppliedRevision = ThemeManager.shared.revision
+                OWWindowChrome.apply(to: window)
+            }
+            observers.append(themeToken)
+        }
+    }
+}
+
+/// Sub-classed NSView so we can react when AppKit attaches the configurator probe to a window.
+private final class OWWindowChromeProbeView: NSView {
+    weak var coordinator: OWWindowChromeConfigurator.Coordinator?
+
+    init(coordinator: OWWindowChromeConfigurator.Coordinator) {
+        self.coordinator = coordinator
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // `updateNSView` doesn't always re-fire after the SwiftUI hosting view is attached, so we
+        // poke the coordinator directly. This was the single most common cause of the gray strip.
+        coordinator?.refresh(view: self)
     }
 }
 

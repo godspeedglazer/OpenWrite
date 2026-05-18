@@ -526,7 +526,11 @@ final class OpenWriteAIServices: ObservableObject {
                 return "Invalid LM Studio URL (\(config.baseURL.absoluteString)). Use http://127.0.0.1:1234 in Settings."
             case .httpStatus(let code, let detail):
                 if code == 404 {
-                    return "Chat model not found. Load “\(config.chatModelDisplay)” in LM Studio or change Chat model in Settings."
+                    let trimmed = config.chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.isEmpty {
+                        return "No chat model configured. Load a model in LM Studio, or pick a Chat model in Settings → AI."
+                    }
+                    return "Chat model not found. Load “\(trimmed)” in LM Studio or change Chat model in Settings."
                 }
                 if let detail, !detail.isEmpty {
                     return "LM Studio returned HTTP \(code): \(detail)"

@@ -20,7 +20,6 @@ struct AnytypeShellView: View {
     @State private var searchQuery: String = ""
     @State private var navigationRailWidth: CGFloat = ShellChromePreferences.navigationRailWidth
     @State private var assistStripWidth: CGFloat = ShellChromePreferences.assistStripWidth
-    @State private var editorLayoutEpoch: UInt = 0
 
     var body: some View {
         let _ = themeManager.revision
@@ -35,10 +34,14 @@ struct AnytypeShellView: View {
             shellBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // Ignore the macOS title-bar safe area so the cream chrome paints from y=0 — without this,
+        // OWShellTitleBar started ~28pt below the window edge and AppKit drew its vibrancy material
+        // in the gap, producing the visible "gray void" above the custom traffic lights.
+        .ignoresSafeArea(edges: .top)
         .animation(DesignTokens.Motion.animationStandard, value: workbench.sidebarVisible)
         .animation(DesignTokens.Motion.animationStandard, value: workbench.aiAssistExpanded)
         .animation(DesignTokens.Motion.animationStandard, value: workbench.navigationRailCollapsed)
-        .background(palette.shellChrome)
+        .background(palette.shellChrome.ignoresSafeArea())
         .onChange(of: workbench.sidebarVisible) { _, _ in workbench.persistChromePreferences() }
         .onChange(of: workbench.aiAssistExpanded) { _, _ in workbench.persistChromePreferences() }
         .onChange(of: workbench.navigationRailCollapsed) { _, collapsed in
@@ -208,7 +211,9 @@ struct AnytypeShellView: View {
         if let centerWidth {
             reconcileCenterWorkbenchLayout(centerWidth: centerWidth)
         }
-        editorLayoutEpoch &+= 1
+        // Editor re-layout is driven by `editorScrollLayoutToken` (theme/rail flags) inside `EditorView`,
+        // so we no longer rebuild the EditorView identity here — that path used to wipe `editingBlocks`
+        // back to `[]` and leave the welcome body invisible until `.onAppear` re-fired.
     }
 
     private func reconcileCenterWorkbenchLayout(centerWidth: CGFloat) {
@@ -325,8 +330,11 @@ struct AnytypeShellView: View {
     @ViewBuilder
     private var editorCenter: some View {
         if let doc = vaultStore.selectedDocument {
-            EditorView(documentID: doc.id)
-                .id(editorLayoutEpoch)
+            // Pass the full doc so EditorView seeds editingBlocks/header from the active vault content
+            // synchronously at init. Identity is keyed on doc id — switching pages re-runs init.
+            // No more EditorView rebuild on rail/assist toggle (used to wipe state to [] every time).
+            EditorView(document: doc)
+                .id(doc.id)
         } else {
             emptyEditorState
         }

@@ -31,13 +31,16 @@ extension View {
 
 private struct OpenWriteSheetPresentationChromeModifier: ViewModifier {
     func body(content: Content) -> some View {
+        // `.regularMaterial` lets the parent shell remain visible through a translucent blur instead of
+        // dropping to a flat backdrop color — addresses the "submenus blur out the rest of the screen"
+        // feedback while staying within native macOS sheet semantics.
         if #available(macOS 15.0, *) {
             content
-                .presentationBackground(DesignTokens.Color.background)
+                .presentationBackground(.regularMaterial)
                 .presentationSizing(.fitted)
         } else {
             content
-                .presentationBackground(DesignTokens.Color.background)
+                .presentationBackground(.regularMaterial)
         }
     }
 }
