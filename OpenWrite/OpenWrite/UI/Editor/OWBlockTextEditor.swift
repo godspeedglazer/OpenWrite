@@ -54,15 +54,20 @@ struct OWBlockTextEditor: NSViewRepresentable {
         if layoutWidth > 1 {
             context.coordinator.layout(toWidth: layoutWidth)
         }
+        guard !context.coordinator.isProgrammaticUpdate else { return }
+
         let attributesChanged = context.coordinator.lastAppliedAttributes != blockAttributes
-        if attributesChanged {
-            context.coordinator.lastAppliedAttributes = blockAttributes
+        let markdownEcho = markdown == context.coordinator.lastEmittedMarkdown
+        if context.coordinator.isActivelyEditing(textView), !attributesChanged {
+            return
         }
-        if !context.coordinator.isProgrammaticUpdate {
-            let current = InlineMarkdown.markdown(from: textView.textStorage ?? NSAttributedString())
-            if current != markdown || attributesChanged {
-                context.coordinator.applyContent()
-            }
+        if markdownEcho, !attributesChanged {
+            return
+        }
+
+        let current = InlineMarkdown.markdown(from: textView.textStorage ?? NSAttributedString())
+        if current != markdown || attributesChanged {
+            context.coordinator.applyContent(preserveSelection: context.coordinator.isActivelyEditing(textView))
         }
     }
 
@@ -79,12 +84,24 @@ struct OWBlockTextEditor: NSViewRepresentable {
         var parent: OWBlockTextEditor
         weak var textView: BlockFormattingTextView?
         var isProgrammaticUpdate = false
+        var lastEmittedMarkdown: String = ""
         private var lastLayoutWidth: CGFloat = 0
         private var lastLayoutHeight: CGFloat = 24
         var lastAppliedAttributes: [String: String] = [:]
 
         init(parent: OWBlockTextEditor) {
             self.parent = parent
+            self.lastEmittedMarkdown = parent.markdown
+        }
+
+        func isActivelyEditing(_ textView: NSTextView) -> Bool {
+            guard let window = textView.window else { return false }
+            if window.firstResponder === textView { return true }
+            if let fieldEditor = window.fieldEditor(false, for: textView) as? NSTextView,
+               fieldEditor.delegate === textView.delegate {
+                return true
+            }
+            return false
         }
 
         func layout(toWidth width: CGFloat) {
@@ -113,8 +130,9 @@ struct OWBlockTextEditor: NSViewRepresentable {
             textView.superview?.invalidateIntrinsicContentSize()
         }
 
-        func applyContent() {
+        func applyContent(preserveSelection: Bool = false) {
             guard let textView else { return }
+            let selection = preserveSelection ? textView.selectedRange() : NSRange(location: 0, length: 0)
             let family = InlineMarkdown.FontFamily(attribute: parent.blockAttributes["fontFamily"])
             let size = resolvedPointSize()
             let parsed = InlineMarkdown.attributedString(
@@ -125,7 +143,16 @@ struct OWBlockTextEditor: NSViewRepresentable {
             )
             isProgrammaticUpdate = true
             textView.textStorage?.setAttributedString(parsed)
+            if preserveSelection {
+                let length = (textView.string as NSString).length
+                if length > 0 {
+                    let safeLocation = min(selection.location, max(length - 1, 0))
+                    let safeLength = min(selection.length, length - safeLocation)
+                    textView.setSelectedRange(NSRange(location: safeLocation, length: safeLength))
+                }
+            }
             isProgrammaticUpdate = false
+            lastEmittedMarkdown = parent.markdown
             lastAppliedAttributes = parent.blockAttributes
             layout(toWidth: textView.frame.width > 1 ? textView.frame.width : textView.bounds.width)
         }
@@ -140,7 +167,9 @@ struct OWBlockTextEditor: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard !isProgrammaticUpdate, let textView, let storage = textView.textStorage else { return }
-            parent.markdown = InlineMarkdown.markdown(from: storage)
+            let emitted = InlineMarkdown.markdown(from: storage)
+            lastEmittedMarkdown = emitted
+            parent.markdown = emitted
             layout(toWidth: textView.frame.width > 1 ? textView.frame.width : textView.bounds.width)
         }
 
@@ -163,6 +192,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
         func registerWithFormattingState() {
             guard let textView else { return }
             parent.formatting.register(textView: textView, blockID: parent.blockID) { [weak self] markdown in
+                self?.lastEmittedMarkdown = markdown
                 self?.parent.markdown = markdown
             }
         }

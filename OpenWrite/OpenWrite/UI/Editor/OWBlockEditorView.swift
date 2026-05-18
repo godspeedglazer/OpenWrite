@@ -8,16 +8,9 @@ struct OWBlockEditorView: View {
     @Binding var blocks: [NoteBlock]
     var onSelectionChange: ((String?) -> Void)? = nil
     var body: some View {
-        BlockEditorPasteHost(blocks: $blocks) {
-            VStack(alignment: .leading, spacing: DesignTokens.Layout.editorBlockStackSpacing) {
-                ForEach($blocks) { $block in
-                    blockRow(for: $block)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .fixedSize(horizontal: false, vertical: true)
+        BlockEditorPasteHost(blocks: $blocks, onSelectionChange: onSelectionChange)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -100,23 +93,116 @@ struct OWBlockEditorView: View {
 
 // MARK: - Block editor paste host
 
-private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
+/// Stable SwiftUI root for `NSHostingView` — keeps `NSTextView` instances alive across keystrokes.
+private struct BlockEditorHostedContent: View {
     @Binding var blocks: [NoteBlock]
-    let content: Content
+    var onSelectionChange: ((String?) -> Void)?
 
-    init(blocks: Binding<[NoteBlock]>, @ViewBuilder content: () -> Content) {
-        self._blocks = blocks
-        self.content = content()
+    var body: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Layout.editorBlockStackSpacing) {
+            ForEach($blocks) { $block in
+                blockRow(for: $block)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    @ViewBuilder
+    private func blockRow(for block: Binding<NoteBlock>) -> some View {
+        let editableText = block.text
+        switch block.wrappedValue.kind {
+        case .todo:
+            OWPreviewBlockRow(
+                block: block.wrappedValue,
+                text: editableText,
+                blockAttributes: attributesBinding(block),
+                checked: todoCheckedBinding(block),
+                onSelectionChange: onSelectionChange
+            )
+        case .callout:
+            OWPreviewBlockRow(
+                block: block.wrappedValue,
+                text: editableText,
+                blockAttributes: attributesBinding(block),
+                calloutType: attributeBinding(block, key: "callout"),
+                onSelectionChange: onSelectionChange
+            )
+        case .code:
+            OWPreviewBlockRow(
+                block: block.wrappedValue,
+                text: editableText,
+                blockAttributes: attributesBinding(block),
+                language: attributeBinding(block, key: "language"),
+                onSelectionChange: onSelectionChange
+            )
+        case .heading1, .heading2, .heading3, .paragraph, .bullet, .quote, .wikilink:
+            OWPreviewBlockRow(
+                block: block.wrappedValue,
+                text: editableText,
+                blockAttributes: attributesBinding(block),
+                onSelectionChange: onSelectionChange
+            )
+        case .image:
+            OWPreviewBlockRow(
+                block: block.wrappedValue,
+                text: editableText,
+                blockAttributes: attributesBinding(block)
+            )
+        default:
+            OWPreviewBlockRow(block: block.wrappedValue)
+        }
+    }
+
+    private func todoCheckedBinding(_ block: Binding<NoteBlock>) -> Binding<Bool> {
+        Binding(
+            get: { block.wrappedValue.isChecked },
+            set: { newValue in
+                var updated = block.wrappedValue
+                updated.isChecked = newValue
+                block.wrappedValue = updated
+            }
+        )
+    }
+
+    private func attributesBinding(_ block: Binding<NoteBlock>) -> Binding<[String: String]> {
+        Binding(
+            get: { block.wrappedValue.attributes },
+            set: { block.wrappedValue.attributes = $0 }
+        )
+    }
+
+    private func attributeBinding(_ block: Binding<NoteBlock>, key: String) -> Binding<String> {
+        Binding(
+            get: { block.wrappedValue.attributes[key] ?? "" },
+            set: { newValue in
+                if newValue.isEmpty {
+                    block.wrappedValue.attributes.removeValue(forKey: key)
+                } else {
+                    block.wrappedValue.attributes[key] = newValue
+                }
+            }
+        )
+    }
+}
+
+private struct BlockEditorPasteHost: NSViewRepresentable {
+    @Binding var blocks: [NoteBlock]
+    var onSelectionChange: ((String?) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(blocks: $blocks)
     }
 
     func makeNSView(context: Context) -> BlockEditorPasteCaptureView {
-        let hosting = NSHostingView(rootView: content)
+        let hosted = BlockEditorHostedContent(
+            blocks: context.coordinator.blocks,
+            onSelectionChange: onSelectionChange
+        )
+        let hosting = NSHostingView(rootView: hosted)
         hosting.openWriteSuppressFocusRing()
         hosting.sizingOptions = [.intrinsicContentSize]
+        context.coordinator.hostingView = hosting
+        context.coordinator.seedHostedBlockIDs(blocks)
         let host = BlockEditorPasteCaptureView(hostedView: hosting)
         host.onPasteImage = {
             context.coordinator.ingestPastedImage()
@@ -128,25 +214,31 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ host: BlockEditorPasteCaptureView, context: Context) {
-        guard let hosting = host.hostedView as? NSHostingView<Content> else { return }
         host.onPasteImage = {
             context.coordinator.ingestPastedImage()
         }
         host.onDropImageFile = { url in
             context.coordinator.ingestImageFile(url)
         }
-        hosting.rootView = content
+        context.coordinator.onSelectionChange = onSelectionChange
+        if context.coordinator.needsHostedRootRefresh(for: blocks),
+           let hosting = context.coordinator.hostingView {
+            hosting.rootView = BlockEditorHostedContent(
+                blocks: context.coordinator.blocks,
+                onSelectionChange: { context.coordinator.onSelectionChange?($0) }
+            )
+        }
 
         let layoutWidth = max(context.coordinator.lastProposedWidth ?? host.bounds.width, 320)
-        let revision = context.coordinator.blocksRevision(blocks)
+        let structureRevision = context.coordinator.blocksStructureRevision(blocks)
         let widthChanged = abs((context.coordinator.lastAppliedWidth ?? 0) - layoutWidth) > 0.5
-        let contentChanged = revision != context.coordinator.lastBlocksRevision
-        guard widthChanged || contentChanged else { return }
+        let structureChanged = structureRevision != context.coordinator.lastStructureRevision
+        guard widthChanged || structureChanged else { return }
 
-        if contentChanged || widthChanged {
+        if structureChanged || widthChanged {
             host.invalidateMeasurementCache()
         }
-        context.coordinator.lastBlocksRevision = revision
+        context.coordinator.lastStructureRevision = structureRevision
         context.coordinator.lastAppliedWidth = layoutWidth
         context.coordinator.scheduleLayout(on: host, width: layoutWidth)
     }
@@ -159,13 +251,27 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
 
     final class Coordinator {
         var blocks: Binding<[NoteBlock]>
+        var onSelectionChange: ((String?) -> Void)?
+        weak var hostingView: NSHostingView<BlockEditorHostedContent>?
         var lastProposedWidth: CGFloat?
         var lastAppliedWidth: CGFloat?
-        var lastBlocksRevision: UInt64 = 0
+        var lastStructureRevision: UInt64 = 0
+        private var lastHostedBlockIDs: [UUID] = []
         private var layoutGeneration = 0
 
         init(blocks: Binding<[NoteBlock]>) {
             self.blocks = blocks
+        }
+
+        func seedHostedBlockIDs(_ blocks: [NoteBlock]) {
+            lastHostedBlockIDs = blocks.map(\.id)
+        }
+
+        func needsHostedRootRefresh(for blocks: [NoteBlock]) -> Bool {
+            let ids = blocks.map(\.id)
+            guard ids != lastHostedBlockIDs else { return false }
+            lastHostedBlockIDs = ids
+            return true
         }
 
         func append(_ block: NoteBlock) {
@@ -212,13 +318,14 @@ private struct BlockEditorPasteHost<Content: View>: NSViewRepresentable {
             }
         }
 
-        func blocksRevision(_ blocks: [NoteBlock]) -> UInt64 {
+        /// Layout-affecting block changes only — excludes `text` so typing does not relayout the paste host.
+        func blocksStructureRevision(_ blocks: [NoteBlock]) -> UInt64 {
             var hasher = Hasher()
             hasher.combine(blocks.count)
             for block in blocks {
                 hasher.combine(block.id)
                 hasher.combine(block.kind)
-                hasher.combine(block.text)
+                hasher.combine(block.isChecked)
                 for key in block.attributes.keys.sorted() {
                     hasher.combine(key)
                     hasher.combine(block.attributes[key] ?? "")

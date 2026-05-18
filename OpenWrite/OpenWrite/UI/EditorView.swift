@@ -19,6 +19,7 @@ struct EditorView: View {
     @State private var appliedEditorPresentation = false
     @StateObject private var inlineAssist = InlineAssistController()
     @StateObject private var blockFormatting = BlockFormattingState()
+    @State private var blocksCommitTask: Task<Void, Never>?
 
     init(document: VaultDocument) {
         self.documentID = document.id
@@ -61,6 +62,11 @@ struct EditorView: View {
             let body = doc.rootBlocks.filter { $0.kind != .property }
             if body != editingBlocks {
                 syncFromDocument(doc)
+            }
+        }
+        .onDisappear {
+            if let doc = document {
+                flushPendingBlocksCommit(document: doc)
             }
         }
     }
@@ -263,7 +269,7 @@ struct EditorView: View {
                     .openWriteEditorLeadingInset()
                     .padding(.top, DesignTokens.Layout.editorHeaderToBodySpacing)
                     .onChange(of: editingBlocks) { _, newBlocks in
-                        commitBlocks(document: document, blocks: newBlocks)
+                        scheduleCommitBlocks(document: document, blocks: newBlocks)
                     }
             }
             .openWriteEditorContentWidth()
@@ -379,12 +385,33 @@ struct EditorView: View {
         inlineAssist.dismissRefine()
     }
 
+    private func scheduleCommitBlocks(document: VaultDocument, blocks: [NoteBlock]) {
+        blocksCommitTask?.cancel()
+        let documentID = document.id
+        let title = document.displayTitle
+        blocksCommitTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            commitBlocks(documentID: documentID, noteTitle: title, blocks: blocks)
+        }
+    }
+
+    private func flushPendingBlocksCommit(document: VaultDocument) {
+        blocksCommitTask?.cancel()
+        blocksCommitTask = nil
+        commitBlocks(documentID: document.id, noteTitle: document.displayTitle, blocks: editingBlocks)
+    }
+
     private func commitBlocks(document: VaultDocument, blocks: [NoteBlock]) {
-        vaultStore.updateRootBlocks(for: document.id, bodyBlocks: blocks)
+        commitBlocks(documentID: document.id, noteTitle: document.displayTitle, blocks: blocks)
+    }
+
+    private func commitBlocks(documentID: UUID, noteTitle: String, blocks: [NoteBlock]) {
+        vaultStore.updateRootBlocks(for: documentID, bodyBlocks: blocks)
         let excerpt = blocks.map(\.text).joined(separator: "\n")
         pastWrites.recordEdit(
-            noteID: document.id,
-            noteTitle: document.displayTitle,
+            noteID: documentID,
+            noteTitle: noteTitle,
             plainText: excerpt
         )
     }
