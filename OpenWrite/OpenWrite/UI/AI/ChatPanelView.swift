@@ -700,18 +700,39 @@ final class ChatPanelModel: ObservableObject {
         let title = trimmed.isEmpty ? "Connection failed" : "Connection failed — \(trimmed)"
         updatePipelineStepTitle(at: index, id: "connect", title: String(title.prefix(120)))
         setPipelineStep(at: index, id: "connect", status: .failed)
+        mutateMessage(at: index) { message in
+            for stepIndex in message.pipelineSteps.indices {
+                let stepID = message.pipelineSteps[stepIndex].id
+                guard stepID == "respond" || stepID == "done" else { continue }
+                if message.pipelineSteps[stepIndex].status == .active {
+                    message.pipelineSteps[stepIndex].status = .pending
+                }
+            }
+        }
     }
 
     private func markPipelineFailed(at index: Int) {
         mutateMessage(at: index) { message in
+            let connectFailed = message.pipelineSteps.contains { $0.id == "connect" && $0.status == .failed }
             for stepIndex in message.pipelineSteps.indices {
-                if message.pipelineSteps[stepIndex].status == .active {
+                let stepID = message.pipelineSteps[stepIndex].id
+                switch message.pipelineSteps[stepIndex].status {
+                case .active:
+                    if connectFailed, stepID == "respond" || stepID == "done" {
+                        message.pipelineSteps[stepIndex].status = .pending
+                    } else {
+                        message.pipelineSteps[stepIndex].status = .failed
+                    }
+                case .pending:
+                    if connectFailed, stepID == "respond" || stepID == "done" {
+                        continue
+                    }
                     message.pipelineSteps[stepIndex].status = .failed
-                } else if message.pipelineSteps[stepIndex].status == .pending {
-                    message.pipelineSteps[stepIndex].status = .failed
+                case .completed, .failed:
+                    break
                 }
             }
-            if let doneIndex = message.pipelineSteps.firstIndex(where: { $0.id == "done" }) {
+            if !connectFailed, let doneIndex = message.pipelineSteps.firstIndex(where: { $0.id == "done" }) {
                 message.pipelineSteps[doneIndex].title = "Failed"
                 message.pipelineSteps[doneIndex].status = .failed
             }
@@ -761,7 +782,7 @@ struct AIActivityIndicator: View {
                         .controlSize(.small)
                         .scaleEffect(pulse ? 1.05 : 0.95)
                 } else if case .error = state {
-                    OWUnicodeIconView(icon: .warningFill, size: 16, color: .orange)
+                    OWUnicodeIconView(icon: .warningFill, size: 16, color: DesignTokens.Color.warning)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -1113,6 +1134,7 @@ struct ChatPanelView: View {
                 OWChatStatusStepper(
                     steps: message.pipelineSteps,
                     showsStreamingDots: message.isStreaming
+                        && message.pipelineSteps.contains { $0.id == "respond" && $0.status == .active }
                 )
             }
 
@@ -1204,15 +1226,13 @@ struct ChatPanelView: View {
             .padding(.vertical, DesignTokens.Spacing.spacing2)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                message.isError
-                    ? DesignTokens.Color.warning.opacity(0.14)
-                    : DesignTokens.Color.surfaceElevated,
+                DesignTokens.Color.surfaceElevated,
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
             )
             .overlay {
                 if message.isError {
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-                        .strokeBorder(DesignTokens.Color.warning.opacity(0.35), lineWidth: DesignTokens.Layout.borderWidth)
+                        .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
                 }
             }
     }

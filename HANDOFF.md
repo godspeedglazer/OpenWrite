@@ -2,7 +2,7 @@
 
 **Version:** 1.1  
 **Date:** 2026-05-17  
-**Branch:** `main` — see `git log -1` after your last pull (emergency editor fix lands after `99d9da1`)  
+**Branch:** `main` — see `git log -1` after your last pull  
 **Audience:** Next engineer, designer, or Cursor agent taking ownership
 
 This document is the **single honest snapshot** of OpenWrite as it exists today. Read it before touching code. For the mandated next workstream, start with **[AGENT_PROMPT_UI_REFACTOR.md](./AGENT_PROMPT_UI_REFACTOR.md)** (root) or **[docs/AGENT_PROMPT_UI_REFACTOR.md](./docs/AGENT_PROMPT_UI_REFACTOR.md)**.
@@ -18,6 +18,7 @@ This document is the **single honest snapshot** of OpenWrite as it exists today.
 | **Sheets hide entire app** | macOS sheet filled window; cover used `.sheet` | `openWriteSheetPresentationChrome()` → `.presentationSizing(.fitted)` (macOS 15+); cover picker → **popover** |
 | **Refine button appears dead** | Toolbar disabled when no selection captured | Refine always opens sheet; guidance when no selection; LM Studio errors in sheet |
 | **User still broken after agent “fix”** | Old binary / no clean build | Quit app, Clean Build Folder, rebuild Debug, confirm `git log -1` |
+| **Chat stepper overlap / yellow errors** | Connect fail left **Responding** active; rail rows collapsed; warning tint read as yellow body text | **`b817574`**: truncate after connect fail; fixed row heights; token-only error card; dots only on active **respond** |
 
 **Not fixed in this pass:** Affine-style block suite, real vault crypto, font banner on Release if fonts missing, block text clipping in cards, emoji popover polish.
 
@@ -76,7 +77,7 @@ OpenWrite is a **local macOS app-of-apps**: one encrypted vault where you **writ
 | Area | Status |
 |------|--------|
 | **Welcome editor** | SwiftUI `ScrollView` + measured `minHeight` on block host; Welcome blocks should render (callout, Space heading, bullets). **Clean-rebuild** after pull. |
-| **Chat connect** | **Improved** — connect step stays honest until first token; **30s** cap (`AISafetyLimits.chatStreamTimeoutSeconds`) fails connect + runs `diagnoseChatFailure` when LM Studio is off. Vault search already has 15s timeout → lexical fallback. |
+| **Chat connect** | **Improved** — connect step stays honest until first token; **30s** cap fails connect + `diagnoseChatFailure`; stepper no longer stacks **Responding** on **Connection failed**; error bubbles use design tokens only. |
 | **Launch selection** | `VaultStore.bootstrapOnLaunch` selects Welcome (or first doc); `ContentView.onAppear` forces **Editor** center tab. |
 
 ### Current state (honest)
@@ -198,6 +199,7 @@ Prioritize these in user demos and the UI refactor.
 | **Titlebar grey strip** | Native vibrancy band above cream shell on some macOS builds | `OWSolidTitlebarAccessory` + theme-frame paint; verify after theme switch / fullscreen |
 | **Welcome editor crash / CPU** | Was SIGABRT / 99% CPU on Welcome | **cfcff62** + follow-up: no `layout()` async re-entry; read-only `sizeThatFits`. Re-test after build. |
 | **Chat stuck on “Connecting…”** | Spinner forever when LM Studio off | **30s timeout** + failed connect step + diagnosis message. |
+| **Chat stepper / error styling** | Overlapping rows; garish yellow error text; failed dots on respond/done after connect fail | **Fixed** — see KNOWN BROKEN table; clean rebuild required. |
 | **Block editor layout** | Residual spacing edge cases in preview vs edit | Toolbar, preview mode, scroll remeasure; outliner ops still missing |
 | **Anytype gap** | Density / object rows vs reference captures | Assist strip capped and off by default; rail uses custom rows not `List` |
 | **Graph was broken; now “OK scaffold”** | Pre-**932e576**: huge circles, bad edges, missing nodes | Fixed: rounded-rect cards, force-directed lite, border edges, all docs visible. **UI overall still weak** — graph is not the product win yet. |
@@ -248,7 +250,8 @@ Read with `git show <hash>`. Messages are the changelog.
 
 | Hash | Summary |
 |------|---------|
-| **(next)** | Welcome `sizeThatFits` measure-only; chat 30s connect timeout; launch selects Welcome; HANDOFF refresh. |
+| **(next)** | Chat stepper layout + token-based error bubbles; editor SwiftUI scroll (`dbb8f66`). |
+| **dbb8f66** | Stop editor layout fork-bomb and blank launch; SwiftUI editor scroll; HANDOFF refresh. |
 | **cfcff62** | Fix Welcome editor layout loop (remove async `layout()` on paste host); chat connect honesty; vector store / stepper polish. |
 | **cd731b5** | Consolidation: honest chat pipeline, scroll pin, theme propagation, layout safety. |
 | **218bdc1** | Unify editor layout, themes, window chrome stability. |

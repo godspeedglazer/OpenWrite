@@ -17,15 +17,25 @@ struct ChatPipelineStep: Identifiable, Hashable {
 /// Theme-aware vertical stepper: filled accent dot + connector for completed steps, ring for active, grey for pending.
 struct OWChatStatusStepper: View {
     let steps: [ChatPipelineStep]
+    /// When true, animated dots appear only on the active **respond** step.
     var showsStreamingDots: Bool = false
 
     private let railWidth: CGFloat = 16
     private let dotSize: CGFloat = 10
     private let connectorWidth: CGFloat = 2
-    private let rowSpacing: CGFloat = 6
+    private let rowSpacing: CGFloat = 8
+    private let connectorSegmentHeight: CGFloat = 12
+
+    private var rowMinHeight: CGFloat {
+        max(dotSize + 4, ceil(OWTypography.Scale.captionLineHeight * OWTypography.dynamicScale) + 2)
+    }
 
     /// Steps that have started or are next up — hides trailing pending rows that only lengthen the rail.
     private var visibleSteps: [ChatPipelineStep] {
+        if let connectFailedIndex = steps.firstIndex(where: { $0.id == "connect" && $0.status == .failed }) {
+            return Array(steps.prefix(connectFailedIndex + 1))
+        }
+
         var visible: [ChatPipelineStep] = []
         var includedFirstPending = false
         for step in steps {
@@ -46,8 +56,9 @@ struct OWChatStatusStepper: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: rowSpacing) {
-            ForEach(Array(visibleSteps.enumerated()), id: \.element) { index, step in
-                stepRow(step, isLast: index == visibleSteps.count - 1)
+            ForEach(Array(visibleSteps.enumerated()), id: \.element.id) { index, step in
+                let next = index + 1 < visibleSteps.count ? visibleSteps[index + 1] : nil
+                stepRow(step, nextStep: next, isLast: index == visibleSteps.count - 1)
             }
         }
         .padding(.leading, DesignTokens.Spacing.spacing1)
@@ -56,7 +67,7 @@ struct OWChatStatusStepper: View {
         .accessibilityLabel("Response progress")
     }
 
-    private func stepRow(_ step: ChatPipelineStep, isLast: Bool) -> some View {
+    private func stepRow(_ step: ChatPipelineStep, nextStep: ChatPipelineStep?, isLast: Bool) -> some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(spacing: 0) {
                 stepIndicator(step.status)
@@ -64,21 +75,16 @@ struct OWChatStatusStepper: View {
                     .frame(width: railWidth, height: dotSize)
 
                 if !isLast {
-                    connector(from: step.status)
-                        .frame(width: connectorWidth)
-                        .frame(height: connectorMinHeight, alignment: .top)
+                    connector(from: step.status, to: nextStep?.status)
+                        .frame(width: connectorWidth, height: connectorSegmentHeight)
                 }
             }
-            .frame(width: railWidth)
+            .frame(width: railWidth, alignment: .top)
 
             stepLabel(step)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, minHeight: rowMinHeight, alignment: .topLeading)
         }
-    }
-
-    /// Minimum rail segment between dots; grows with the label so the connector meets the next dot.
-    private var connectorMinHeight: CGFloat {
-        max(10, OWTypography.Scale.captionLineHeight * OWTypography.dynamicScale + rowSpacing - dotSize)
+        .frame(minHeight: rowMinHeight + (isLast ? 0 : connectorSegmentHeight), alignment: .top)
     }
 
     @ViewBuilder
@@ -90,12 +96,13 @@ struct OWChatStatusStepper: View {
                 .lineLimit(2)
                 .minimumScaleFactor(0.82)
                 .truncationMode(.tail)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-            if step.status == .active, showsStreamingDots {
+            if step.status == .active, showsStreamingDots, step.id == "respond" {
                 StepperStreamingDots()
             }
         }
-        .frame(minHeight: dotSize, alignment: .leadingFirstTextBaseline)
+        .frame(minHeight: rowMinHeight, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -115,17 +122,27 @@ struct OWChatStatusStepper: View {
                     .fill(DesignTokens.Color.accent)
             case .failed:
                 Circle()
-                    .fill(DesignTokens.Color.warning)
+                    .fill(DesignTokens.Color.warning.opacity(0.85))
             }
         }
         .frame(width: dotSize, height: dotSize)
         .animation(.easeInOut(duration: 0.32), value: status)
     }
 
-    private func connector(from status: ChatPipelineStep.Status) -> some View {
+    private func connector(from status: ChatPipelineStep.Status, to nextStatus: ChatPipelineStep.Status?) -> some View {
         Rectangle()
-            .fill(status == .completed ? DesignTokens.Color.accent.opacity(0.55) : DesignTokens.Color.borderSubtle)
+            .fill(connectorColor(from: status, to: nextStatus))
             .animation(.easeInOut(duration: 0.38), value: status)
+    }
+
+    private func connectorColor(from status: ChatPipelineStep.Status, to nextStatus: ChatPipelineStep.Status?) -> Color {
+        if status == .completed {
+            return DesignTokens.Color.accent.opacity(0.55)
+        }
+        if status == .failed || nextStatus == .failed {
+            return DesignTokens.Color.warning.opacity(0.35)
+        }
+        return DesignTokens.Color.borderSubtle
     }
 
     private func labelColor(for status: ChatPipelineStep.Status) -> Color {
@@ -135,7 +152,7 @@ struct OWChatStatusStepper: View {
         case .active, .completed:
             return DesignTokens.Color.textSecondary
         case .failed:
-            return DesignTokens.Color.textPrimary
+            return DesignTokens.Color.textSecondary
         }
     }
 }
