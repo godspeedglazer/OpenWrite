@@ -15,6 +15,8 @@ extension NSView {
 
 /// Applies unified transparent titlebar so custom shell chrome can sit behind traffic lights.
 struct OWWindowChromeConfigurator: NSViewRepresentable {
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
         view.openWriteSuppressFocusRing()
@@ -24,10 +26,24 @@ struct OWWindowChromeConfigurator: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        let revision = ThemeManager.shared.revision
+        let windowID = nsView.window.map(ObjectIdentifier.init)
+        let coordinator = context.coordinator
+        let needsApply = revision != coordinator.lastAppliedRevision
+            || windowID != coordinator.boundWindowID
+        guard needsApply else { return }
+        coordinator.lastAppliedRevision = revision
+        coordinator.boundWindowID = windowID
+        guard let window = nsView.window else { return }
         DispatchQueue.main.async {
-            guard let window = nsView.window else { return }
+            guard nsView.window === window else { return }
             OWWindowChrome.apply(to: window)
         }
+    }
+
+    final class Coordinator {
+        var lastAppliedRevision: UInt = 0
+        var boundWindowID: ObjectIdentifier?
     }
 }
 
@@ -477,14 +493,12 @@ struct OWShellTitleBar: View {
                 palette.shellChrome
                     .ignoresSafeArea(edges: .top)
 
-                OWShellWindowControls()
-                    .padding(.leading, DesignTokens.Layout.windowControlLeadingInset)
-                    .padding(.top, DesignTokens.Layout.windowControlTopInset)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
                 VStack(spacing: 0) {
                     ZStack(alignment: .leading) {
                         HStack(spacing: DesignTokens.Spacing.spacing3) {
+                            OWShellWindowControls()
+                                .padding(.leading, DesignTokens.Layout.windowControlLeadingInset)
+
                             if !brandAlignsWithNavigationRail {
                                 HStack(spacing: DesignTokens.Spacing.spacing2) {
                                     OWBrandMark(size: compact ? 18 : 20)
@@ -497,7 +511,6 @@ struct OWShellTitleBar: View {
 
                             Spacer(minLength: 0)
                         }
-                        .padding(.leading, leadingInset)
                         .padding(.trailing, DesignTokens.Spacing.spacing4)
 
                         HStack(spacing: 0) {

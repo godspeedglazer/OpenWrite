@@ -65,6 +65,9 @@ final class ThemeManager {
         ThemePalette.palette(for: selectedTheme)
     }
 
+    private var pendingTheme: ThemeID?
+    private var applyTask: Task<Void, Never>?
+
     private init() {
         if let raw = UserDefaults.standard.string(forKey: Self.storageKey),
            let restored = ThemeID.resolved(fromPersistedRawValue: raw) {
@@ -74,21 +77,36 @@ final class ThemeManager {
         }
     }
 
+    /// Commits after 200ms of quiet — one `applyToAllWindows` per settled change.
     func select(_ theme: ThemeID) {
-        guard theme != selectedTheme else { return }
-        selectedTheme = theme
-        revision &+= 1
-        NotificationCenter.default.post(name: .openWriteThemeDidChange, object: nil)
-        OWWindowChrome.applyToAllWindows()
+        let effective = pendingTheme ?? selectedTheme
+        guard theme != effective else { return }
+        pendingTheme = theme
+        applyTask?.cancel()
+        applyTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            guard !Task.isCancelled, let pending = pendingTheme else { return }
+            commit(pending)
+        }
     }
 
     /// Cycles through all themes — used by the sidebar quick toggle.
     func selectNext() {
+        let current = pendingTheme ?? selectedTheme
         let all = ThemeID.allCases
-        guard let index = all.firstIndex(of: selectedTheme) else {
+        guard let index = all.firstIndex(of: current) else {
             select(all[0])
             return
         }
         select(all[(index + 1) % all.count])
+    }
+
+    private func commit(_ theme: ThemeID) {
+        pendingTheme = nil
+        applyTask = nil
+        guard theme != selectedTheme else { return }
+        selectedTheme = theme
+        revision &+= 1
+        NotificationCenter.default.post(name: .openWriteThemeDidChange, object: nil)
     }
 }

@@ -54,7 +54,6 @@ struct ContentView: View {
             .openWriteSheetPresentationChrome()
         }
         .background(DesignTokens.Color.shellChrome)
-        .id(themeManager.revision)
         .task {
             _ = try? VaultLocationPreferences.ensureDefaultVaultLayout()
             await aiServices.startFilesystemIngestionWatch()

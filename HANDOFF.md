@@ -18,9 +18,19 @@ This document is the **single honest snapshot** of OpenWrite as it exists today.
 | **Sheets hide entire app** | macOS sheet filled window; cover used `.sheet` | `openWriteSheetPresentationChrome()` → `.presentationSizing(.fitted)` (macOS 15+); cover picker → **popover** |
 | **Refine button appears dead** | Toolbar disabled when no selection captured | Refine always opens sheet; guidance when no selection; LM Studio errors in sheet |
 | **User still broken after agent “fix”** | Old binary / no clean build | Quit app, Clean Build Folder, rebuild Debug, confirm `git log -1` |
-| **Chat stepper overlap / yellow errors** | Connect fail left **Responding** active; rail rows collapsed; warning tint read as yellow body text | **`b817574`**: truncate after connect fail; fixed row heights; token-only error card; dots only on active **respond** |
+| **Chat stepper overlap / yellow errors** | Connect fail left **Responding** active; rail rows collapsed; warning tint read as yellow body text | **`d24845a`**: fixed row heights; token-only error card; dots only on active **respond** |
+| **Chat scroll clips history** | `OpenWriteThemedScrollView` document height drift in assist strip | **`ChatTranscriptScrollView`**: SwiftUI `ScrollView` + bottom sentinel pin |
+| **Theme toggle lag** | `ContentView.id(revision)` rebuilt tree; double `applyToAllWindows` | Debounced `ThemeManager.select` (200ms); chrome apply on revision/window change only |
 
 **Not fixed in this pass:** Affine-style block suite, real vault crypto, font banner on Release if fonts missing, block text clipping in cards, emoji popover polish.
+
+### Runtime warnings (brief)
+
+After launch, Console may show benign **AttributeGraph** layout messages, **NSHostingView** measure probes, and titlebar accessory layout on first window — not user-facing unless paired with climbing RAM/CPU (see above).
+
+### Runtime warnings (2026-05-17)
+
+Debug launch + 1s `sample` + `log show` (process OpenWrite): **no stderr faults or system log errors** on idle startup. Console spam when **rapid theme cycling** was traced to **`OWWindowChrome.apply` on every `updateNSView`** and **`ContentView.id(themeManager.revision)`** tearing down the workbench — fixed with debounced `ThemeManager.select` (200ms), revision-gated chrome configurator, removed root `.id(revision)`, traffic lights merged into `OWShellTitleBar`. Re-profile in Xcode console while hammering the rail theme control if new warnings appear.
 
 ---
 
