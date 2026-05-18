@@ -338,6 +338,8 @@ enum DesignTokens {
         static let assistStripComposerBottomInset: CGFloat = Spacing.spacing4
         /// Chat composer attach / send / stop control height (matches `OWThemedComposerField`).
         static let composerActionSize: CGFloat = 36
+        /// Max height for multiline chat composer before internal scroll.
+        static let composerFieldMaxHeight: CGFloat = 120
         static let centerCardOuterPadding: CGFloat = Spacing.spacing2
         static let shellColumnGutter: CGFloat = Spacing.spacing2
         /// Below this width, collapse assist before shrinking editor (see LayoutAndResize.md).

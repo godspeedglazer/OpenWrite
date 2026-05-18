@@ -270,7 +270,7 @@ struct OWThemedTextField: View {
 struct OWThemedComposerField: View {
     let placeholder: String
     @Binding var text: String
-    var lineLimit: ClosedRange<Int> = 1 ... 4
+    var lineLimit: ClosedRange<Int> = 1 ... 6
     var onSubmit: (() -> Void)?
 
     @FocusState private var isFocused: Bool
@@ -283,7 +283,11 @@ struct OWThemedComposerField: View {
             .lineLimit(lineLimit)
             .focused($isFocused)
             .openWriteFocusChrome(.suppressSystemRing)
-            .frame(minHeight: DesignTokens.Layout.composerActionSize)
+            .frame(
+                minHeight: DesignTokens.Layout.composerActionSize,
+                maxHeight: DesignTokens.Layout.composerFieldMaxHeight,
+                alignment: .topLeading
+            )
             .padding(.horizontal, DesignTokens.Spacing.spacing2)
             .padding(.vertical, DesignTokens.Spacing.spacing2)
             .background(
@@ -496,6 +500,12 @@ struct OWThemedToggle: View {
     @Binding var isOn: Bool
     /// When false, only the switch is shown (label remains for accessibility / help).
     var showsLabel: Bool = true
+    /// Shorter visible label for narrow assist strip widths (accessibility still uses `label`).
+    var abbreviatedLabel: String?
+
+    private var visibleLabel: String {
+        abbreviatedLabel ?? label
+    }
 
     var body: some View {
         Button {
@@ -505,29 +515,34 @@ struct OWThemedToggle: View {
         } label: {
             HStack(spacing: DesignTokens.Spacing.spacing2) {
                 if showsLabel {
-                    Text(label)
+                    Text(visibleLabel)
                         .font(OWTypography.caption)
                         .foregroundStyle(DesignTokens.Color.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    Spacer(minLength: 0)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
-                ZStack(alignment: isOn ? .trailing : .leading) {
-                    Capsule()
-                        .fill(isOn ? DesignTokens.Color.accent : DesignTokens.Color.borderSubtle)
-                        .frame(width: 36, height: 20)
-                    Circle()
-                        .fill(DesignTokens.Color.selectionPill)
-                        .frame(width: 16, height: 16)
-                        .padding(2)
-                }
-                .animation(DesignTokens.Motion.animationFast, value: isOn)
+                toggleTrack
             }
         }
         .buttonStyle(.plain)
         .openWriteFocusChrome()
         .accessibilityLabel(label)
         .accessibilityValue(isOn ? "On" : "Off")
+    }
+
+    private var toggleTrack: some View {
+        ZStack(alignment: isOn ? .trailing : .leading) {
+            Capsule()
+                .fill(isOn ? DesignTokens.Color.accent : DesignTokens.Color.borderSubtle)
+                .frame(width: 36, height: 20)
+            Circle()
+                .fill(DesignTokens.Color.selectionPill)
+                .frame(width: 16, height: 16)
+                .padding(2)
+        }
+        .animation(DesignTokens.Motion.animationFast, value: isOn)
+        .fixedSize()
     }
 }
 

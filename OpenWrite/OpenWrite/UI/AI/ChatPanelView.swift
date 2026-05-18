@@ -705,6 +705,16 @@ struct ChatPanelView: View {
         assistStripWidth < DesignTokens.Layout.assistStripIconsOnlyThreshold
     }
 
+    /// Between default strip width and icon-only threshold: shorter toggle captions.
+    private var composerTogglesAbbreviated: Bool {
+        assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
+            && !composerTogglesIconOnly
+    }
+
+    private var showsComposerModelLabel: Bool {
+        !composerTogglesIconOnly
+    }
+
     var body: some View {
         Group {
             switch effectiveScreen {
@@ -1064,7 +1074,7 @@ struct ChatPanelView: View {
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
             if let attachmentError = model.attachmentError {
                 Text(attachmentError)
                     .font(OWTypography.caption)
@@ -1076,96 +1086,8 @@ struct ChatPanelView: View {
                 pendingAttachmentRow
             }
 
-            HStack(spacing: composerTogglesIconOnly ? 8 : 12) {
-                OWThemedToggle(
-                    label: "Search notes",
-                    isOn: $model.searchVaultEnabled,
-                    showsLabel: !composerTogglesIconOnly
-                )
-                .help("Search notes")
-                .frame(maxWidth: composerTogglesIconOnly ? nil : .infinity, alignment: .leading)
-
-                OWThemedToggle(
-                    label: "Web",
-                    isOn: $model.webLookupEnabled,
-                    showsLabel: !composerTogglesIconOnly
-                )
-                .help("Fetch HTTPS links in your message (off by default). No in-page JavaScript.")
-
-                if !composerTogglesIconOnly {
-                    Spacer(minLength: 0)
-                    Text(aiServices.lmConfig.embeddingModelDisplay)
-                        .font(OWTypography.caption2)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-            }
-
-            HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
-                OWThemedComposerField(
-                    placeholder: stripIsCompact ? "Ask…" : "Ask about your notes…",
-                    text: $model.draft,
-                    lineLimit: 1 ... 4
-                ) {
-                    if !model.isBusy {
-                        model.send(services: aiServices, agent: aiServices.selectedAgent)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .disabled(model.isBusy)
-
-                HStack(spacing: DesignTokens.Spacing.spacing1) {
-                    Button {
-                        showFileImporter = true
-                    } label: {
-                        OWUnicodeIconView(
-                            icon: .document,
-                            size: 17,
-                            color: DesignTokens.Color.textSecondary
-                        )
-                    }
-                    .buttonStyle(OWComposerIconButtonStyle())
-                    .help("Attach .md, .txt, or .pdf")
-                    .disabled(model.isBusy)
-                    .fileImporter(
-                        isPresented: $showFileImporter,
-                        allowedContentTypes: ChatAttachmentStore.allowedContentTypes,
-                        allowsMultipleSelection: true
-                    ) { result in
-                        switch result {
-                        case .success(let urls):
-                            model.importAttachments(from: urls)
-                        case .failure(let error):
-                            model.attachmentError = error.localizedDescription
-                        }
-                    }
-
-                    if model.isBusy {
-                        Button {
-                            model.cancelSend(services: aiServices)
-                        } label: {
-                            OWUnicodeIconView(icon: .stop, size: 14, color: DesignTokens.Color.warning)
-                        }
-                        .buttonStyle(OWComposerStopButtonStyle())
-                        .help("Stop response")
-                    } else {
-                        Button {
-                            model.send(services: aiServices, agent: aiServices.selectedAgent)
-                        } label: {
-                            OWUnicodeIconView(
-                                icon: .send,
-                                size: 17,
-                                color: DesignTokens.Color.selectionPill
-                            )
-                        }
-                        .buttonStyle(OWComposerSendButtonStyle(isEnabled: canSendMessage))
-                        .disabled(!canSendMessage)
-                        .help("Send")
-                        .keyboardShortcut(.return, modifiers: [.command])
-                    }
-                }
-            }
+            composerToggleRow
+            composerInputRow
         }
         .padding(DesignTokens.Spacing.assistStripContentPadding)
         .padding(.bottom, DesignTokens.Layout.assistStripComposerBottomInset)
@@ -1173,8 +1095,108 @@ struct ChatPanelView: View {
         .background(DesignTokens.Color.background)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(DesignTokens.Color.borderSubtle.opacity(0.65))
+                .fill(DesignTokens.Color.borderSubtle)
                 .frame(height: DesignTokens.Layout.borderWidth)
+        }
+    }
+
+    private var composerToggleRow: some View {
+        HStack(spacing: DesignTokens.Spacing.spacing2) {
+            OWThemedToggle(
+                label: "Search notes",
+                isOn: $model.searchVaultEnabled,
+                showsLabel: !composerTogglesIconOnly,
+                abbreviatedLabel: composerTogglesAbbreviated ? "Notes" : nil
+            )
+            .help("Search notes")
+
+            OWThemedToggle(
+                label: "Web",
+                isOn: $model.webLookupEnabled,
+                showsLabel: !composerTogglesIconOnly
+            )
+            .help("Fetch HTTPS links in your message (off by default). No in-page JavaScript.")
+
+            Spacer(minLength: 0)
+
+            if showsComposerModelLabel {
+                Text(aiServices.lmConfig.embeddingModelDisplay)
+                    .font(OWTypography.caption2)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(-1)
+                    .help(aiServices.lmConfig.embeddingModelDisplay)
+            }
+        }
+        .help(composerTogglesIconOnly ? aiServices.lmConfig.embeddingModelDisplay : "")
+    }
+
+    private var composerInputRow: some View {
+        HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
+            OWThemedComposerField(
+                placeholder: stripIsCompact ? "Ask…" : "Ask about your notes…",
+                text: $model.draft,
+                lineLimit: 1 ... 6
+            ) {
+                if !model.isBusy {
+                    model.send(services: aiServices, agent: aiServices.selectedAgent)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .disabled(model.isBusy)
+
+            HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
+                Button {
+                    showFileImporter = true
+                } label: {
+                    OWUnicodeIconView(
+                        icon: .document,
+                        size: 17,
+                        color: DesignTokens.Color.textSecondary
+                    )
+                }
+                .buttonStyle(OWComposerIconButtonStyle())
+                .help("Attach .md, .txt, or .pdf")
+                .disabled(model.isBusy)
+                .fileImporter(
+                    isPresented: $showFileImporter,
+                    allowedContentTypes: ChatAttachmentStore.allowedContentTypes,
+                    allowsMultipleSelection: true
+                ) { result in
+                    switch result {
+                    case .success(let urls):
+                        model.importAttachments(from: urls)
+                    case .failure(let error):
+                        model.attachmentError = error.localizedDescription
+                    }
+                }
+
+                if model.isBusy {
+                    Button {
+                        model.cancelSend(services: aiServices)
+                    } label: {
+                        OWUnicodeIconView(icon: .stop, size: 14, color: DesignTokens.Color.warning)
+                    }
+                    .buttonStyle(OWComposerStopButtonStyle())
+                    .help("Stop response")
+                } else {
+                    Button {
+                        model.send(services: aiServices, agent: aiServices.selectedAgent)
+                    } label: {
+                        OWUnicodeIconView(
+                            icon: .send,
+                            size: 17,
+                            color: DesignTokens.Color.selectionPill
+                        )
+                    }
+                    .buttonStyle(OWComposerSendButtonStyle(isEnabled: canSendMessage))
+                    .disabled(!canSendMessage)
+                    .help("Send")
+                    .keyboardShortcut(.return, modifiers: [.command])
+                }
+            }
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
@@ -1184,9 +1206,9 @@ struct ChatPanelView: View {
 
     private var pendingAttachmentRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: DesignTokens.Spacing.spacing1) {
                 ForEach(model.pendingAttachments) { attachment in
-                    HStack(spacing: 4) {
+                    HStack(spacing: DesignTokens.Spacing.spacing1) {
                         Text(attachment.displayName)
                             .font(OWTypography.caption)
                             .lineLimit(1)
