@@ -109,7 +109,12 @@ struct ContentView: View {
         reindexDebounceTask = Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
-            await aiServices.reindex(documents: vaultStore.documentsInActiveVault)
+            let documents = vaultStore.documentsInActiveVault
+            if aiServices.indexedChunkCount > 0 {
+                await aiServices.reindexChangedDocuments(in: documents)
+            } else {
+                await aiServices.reindex(documents: documents)
+            }
         }
     }
 

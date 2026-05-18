@@ -16,7 +16,7 @@ struct PropertyInspectorView: View {
             } else {
                 Text("Document not found")
                     .font(OWTypography.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
             }
         }
     }

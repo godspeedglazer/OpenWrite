@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Date:** 2026-05-17  
-**Branch:** `main` (HEAD `cfcff62` + Welcome/chat stability pass)  
+**Branch:** `main` (HEAD `706218e` — Welcome/chat stability; incremental vault index on edit)  
 **Audience:** Next engineer, designer, or Cursor agent taking ownership
 
 This document is the **single honest snapshot** of OpenWrite as it exists today. Read it before touching code. For the mandated next workstream, start with **[AGENT_PROMPT_UI_REFACTOR.md](./AGENT_PROMPT_UI_REFACTOR.md)**.
@@ -33,7 +33,7 @@ OpenWrite is a **local macOS app-of-apps**: one encrypted vault where you **writ
 |------|---------|
 | **UI / shell** | **Phase 0 largely landed** — custom rail, flush titlebar accessory, centered editor column, collapsible Reor-style assist strip, themed scroll remeasure. Still not App Store “done”; needs visual QA on user machines. |
 | **Backend / vault** | In-memory demo vault + encryption **stubs**. No production `.openwrite` package, Keychain unlock, or FSEvents indexer on disk. |
-| **RAG / AI** | **Works when LM Studio is up:** streaming chat, vault index + markdown ingest, hybrid retrieval, citation pills. **Fails fast** when server down (timeouts + diagnosis). Persisted index across restarts still incomplete. |
+| **RAG / AI** | **Works when LM Studio is up:** streaming chat, vault index + markdown ingest, hybrid retrieval, citation pills. **Fails fast** when server down (timeouts + diagnosis). Debounced edits call `reindexChangedDocuments` (per-doc `index`) when the index is warm; full `reindex` on cold start. Persisted index across restarts still incomplete. |
 | **NDL / editor** | Block model + `OWBlockEditorView` / AppKit per-block fields — **not** Affine BlockSuite or full Logseq outliner (no indent/outdent, slash menu, drag reorder). |
 | **Documentation** | Strong: master plan, ADRs, design canon, 357-row feature matrix, epics. Code has not caught up to docs on crypto/persistence. |
 
@@ -231,7 +231,7 @@ Earlier: **0ce1c1c** (window on launch), **ad26135** (initial scaffold).
 
 - **Requires LM Studio** (or compatible OpenAI API) for chat completions and preferred embeddings.
 - **Circuit breaker:** embedding failures cool down remote calls (`embeddingCircuitCooldownSeconds`); hash fallback vectors.
-- **Index:** in-memory + launch `prepareVaultIndex`; on-disk `Welcome.md` + vault markdown catalog; Settings shows rebuild status.
+- **Index:** in-memory + launch `prepareVaultIndex`; on-disk `Welcome.md` + vault markdown catalog; debounced edits use incremental `reindexChangedDocuments` when chunks already loaded; Settings **Rebuild index** runs full `reindex`.
 - **Chat:** 15s vault search timeout → lexical fallback; **30s** connect/stream timeout when model never responds.
 
 ### Themes

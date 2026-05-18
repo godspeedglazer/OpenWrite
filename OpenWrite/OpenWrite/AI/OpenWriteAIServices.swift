@@ -29,6 +29,8 @@ final class OpenWriteAIServices: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// Vault content signature reflected in the last successful `prepareVaultIndex` / `reindex`.
     private(set) var lastPreparedVaultSignature: Int?
+    /// Per-document content fingerprints for incremental `index(document:)` after edits.
+    private var indexedDocumentFingerprints: [UUID: Int] = [:]
 
     /// True after a successful connection check (`lmStatus` begins with "Connected").
     var isLMStudioConnected: Bool {
@@ -71,6 +73,7 @@ final class OpenWriteAIServices: ObservableObject {
         let signature = Self.vaultContentSignature(documents: documents)
         if loaded > 0 {
             lastPreparedVaultSignature = signature
+            applyIndexFingerprints(for: Self.indexEntries(including: documents))
             return
         }
         guard Self.hasIndexableContent(documents: documents) else { return }
@@ -81,12 +84,29 @@ final class OpenWriteAIServices: ObservableObject {
     static func vaultContentSignature(documents: [VaultDocument]) -> Int {
         var hasher = Hasher()
         for entry in indexEntries(including: documents) {
-            hasher.combine(entry.documentID)
-            hasher.combine(entry.title)
-            hasher.combine(entry.blocks.count)
-            hasher.combine(entry.sourceFilename ?? "")
+            hasher.combine(entryFingerprint(entry))
         }
         return hasher.finalize()
+    }
+
+    static func entryFingerprint(_ entry: VaultIndexEntry) -> Int {
+        var hasher = Hasher()
+        hasher.combine(entry.documentID)
+        hasher.combine(entry.title)
+        hasher.combine(entry.sourceFilename ?? "")
+        for block in entry.blocks {
+            hasher.combine(block.id)
+            hasher.combine(block.kind)
+            hasher.combine(block.text)
+            hasher.combine(block.isChecked)
+        }
+        return hasher.finalize()
+    }
+
+    private func applyIndexFingerprints(for entries: [VaultIndexEntry]) {
+        indexedDocumentFingerprints = Dictionary(
+            uniqueKeysWithValues: entries.map { ($0.documentID, Self.entryFingerprint($0)) }
+        )
     }
 
     func shouldSkipDebouncedReindex(for signature: Int) -> Bool {
@@ -292,6 +312,7 @@ final class OpenWriteAIServices: ObservableObject {
                     indexedChunkCount = count
                     ingestionHealth.updateIndexedChunkCount(count)
                     lastPreparedVaultSignature = Self.vaultContentSignature(documents: documents)
+                    applyIndexFingerprints(for: payload)
                 }
             } catch is CancellationError {
                 await MainActor.run { ingestionHealth.markCancelled() }
@@ -309,14 +330,80 @@ final class OpenWriteAIServices: ObservableObject {
         await indexingTask?.value
     }
 
+    /// Re-ingests only vault entries whose content changed; removes index rows for deleted pages/markdown files.
+    func reindexChangedDocuments(in documents: [VaultDocument]) async {
+        let entries = Self.indexEntries(including: documents)
+        if indexedDocumentFingerprints.isEmpty, indexedChunkCount > 0 {
+            applyIndexFingerprints(for: entries)
+        }
+
+        let currentIDs = Set(entries.map(\.documentID))
+        let staleIDs = indexedDocumentFingerprints.keys.filter { !currentIDs.contains($0) }
+        let changed = entries.filter {
+            indexedDocumentFingerprints[$0.documentID] != Self.entryFingerprint($0)
+        }
+
+        guard !staleIDs.isEmpty || !changed.isEmpty else {
+            lastPreparedVaultSignature = Self.vaultContentSignature(documents: documents)
+            return
+        }
+
+        indexingTask?.cancel()
+        isIndexing = true
+        ingestionHealth.clearError()
+
+        indexingTask = Task {
+            defer {
+                Task { @MainActor in
+                    isIndexing = false
+                }
+            }
+            do {
+                try Task.checkCancellation()
+                for documentID in staleIDs {
+                    try await indexer.remove(documentID: documentID)
+                    indexedDocumentFingerprints.removeValue(forKey: documentID)
+                }
+                for entry in changed {
+                    try await indexer.index(
+                        documentID: entry.documentID,
+                        title: entry.title,
+                        blocks: entry.blocks,
+                        sourceFilename: entry.sourceFilename
+                    )
+                    indexedDocumentFingerprints[entry.documentID] = Self.entryFingerprint(entry)
+                }
+                indexedChunkCount = await vectorStore.chunkCount
+                ingestionHealth.updateIndexedChunkCount(indexedChunkCount)
+                lastPreparedVaultSignature = Self.vaultContentSignature(documents: documents)
+            } catch is CancellationError {
+                ingestionHealth.markCancelled()
+            } catch IngestionPipelineError.cancelled {
+                ingestionHealth.markCancelled()
+            } catch {
+                ingestionHealth.recordError(error.localizedDescription)
+                lmStatus = "Index error: \(error.localizedDescription)"
+            }
+        }
+
+        await indexingTask?.value
+    }
+
     func index(document: VaultDocument) async {
+        let entry = VaultIndexEntry(
+            documentID: document.id,
+            title: document.title,
+            blocks: document.rootBlocks,
+            sourceFilename: nil
+        )
         do {
             try await indexer.index(
-                documentID: document.id,
-                title: document.title,
-                blocks: document.rootBlocks,
-                sourceFilename: nil
+                documentID: entry.documentID,
+                title: entry.title,
+                blocks: entry.blocks,
+                sourceFilename: entry.sourceFilename
             )
+            indexedDocumentFingerprints[document.id] = Self.entryFingerprint(entry)
             indexedChunkCount = await vectorStore.chunkCount
             ingestionHealth.updateIndexedChunkCount(indexedChunkCount)
         } catch {
