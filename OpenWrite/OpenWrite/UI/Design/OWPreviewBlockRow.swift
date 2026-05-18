@@ -12,6 +12,7 @@ struct OWPreviewBlockRow: View {
     var language: Binding<String>? = nil
     var calloutType: Binding<String>? = nil
     var onSelectionChange: ((String?) -> Void)? = nil
+    var onRefinePreset: ((InlineRefinePreset, String) -> Void)? = nil
     var previewMode: Bool = false
     var onActivate: (() -> Void)? = nil
 
@@ -345,7 +346,8 @@ struct OWPreviewBlockRow: View {
                 themeRevision: themeManager.selectedTheme.rawValue,
                 formatting: blockFormatting,
                 strikethrough: strikethrough,
-                onSelectionChange: onSelectionChange
+                onSelectionChange: onSelectionChange,
+                onRefinePreset: onRefinePreset
             )
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {

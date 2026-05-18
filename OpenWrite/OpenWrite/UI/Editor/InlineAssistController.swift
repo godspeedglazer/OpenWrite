@@ -2,6 +2,32 @@ import AppKit
 import Foundation
 import SwiftUI
 
+/// Quick-transform presets for selection refine (context menu + toolbar).
+enum InlineRefinePreset: String, CaseIterable, Sendable {
+    case improve
+    case shorten
+    case fixGrammar
+
+    var menuTitle: String {
+        switch self {
+        case .improve: return "Improve selection"
+        case .shorten: return "Shorten selection"
+        case .fixGrammar: return "Fix grammar"
+        }
+    }
+
+    fileprivate var instructionSuffix: String {
+        switch self {
+        case .improve:
+            return "Improve clarity, flow, and word choice while preserving meaning and voice."
+        case .shorten:
+            return "Make the selection more concise. Remove redundancy; keep essential meaning."
+        case .fixGrammar:
+            return "Fix grammar, punctuation, and spelling only. Do not change meaning or tone."
+        }
+    }
+}
+
 /// Selection snapshot for inline refine; safe to pass across actors.
 struct InlineSelectionSnapshot: Sendable, Equatable {
     let documentID: UUID
@@ -24,7 +50,10 @@ enum InlineAssistPhase: Equatable {
 }
 
 /// Debounced selection capture and async refine via `RAGService` — never blocks the text view.
-/// Design: selection-only payload, explicit Refine invoke, popover + Apply (no auto-apply). See `docs/design/InlineAIEditing.md` and `InlineAI-GoogleDocsResearch.md`.
+/// Design: selection-only payload, explicit Refine invoke, popover + Apply (no auto-apply). See `docs/design/InlineAIEditing.md`.
+///
+/// Writing-core phase 2 (not here): Affine-style block store + slash menu; Anytype object/relations on blocks;
+/// CRDT/collab; direct `NSTextView` range replace on Apply (today merges via `NoteBlock.text` string match).
 @MainActor
 final class InlineAssistController: ObservableObject {
     @Published private(set) var phase: InlineAssistPhase = .idle
@@ -83,6 +112,13 @@ final class InlineAssistController: ObservableObject {
             guard !Task.isCancelled else { return }
             applyPendingCapture()
         }
+    }
+
+    /// Flushes debounced capture immediately (e.g. before context-menu refine).
+    func commitPendingCapture() {
+        debounceTask?.cancel()
+        debounceTask = nil
+        applyPendingCapture()
     }
 
     private func applyPendingCapture() {
@@ -167,13 +203,21 @@ final class InlineAssistController: ObservableObject {
         return false
     }
 
-    func refineSelection(using rag: RAGService) {
+    func refineSelection(
+        using rag: RAGService,
+        preset: InlineRefinePreset = .improve,
+        noteExcerpt: String? = nil
+    ) {
         guard let snapshot = latestSnapshot else { return }
         refineTask?.cancel()
         phase = .refining
         showRefineResult = true
 
-        let query = Self.refineQuery(for: snapshot.selectedText)
+        let query = Self.refineQuery(
+            for: snapshot.selectedText,
+            preset: preset,
+            noteExcerpt: noteExcerpt
+        )
         let agent = BuiltInAgents.refineProse
 
         refineTask = Task {
@@ -207,15 +251,30 @@ final class InlineAssistController: ObservableObject {
         }
     }
 
-    private static func refineQuery(for selection: String) -> String {
-        """
+    private static func refineQuery(
+        for selection: String,
+        preset: InlineRefinePreset,
+        noteExcerpt: String?
+    ) -> String {
+        var body = """
         Refine the following selected excerpt from my note. Return only the improved text. \
-        Preserve meaning and voice. Do not wrap in markdown fences unless the selection already uses them.
+        Do not wrap in markdown fences unless the selection already uses them.
+        Task: \(preset.instructionSuffix)
 
         --- SELECTION ---
         \(selection)
         --- END SELECTION ---
         """
+        if let excerpt = noteExcerpt?.trimmingCharacters(in: .whitespacesAndNewlines), !excerpt.isEmpty {
+            body += """
+
+
+            --- NOTE CONTEXT (for tone only; do not quote or summarize) ---
+            \(excerpt)
+            --- END NOTE CONTEXT ---
+            """
+        }
+        return body
     }
 
     private static func runRefine(

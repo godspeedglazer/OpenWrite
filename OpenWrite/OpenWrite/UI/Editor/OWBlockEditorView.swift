@@ -9,12 +9,14 @@ struct OWBlockEditorView: View {
     var previewMode: Bool = false
     var onActivateBlock: ((UUID) -> Void)? = nil
     var onSelectionChange: ((String?) -> Void)? = nil
+    var onRefinePreset: ((InlineRefinePreset, String) -> Void)? = nil
     var body: some View {
         BlockEditorPasteHost(
             blocks: $blocks,
             previewMode: previewMode,
             onActivateBlock: onActivateBlock,
-            onSelectionChange: onSelectionChange
+            onSelectionChange: onSelectionChange,
+            onRefinePreset: onRefinePreset
         )
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .fixedSize(horizontal: false, vertical: true)
@@ -29,6 +31,7 @@ private struct BlockEditorHostedContent: View {
     var previewMode: Bool
     var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
+    var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Layout.editorBlockStackSpacing) {
@@ -53,6 +56,7 @@ private struct BlockEditorHostedContent: View {
                 blockAttributes: attributesBinding(block),
                 checked: todoCheckedBinding(block),
                 onSelectionChange: onSelectionChange,
+                onRefinePreset: onRefinePreset,
                 previewMode: previewMode,
                 onActivate: activate
             )
@@ -63,6 +67,7 @@ private struct BlockEditorHostedContent: View {
                 blockAttributes: attributesBinding(block),
                 calloutType: attributeBinding(block, key: "callout"),
                 onSelectionChange: onSelectionChange,
+                onRefinePreset: onRefinePreset,
                 previewMode: previewMode,
                 onActivate: activate
             )
@@ -73,6 +78,7 @@ private struct BlockEditorHostedContent: View {
                 blockAttributes: attributesBinding(block),
                 language: attributeBinding(block, key: "language"),
                 onSelectionChange: onSelectionChange,
+                onRefinePreset: onRefinePreset,
                 previewMode: previewMode,
                 onActivate: activate
             )
@@ -82,6 +88,7 @@ private struct BlockEditorHostedContent: View {
                 text: editableText,
                 blockAttributes: attributesBinding(block),
                 onSelectionChange: onSelectionChange,
+                onRefinePreset: onRefinePreset,
                 previewMode: previewMode,
                 onActivate: activate
             )
@@ -139,6 +146,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     var previewMode: Bool
     var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
+    var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(blocks: $blocks)
@@ -149,7 +157,8 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             blocks: context.coordinator.blocks,
             previewMode: previewMode,
             onActivateBlock: onActivateBlock,
-            onSelectionChange: onSelectionChange
+            onSelectionChange: onSelectionChange,
+            onRefinePreset: onRefinePreset
         )
         let hosting = NSHostingView(rootView: hosted)
         hosting.openWriteSuppressFocusRing()
@@ -175,6 +184,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             context.coordinator.ingestImageFile(url)
         }
         context.coordinator.onSelectionChange = onSelectionChange
+        context.coordinator.onRefinePreset = onRefinePreset
         let previewModeChanged = context.coordinator.lastPreviewMode != previewMode
         context.coordinator.lastPreviewMode = previewMode
         if let hosting = context.coordinator.hostingView {
@@ -194,7 +204,8 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
                 blocks: context.coordinator.blocks,
                 previewMode: previewMode,
                 onActivateBlock: onActivateBlock,
-                onSelectionChange: { context.coordinator.onSelectionChange?($0) }
+                onSelectionChange: { context.coordinator.onSelectionChange?($0) },
+                onRefinePreset: { context.coordinator.onRefinePreset?($0, $1) }
             )
             if previewModeChanged || themeChanged {
                 host.invalidateMeasurementCache()
@@ -236,6 +247,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     final class Coordinator {
         var blocks: Binding<[NoteBlock]>
         var onSelectionChange: ((String?) -> Void)?
+        var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
         weak var hostingView: NSHostingView<BlockEditorHostedContent>?
         var lastProposedWidth: CGFloat?
         var lastAppliedWidth: CGFloat?

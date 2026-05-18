@@ -16,6 +16,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
     @ObservedObject var formatting: BlockFormattingState
     var strikethrough: Bool = false
     var onSelectionChange: ((String?) -> Void)?
+    var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -280,6 +281,42 @@ struct OWBlockTextEditor: NSViewRepresentable {
                 return
             }
             parent.onSelectionChange?(ns.substring(with: range))
+        }
+
+        func textView(
+            _ textView: NSTextView,
+            menu: NSMenu,
+            for event: NSEvent,
+            at charIndex: Int
+        ) -> NSMenu? {
+            guard parent.onRefinePreset != nil, textView.selectedRange().length > 0 else {
+                return menu
+            }
+            menu.addItem(.separator())
+            for preset in InlineRefinePreset.allCases {
+                let item = NSMenuItem(
+                    title: preset.menuTitle,
+                    action: #selector(handleRefinePresetMenu(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = preset.rawValue
+                menu.addItem(item)
+            }
+            return menu
+        }
+
+        @objc private func handleRefinePresetMenu(_ sender: NSMenuItem) {
+            guard let textView,
+                  let raw = sender.representedObject as? String,
+                  let preset = InlineRefinePreset(rawValue: raw) else { return }
+            let range = textView.selectedRange()
+            guard range.length > 0 else { return }
+            let ns = textView.string as NSString
+            guard NSMaxRange(range) <= ns.length else { return }
+            let selected = ns.substring(with: range)
+            parent.onSelectionChange?(selected)
+            parent.onRefinePreset?(preset, selected)
         }
 
         func registerWithFormattingState() {

@@ -223,7 +223,7 @@ struct EditorView: View {
             Spacer()
 
             Button {
-                inlineAssist.refineSelection(using: aiServices.rag)
+                requestInlineRefine(preset: .improve)
             } label: {
                 if inlineAssist.isRefining {
                     ProgressView()
@@ -292,14 +292,22 @@ struct EditorView: View {
                         previewMode: isEditorPreviewMode,
                         onActivateBlock: { _ in
                             isEditorPreviewMode = false
+                        },
+                        onSelectionChange: { selectedText in
+                            inlineAssist.scheduleSelectionCapture(
+                                documentID: document.id,
+                                blockID: blockFormatting.focusedBlockID,
+                                selectedText: selectedText
+                            )
+                        },
+                        onRefinePreset: { preset, selectedText in
+                            requestInlineRefine(
+                                document: document,
+                                preset: preset,
+                                selectedText: selectedText
+                            )
                         }
-                    ) { selectedText in
-                        inlineAssist.scheduleSelectionCapture(
-                            documentID: document.id,
-                            blockID: blockFormatting.focusedBlockID,
-                            selectedText: selectedText
-                        )
-                    }
+                    )
                         .openWriteEditorLeadingInset()
                         .padding(.top, DesignTokens.Layout.editorHeaderToBodySpacing)
                         .onChange(of: editingBlocks) { _, newBlocks in
@@ -401,6 +409,43 @@ struct EditorView: View {
             }
         }
         .frame(minWidth: 420, minHeight: 280)
+    }
+
+    private func requestInlineRefine(
+        document: VaultDocument,
+        preset: InlineRefinePreset,
+        selectedText: String
+    ) {
+        inlineAssist.scheduleSelectionCapture(
+            documentID: document.id,
+            blockID: blockFormatting.focusedBlockID,
+            selectedText: selectedText
+        )
+        inlineAssist.commitPendingCapture()
+        let excerpt = editingBlocks
+            .map(\.text)
+            .joined(separator: "\n")
+            .prefix(1200)
+        inlineAssist.refineSelection(
+            using: aiServices.rag,
+            preset: preset,
+            noteExcerpt: String(excerpt)
+        )
+    }
+
+    private func requestInlineRefine(preset: InlineRefinePreset) {
+        guard let document else { return }
+        inlineAssist.commitPendingCapture()
+        guard inlineAssist.canRefineSelection else { return }
+        let excerpt = editingBlocks
+            .map(\.text)
+            .joined(separator: "\n")
+            .prefix(1200)
+        inlineAssist.refineSelection(
+            using: aiServices.rag,
+            preset: preset,
+            noteExcerpt: String(excerpt)
+        )
     }
 
     private func applyRefinementToDocument() {
