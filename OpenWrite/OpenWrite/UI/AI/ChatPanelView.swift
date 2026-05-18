@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -147,6 +148,7 @@ final class ChatPanelModel: ObservableObject {
                 }
             }
 
+            var didEstablishStream = false
             do {
                 var webPages: [WebPageSnapshot] = []
                 if fetchesWeb {
@@ -265,6 +267,7 @@ final class ChatPanelModel: ObservableObject {
                                 services: services,
                                 connectStepFinished: &connectStepFinished
                             )
+                            didEstablishStream = true
                         }
                     case .token(let token):
                         await finishConnectPipelineStep(
@@ -272,6 +275,7 @@ final class ChatPanelModel: ObservableObject {
                             services: services,
                             connectStepFinished: &connectStepFinished
                         )
+                        didEstablishStream = true
                         recordRespondFirstToken(at: assistantIndex)
                         services.setActivity(.streaming)
                         mutateMessage(at: assistantIndex) { message in
@@ -294,6 +298,7 @@ final class ChatPanelModel: ObservableObject {
                             reason: message,
                             connectStepFinished: &connectStepFinished
                         )
+                        services.markChatStreamFailed()
                         let diagnosed = await services.diagnoseChatFailure(
                             ChatPanelStreamError(message: message)
                         )
@@ -329,6 +334,7 @@ final class ChatPanelModel: ObservableObject {
                     }
                     markPipelineFailed(at: assistantIndex)
                     clearPipelineTimingState(for: assistantIndex)
+                    services.markChatStreamFailed()
                     services.setActivity(.idle)
                     return
                 }
@@ -346,12 +352,13 @@ final class ChatPanelModel: ObservableObject {
                     trimMessagesIfNeeded()
                     clearPipelineTimingState(for: assistantIndex)
                 }
+                services.markChatStreamConnected()
             } catch is CancellationError {
                 return
             } catch {
                 let diagnosed = await services.diagnoseChatFailure(error)
                 if assistantIndex < messages.count {
-                    var connectDone = false
+                    var connectDone = didEstablishStream
                     await failConnectPipelineStep(
                         at: assistantIndex,
                         reason: OpenWriteAIServices.shortChatFailureReason(error, config: services.lmConfig),
@@ -365,6 +372,7 @@ final class ChatPanelModel: ObservableObject {
                     markPipelineFailed(at: assistantIndex)
                     clearPipelineTimingState(for: assistantIndex)
                 }
+                services.markChatStreamFailed()
                 services.setActivity(.idle)
             }
         }
@@ -387,6 +395,17 @@ final class ChatPanelModel: ObservableObject {
         }
         guard !imported.isEmpty else { return }
         pendingAttachments.append(contentsOf: imported)
+    }
+
+    func importImageFromPasteboard() {
+        attachmentError = nil
+        guard let image = ImagePasteSupport.imageFromPasteboard() else { return }
+        do {
+            let attachment = try ChatAttachmentStore.importPastedImage(image)
+            pendingAttachments.append(attachment)
+        } catch {
+            attachmentError = error.localizedDescription
+        }
     }
 
     func removePendingAttachment(id: UUID) {
@@ -685,6 +704,7 @@ final class ChatPanelModel: ObservableObject {
                 modelDisplay: services.lmConfig.chatModelDisplay
             )
         )
+        services.markChatStreamConnected()
         await completePipelineStep(at: index, id: "connect")
         activatePipelineStep(at: index, id: "respond")
     }
@@ -1306,20 +1326,8 @@ struct ChatPanelView: View {
     }
 
     /// Configured chat model id from Settings (`lmConfig.chatModelDisplay`), not a hardcoded default.
-    /// When LM Studio is off, `checkConnection` leaves `lmStatus` as an error — caption shows "· not connected".
     private var composerModelCaptionText: String {
-        let model = aiServices.lmConfig.chatModelDisplay
-        if aiServices.isLMStudioConnected {
-            return model
-        }
-        if aiServices.lmStatus.hasPrefix("Error")
-            || aiServices.lmStatus.localizedCaseInsensitiveContains("unreachable") {
-            return "\(model) · not connected"
-        }
-        if aiServices.lmStatus == "Not checked" || aiServices.lmStatus == "Checking…" {
-            return "\(model) · not checked"
-        }
-        return model
+        "\(aiServices.lmConfig.chatModelDisplay) · \(aiServices.modelConnectionLabel)"
     }
 
     private var composerModelCaptionHelp: String {
@@ -1344,6 +1352,9 @@ struct ChatPanelView: View {
             }
             .frame(maxWidth: .infinity)
             .disabled(model.isBusy)
+            .onPasteCommand(of: [.image]) { _ in
+                model.importImageFromPasteboard()
+            }
 
             composerActionBoard
         }
@@ -1436,7 +1447,12 @@ struct ChatPanelView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DesignTokens.Spacing.spacing1) {
                 ForEach(model.pendingAttachments) { attachment in
-                    HStack(spacing: DesignTokens.Spacing.spacing1) {
+                    HStack(spacing: 6) {
+                        if attachment.kind == .image {
+                            AttachmentPreviewThumbnail(url: attachment.storedURL)
+                        } else {
+                            OWUnicodeIconView(icon: .document, size: 12, color: DesignTokens.Color.textSecondary)
+                        }
                         Text(attachment.displayName)
                             .font(OWTypography.caption)
                             .lineLimit(1)
@@ -1447,7 +1463,7 @@ struct ChatPanelView: View {
                                 .font(OWTypography.captionEmphasis)
                         }
                         .buttonStyle(.plain)
-                    .openWriteFocusChrome()
+                        .openWriteFocusChrome()
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -1463,41 +1479,119 @@ struct ChatPanelView: View {
     }
 }
 
+private struct AttachmentPreviewThumbnail: View {
+    let url: URL
+
+    var body: some View {
+        if let image = NSImage(contentsOf: url) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 16, height: 16)
+                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        } else {
+            OWUnicodeIconView(icon: .document, size: 12, color: DesignTokens.Color.textSecondary)
+        }
+    }
+}
+
 // MARK: - Chat transcript scroll (SwiftUI)
 
 private enum ChatTranscriptScrollAnchor {
     static let bottom = "openwrite.chat.transcript.bottom"
+    static let top = "openwrite.chat.transcript.top"
 }
 
-/// Native SwiftUI scroll for chat — avoids NSScrollView document height drift that clipped history.
+private struct ChatTranscriptContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct ChatTranscriptTopOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 private struct ChatTranscriptScrollView<Content: View>: View {
     let scrollToken: Int
     let background: Color
     @Binding var isPinnedToBottom: Bool
     @ViewBuilder var content: () -> Content
+    @State private var contentHeight: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
+    @State private var topOffset: CGFloat = 0
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 0) {
-                    content()
-                    Color.clear
-                        .frame(height: 1)
-                        .id(ChatTranscriptScrollAnchor.bottom)
-                        .onAppear { isPinnedToBottom = true }
-                        .onDisappear { isPinnedToBottom = false }
+        GeometryReader { viewport in
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Color.clear
+                            .frame(height: 1)
+                            .id(ChatTranscriptScrollAnchor.top)
+                            .background(
+                                GeometryReader { geometry in
+                                    Color.clear.preference(
+                                        key: ChatTranscriptTopOffsetKey.self,
+                                        value: geometry.frame(in: .named("openwrite.chat.scroll")).minY
+                                    )
+                                }
+                            )
+
+                        content()
+                        Color.clear
+                            .frame(height: 1)
+                            .id(ChatTranscriptScrollAnchor.bottom)
+                    }
+                    .background(
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: ChatTranscriptContentHeightKey.self,
+                                value: geometry.size.height
+                            )
+                        }
+                    )
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .background(background)
-            .onAppear {
-                scrollToBottom(using: proxy, animated: false)
-            }
-            .onChange(of: scrollToken) { _, _ in
-                guard isPinnedToBottom else { return }
-                scrollToBottom(using: proxy, animated: true)
+                .coordinateSpace(name: "openwrite.chat.scroll")
+                .background(background)
+                .onAppear {
+                    viewportHeight = viewport.size.height
+                    scrollToBottom(using: proxy, animated: false)
+                }
+                .onChange(of: viewport.size.height) { _, newValue in
+                    viewportHeight = newValue
+                    recalculatePinnedState()
+                }
+                .onPreferenceChange(ChatTranscriptContentHeightKey.self) { value in
+                    contentHeight = value
+                    recalculatePinnedState()
+                }
+                .onPreferenceChange(ChatTranscriptTopOffsetKey.self) { value in
+                    topOffset = value
+                    recalculatePinnedState()
+                }
+                .onChange(of: scrollToken) { _, _ in
+                    guard isPinnedToBottom else { return }
+                    scrollToBottom(using: proxy, animated: true)
+                }
             }
         }
+    }
+
+    private func recalculatePinnedState() {
+        let scrollRange = max(contentHeight - viewportHeight, 0)
+        if scrollRange <= 1 {
+            isPinnedToBottom = true
+            return
+        }
+        let currentOffset = max(-topOffset, 0)
+        let distanceToBottom = max(scrollRange - currentOffset, 0)
+        isPinnedToBottom = distanceToBottom <= 48
     }
 
     private func scrollToBottom(using proxy: ScrollViewProxy, animated: Bool) {

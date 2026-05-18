@@ -3,8 +3,27 @@ import Combine
 
 @MainActor
 final class OpenWriteAIServices: ObservableObject {
+    enum LMConnectionState: Equatable {
+        case notChecked
+        case checking
+        case connecting
+        case connected
+        case offline
+
+        var shortLabel: String {
+            switch self {
+            case .notChecked: return "not checked"
+            case .checking: return "checking"
+            case .connecting: return "connecting"
+            case .connected: return "connected"
+            case .offline: return "offline"
+            }
+        }
+    }
+
     @Published var lmConfig: LMStudioConfig = .default
     @Published var lmStatus: String = "Not checked"
+    @Published var lmConnectionState: LMConnectionState = .notChecked
     @Published var availableModels: [LMStudioModel] = []
     @Published var isIndexing = false
     @Published var indexedChunkCount = 0
@@ -34,7 +53,18 @@ final class OpenWriteAIServices: ObservableObject {
 
     /// True after a successful connection check (`lmStatus` begins with "Connected").
     var isLMStudioConnected: Bool {
-        lmStatus.hasPrefix("Connected")
+        lmConnectionState == .connected
+    }
+
+    /// User-facing label for model status chip in the chat composer.
+    var modelConnectionLabel: String {
+        if activityState == .streaming {
+            return LMConnectionState.connected.shortLabel
+        }
+        if activityState == .connecting, lmConnectionState != .connected {
+            return LMConnectionState.connecting.shortLabel
+        }
+        return lmConnectionState.shortLabel
     }
 
     init() {
@@ -171,6 +201,10 @@ final class OpenWriteAIServices: ObservableObject {
 
     func setActivity(_ state: AIActivityState) {
         activityState = state
+        if state == .connecting,
+           lmConnectionState == .notChecked || lmConnectionState == .offline {
+            lmConnectionState = .connecting
+        }
         if case .error = state { return }
         if state != .idle { lastChatError = nil }
     }
@@ -187,6 +221,7 @@ final class OpenWriteAIServices: ObservableObject {
     }
 
     func checkConnection() async {
+        lmConnectionState = .checking
         setActivity(.connecting)
         lmStatus = "Checking…"
         do {
@@ -208,10 +243,12 @@ final class OpenWriteAIServices: ObservableObject {
                 }
             }
             lmStatus = models.isEmpty ? "Connected (no models)" : "Connected · \(models.count) models"
+            lmConnectionState = .connected
             setActivity(.idle)
         } catch {
             availableModels = []
             lmStatus = "Error: \(error.localizedDescription)"
+            lmConnectionState = .offline
             setActivity(.error(Self.actionableConnectionError(error)))
         }
     }
@@ -219,6 +256,7 @@ final class OpenWriteAIServices: ObservableObject {
     /// Runs a connection check after chat failure and returns a user-facing message.
     func diagnoseChatFailure(_ error: Error) async -> String {
         let base = Self.actionableChatError(error, config: lmConfig)
+        lmConnectionState = .connecting
         setActivity(.connecting)
         do {
             let models = try await lmClient.listModels()
@@ -236,17 +274,27 @@ final class OpenWriteAIServices: ObservableObject {
                 hints.append("Embedding model “\(lmConfig.resolvedEmbeddingModel)” is not loaded — set Embedding model or load it in LM Studio.")
             }
             lmStatus = models.isEmpty ? "Connected (no models)" : "Connected · \(models.count) models"
+            lmConnectionState = .connected
             setActivity(.error("\(base)\n\n\(hints.joined(separator: " "))"))
             lastChatError = activityState.statusMessage
             return lastChatError ?? base
         } catch {
             let connectionHint = Self.actionableConnectionError(error)
             lmStatus = "Error: \(error.localizedDescription)"
+            lmConnectionState = .offline
             let combined = "\(base)\n\nConnection test failed: \(connectionHint)"
             setActivity(.error(combined))
             lastChatError = combined
             return combined
         }
+    }
+
+    func markChatStreamConnected() {
+        lmConnectionState = .connected
+    }
+
+    func markChatStreamFailed() {
+        lmConnectionState = .offline
     }
 
     /// In-app pages plus all on-disk `.md` files under the vault root (Reor-style).
