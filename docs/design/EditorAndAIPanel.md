@@ -1,6 +1,6 @@
 # Editor and AI panel placement
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Last updated:** 2026-05-17  
 **Status:** Decided — implemented in workbench v2 (assist strip)  
 **Code:** `ContentView.swift`, `AnytypeShellView.swift`, `AIAssistStripView.swift`, `ChatPanelView.swift`, `EditorView.swift`
@@ -97,6 +97,15 @@ Selection-scoped **refine** via `InlineAssistController` + `SelectablePlainTextE
 - Sidebar: `minWidth: 240` (`ContentView`)
 
 Future: collapse inspector below ~900pt window width per [Components.md § Workbench shell](./Components.md#workbench-shell).
+
+### Block editor engine (AppKit host)
+
+| Piece | Role |
+|-------|------|
+| `EditorView` | `OpenWriteThemedScrollView(scrollToken: editorScrollLayoutToken)` — remeasures on assist/rail width changes; **does not** scroll-to-bottom on token change (chat-only). |
+| `OWBlockEditorView` | `BlockEditorPasteCaptureView` + inner `NSHostingView` — block rows stay alive across keystrokes; **structure revision** excludes `text` and `checked` so typing/todo toggles do not remeasure the host. |
+| `OWBlockTextEditor` | Per-block `NSTextView`; strikethrough for todos applied in-place when only checkbox state changes. |
+| `OpenWriteThemedScrollView` | Measure pass restores the live hosting frame after probing; document resize preserves `contentView.bounds.origin` (no snap-back during scroll). |
 
 ---
 

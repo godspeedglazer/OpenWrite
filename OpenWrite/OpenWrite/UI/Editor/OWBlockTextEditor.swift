@@ -66,6 +66,10 @@ struct OWBlockTextEditor: NSViewRepresentable {
         if markdownEcho, !attributesChanged, !strikethroughChanged {
             return
         }
+        if strikethroughChanged, !attributesChanged, markdownEcho {
+            context.coordinator.applyStrikethroughOnly(strikethrough)
+            return
+        }
 
         let current = InlineMarkdown.markdown(from: textView.textStorage ?? NSAttributedString())
         if current != markdown || attributesChanged || strikethroughChanged {
@@ -131,6 +135,27 @@ struct OWBlockTextEditor: NSViewRepresentable {
             guard widthChanged || heightChanged else { return }
             textView.invalidateIntrinsicContentSize()
             textView.superview?.invalidateIntrinsicContentSize()
+        }
+
+        func applyStrikethroughOnly(_ enabled: Bool) {
+            guard let textView, let storage = textView.textStorage else { return }
+            let fullRange = NSRange(location: 0, length: storage.length)
+            guard fullRange.length > 0 else {
+                lastAppliedStrikethrough = enabled
+                return
+            }
+            isProgrammaticUpdate = true
+            if enabled {
+                storage.addAttribute(
+                    .strikethroughStyle,
+                    value: NSUnderlineStyle.single.rawValue,
+                    range: fullRange
+                )
+            } else {
+                storage.removeAttribute(.strikethroughStyle, range: fullRange)
+            }
+            isProgrammaticUpdate = false
+            lastAppliedStrikethrough = enabled
         }
 
         func applyContent(preserveSelection: Bool = false) {

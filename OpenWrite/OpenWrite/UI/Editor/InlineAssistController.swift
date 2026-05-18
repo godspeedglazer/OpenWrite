@@ -429,17 +429,19 @@ final class BlockEditorPasteCaptureView: NSView {
         cachedMeasureHeight = 1
     }
 
-    /// Read-only measure for SwiftUI `sizeThatFits` — width + `fittingSize` only; no subtree layout or intrinsic invalidation.
+    /// Read-only measure for SwiftUI `sizeThatFits` — restores the live frame after probing width.
     func measureDocumentSize(width: CGFloat) -> CGSize {
         let safeWidth = max(width, 320)
         if abs(cachedMeasureWidth - safeWidth) < 0.5, cachedMeasureHeight > 0 {
             return CGSize(width: safeWidth, height: cachedMeasureHeight)
         }
-        if abs(hostedView.frame.width - safeWidth) > 0.5 {
+        let priorFrame = hostedView.frame
+        if abs(priorFrame.width - safeWidth) > 0.5 {
             hostedView.frame.size.width = safeWidth
         }
         let fitting = hostedView.fittingSize.height
         let intrinsic = hostedView.intrinsicContentSize.height
+        hostedView.frame = priorFrame
         let contentHeight = max(max(fitting, intrinsic), 1)
         return CGSize(width: safeWidth, height: contentHeight)
     }

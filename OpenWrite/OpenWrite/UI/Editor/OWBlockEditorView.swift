@@ -282,15 +282,15 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             }
         }
 
-        /// Layout-affecting block changes only — excludes `text` so typing does not relayout the paste host.
+        /// Layout-affecting block changes only — excludes `text` and `isChecked` so typing and todo toggles
+        /// update SwiftUI in place without remeasuring the AppKit paste host.
         func blocksStructureRevision(_ blocks: [NoteBlock]) -> UInt64 {
             var hasher = Hasher()
             hasher.combine(blocks.count)
             for block in blocks {
                 hasher.combine(block.id)
                 hasher.combine(block.kind)
-                hasher.combine(block.isChecked)
-                for key in block.attributes.keys.sorted() {
+                for key in block.attributes.keys.sorted() where key != NoteBlock.checkedAttributeKey {
                     hasher.combine(key)
                     hasher.combine(block.attributes[key] ?? "")
                 }
