@@ -45,8 +45,8 @@ struct EditorView: View {
                 OWEmptyState(title: "Note missing", icon: .missingNote)
             }
         }
-        .id(themeManager.revision)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(DesignTokens.Color.background)
         .environment(\.blockFormatting, blockFormatting)
         .sheet(isPresented: $inlineAssist.showRefineResult) {
             refineResultSheet

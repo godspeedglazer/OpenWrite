@@ -185,6 +185,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         if themeChanged {
             context.coordinator.lastThemeRevision = themeRevision
         }
+        if themeChanged, let hosting = context.coordinator.hostingView {
+            hosting.layer?.backgroundColor = NSColor(DesignTokens.Color.background).cgColor
+        }
         if (context.coordinator.needsHostedRootRefresh(for: blocks) || previewModeChanged || themeChanged),
            let hosting = context.coordinator.hostingView {
             hosting.rootView = BlockEditorHostedContent(

@@ -3,7 +3,7 @@
 **Version:** 1.1  
 **Implementation:** `OpenWrite/Core/Theme/` · **Picker:** `OpenWrite/UI/Settings/ThemePickerView.swift`
 
-OpenWrite ships **nine** clean-room palettes inspired by the *feel* of other knowledge tools (Anytype’s calm object chrome, Reor’s dark assist rail, Logseq’s green outliner shell, MassCode’s mono editor, Solarized warmth). We do **not** copy assets, CSS, or trademarked branding from those products.
+OpenWrite ships **thirteen** clean-room palettes inspired by the *feel* of other knowledge tools (Anytype’s calm object chrome, Reor’s dark assist rail, Logseq’s green outliner shell, MassCode’s mono editor, Solarized warmth, plus Lavender Mist, Parchment Studio, Nord Frost, Ember Dusk). We do **not** copy assets, CSS, or trademarked branding from those products.
 
 ---
 
@@ -19,7 +19,7 @@ OpenWrite ships **nine** clean-room palettes inspired by the *feel* of other kno
 | `ThemePickerView` | Grid preview in **Settings** (gear sheet) and **OpenWrite → Settings** |
 | `ThemeQuickToggle` | Cycle + menu in the gear sheet; **sparkles** button in the sidebar cycles themes |
 
-Changing a theme re-renders the shell via `.id(themeManager.selectedTheme)` on the root window and settings sheet. Object-type chip accents (`DesignTokens.ObjectType`) stay consistent across themes so type color language remains recognizable.
+Theme changes bump `ThemeManager.revision` and refresh `DesignTokens.Color` / `openWritePalette` without tearing down chat scroll or editor state (avoid `.id(themeManager.revision)` on `ChatPanelView` / `EditorView`). `ContentView` may still refresh chrome via revision. Object-type chip accents (`DesignTokens.ObjectType`) stay consistent across themes so type color language remains recognizable.
 
 Legacy persisted IDs `reorDark` and `logseqGreen` map to `reorSlate` and `logseqInk` on launch.
 
@@ -38,6 +38,10 @@ Legacy persisted IDs `reorDark` and `logseqGreen` map to `reorSlate` and `logseq
 | `midnight` | Midnight | Ink-blue night mode with cyan highlights |
 | `solarizedWarm` | Solarized Warm | Cream Solarized base3 canvas, warm orange accent |
 | `highContrast` | High Contrast | Black on white, heavy borders; system chrome stays light |
+| `lavenderMist` | Lavender Mist | Soft lilac rail with muted violet accents |
+| `parchmentStudio` | Parchment Studio | Warm editorial paper with terracotta highlights |
+| `nordFrost` | Nord Frost | Cool polar night with ice-blue links |
+| `emberDusk` | Ember Dusk | Smoky plum canvas with ember orange accents |
 
 ---
 

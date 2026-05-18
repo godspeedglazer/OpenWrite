@@ -7,8 +7,8 @@ struct RAGSourcePillsView: View {
     /// Inline chips for chat bubbles — no section title, tighter padding.
     var compact: Bool = false
 
-    private var documentSources: [RetrievalHit] {
-        hits.uniqueDocumentSources()
+    private var documentSources: [RAGDocumentSource] {
+        hits.groupedDocumentSources()
     }
 
     var body: some View {
@@ -16,8 +16,8 @@ struct RAGSourcePillsView: View {
             Group {
                 if compact {
                     FlowLayout(spacing: 4) {
-                        ForEach(documentSources) { hit in
-                            sourcePill(hit)
+                        ForEach(documentSources) { source in
+                            sourcePill(source)
                         }
                     }
                 } else {
@@ -27,8 +27,8 @@ struct RAGSourcePillsView: View {
                             .foregroundStyle(DesignTokens.Color.textSecondary)
 
                         FlowLayout(spacing: 6) {
-                            ForEach(documentSources) { hit in
-                                sourcePill(hit)
+                            ForEach(documentSources) { source in
+                                sourcePill(source)
                             }
                         }
                     }
@@ -39,43 +39,71 @@ struct RAGSourcePillsView: View {
     }
 
     @ViewBuilder
-    private func sourcePill(_ hit: RetrievalHit) -> some View {
-        let label = hit.sourcePillTitle
+    private func sourcePill(_ source: RAGDocumentSource) -> some View {
         if let onOpenDocument {
             Button {
-                onOpenDocument(hit.documentID)
+                onOpenDocument(source.documentID)
             } label: {
-                pillLabel(label)
+                pillLabel(source)
             }
             .buttonStyle(.plain)
             .openWriteFocusChrome()
-            .help("Open \(label)")
+            .help(pillHelp(source))
         } else {
-            pillLabel(label)
+            pillLabel(source)
         }
     }
 
-    private func pillLabel(_ title: String) -> some View {
-        Text(title)
-            .font(compact ? OWTypography.caption2 : OWTypography.caption)
-            .foregroundStyle(compact ? DesignTokens.Color.textSecondary : DesignTokens.Color.textPrimary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(maxWidth: compact ? 140 : 168, alignment: .leading)
-            .padding(.horizontal, compact ? 7 : 10)
-            .padding(.vertical, compact ? 3 : 5)
-            .background(
-                compact
-                    ? DesignTokens.Color.background.opacity(0.55)
-                    : DesignTokens.Color.surface.opacity(0.95),
-                in: Capsule()
-            )
-            .overlay {
-                if !compact {
-                    Capsule()
-                        .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+    private func pillHelp(_ source: RAGDocumentSource) -> String {
+        var parts = [source.primaryLabel]
+        if let subtitle = source.subtitle { parts.append(subtitle) }
+        if let badge = source.chunkBadge { parts.append(badge) }
+        if let excerpt = source.representativeHit.sourcePillExcerpt { parts.append(excerpt) }
+        return parts.joined(separator: "\n")
+    }
+
+    private func pillLabel(_ source: RAGDocumentSource) -> some View {
+        HStack(spacing: 5) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(source.primaryLabel)
+                    .font(compact ? OWTypography.captionEmphasis : OWTypography.captionEmphasis)
+                    .foregroundStyle(compact ? DesignTokens.Color.textPrimary : DesignTokens.Color.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                if let subtitle = source.subtitle {
+                    Text(subtitle)
+                        .font(OWTypography.caption2)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
+
+            if let badge = source.chunkBadge {
+                Text(badge)
+                    .font(OWTypography.caption2.monospacedDigit())
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(DesignTokens.Color.background.opacity(0.65), in: Capsule())
+            }
+        }
+        .frame(maxWidth: compact ? 168 : 196, alignment: .leading)
+        .padding(.horizontal, compact ? 7 : 10)
+        .padding(.vertical, compact ? 4 : 6)
+        .background(
+            compact
+                ? DesignTokens.Color.background.opacity(0.55)
+                : DesignTokens.Color.surface.opacity(0.95),
+            in: Capsule()
+        )
+        .overlay {
+            if !compact {
+                Capsule()
+                    .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
+            }
+        }
     }
 }
 

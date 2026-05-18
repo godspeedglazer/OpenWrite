@@ -137,9 +137,9 @@ struct LiveRAGService: RAGService {
                     messages.append(contentsOf: Self.historyPayload(history))
                     messages.append(["role": "user", "content": Self.userMessageContent(query: context.query)])
 
+                    // `.connecting` until HTTP stream delivers bytes — UI must not mark "Connected" before this.
                     continuation.yield(RAGStreamEvent(kind: .activity(.connecting)))
                     continuation.yield(RAGStreamEvent(kind: .citations(citationIDs)))
-                    continuation.yield(RAGStreamEvent(kind: .activity(.streaming)))
 
                     var fullText = ""
                     var announcedFirstToken = false

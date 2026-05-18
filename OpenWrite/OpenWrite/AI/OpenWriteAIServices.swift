@@ -208,7 +208,15 @@ final class OpenWriteAIServices: ObservableObject {
         var byID: [UUID: VaultIndexEntry] = [:]
         byID.reserveCapacity(documents.count + 8)
 
+        let vaultRoot = VaultLocationPreferences.resolvedVaultRootURL()
+        let welcomeMarkdown = vaultRoot.appendingPathComponent("Welcome.md")
+        let hasWelcomeMarkdown = FileManager.default.fileExists(atPath: welcomeMarkdown.path)
+
         for doc in documents {
+            // Skip in-app welcome sample when `Welcome.md` is on disk — avoids duplicate index rows and pills.
+            if hasWelcomeMarkdown, doc.id == VaultDocument.welcomeDocumentID {
+                continue
+            }
             byID[doc.id] = VaultIndexEntry(
                 documentID: doc.id,
                 title: doc.title,
@@ -217,7 +225,6 @@ final class OpenWriteAIServices: ObservableObject {
             )
         }
 
-        let vaultRoot = VaultLocationPreferences.resolvedVaultRootURL()
         for file in VaultMarkdownCatalog.scan(vaultRoot: vaultRoot) {
             guard byID[file.documentID] == nil else { continue }
             guard let blocks = try? VaultMarkdownCatalog.loadBlocks(from: file) else { continue }

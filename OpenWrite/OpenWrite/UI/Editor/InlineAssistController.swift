@@ -448,7 +448,8 @@ final class BlockEditorPasteCaptureView: NSView {
         return CGSize(width: safeWidth, height: contentHeight)
     }
 
-    /// Applies width + height on the next run loop turn; may use subtree layout outside AttributeGraph updates.
+    /// Applies width + height on the next run loop turn only — `layoutSubtreeIfNeeded` is safe here,
+    /// not in `measureDocumentSize` / SwiftUI `sizeThatFits` (AttributeGraph precondition / SIGABRT).
     func applyDocumentLayout(width: CGFloat) {
         guard !isApplyingLayout else { return }
         let safeWidth = max(width, 320)

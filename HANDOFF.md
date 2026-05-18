@@ -101,7 +101,7 @@ Statuses: **done** = usable on `main`; **partial** = scaffold or weak UX; **brok
 | **Typed pages** | partial | `PageType`, `PageProperties`, `TypePickerView`, `PropertyInspectorView` |
 | **Page header / hero** | partial | `OWPageHeaderEditor`, `OWPageHero`, `OWPageBanner`, `CoverStyle` |
 | **Universal databases** | partial | `OWDatabase`, `DatabaseTableView`, `CreateDatabaseSheet` — no full lens over all page kinds |
-| **Themes (9 palettes)** | partial | `ThemeManager`, `ThemePickerView` — switching fixed in BUGFIXES.md |
+| **Themes (13 palettes)** | partial | `ThemeManager`, `ThemePickerView` — see [docs/design/Themes.md](docs/design/Themes.md) |
 | **Workbench shell** | partial (improved) | `AnytypeShellView`, `OWNavigationRail`, `OWWindowChrome`, `AIAssistStripView` — assist collapsed by default |
 | **Graph view** | partial (improved) | `GraphView`, `GraphViewModel` — **932e576** fixed rects, edges, layout; not Anytype Flow quality |
 | **Backlinks** | partial | `BacklinkIndex` stub |

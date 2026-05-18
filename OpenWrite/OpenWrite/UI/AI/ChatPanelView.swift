@@ -209,21 +209,12 @@ final class ChatPanelModel: ObservableObject {
                         updatePipelineStepTitle(at: assistantIndex, id: "sources", title: "No matching sources")
                     }
                 }
-                updatePipelineStepTitle(
-                    at: assistantIndex,
-                    id: "connect",
-                    title: AIActivityState.connecting.connectedStatus(
-                        modelDisplay: services.lmConfig.chatModelDisplay
-                    )
-                )
                 retrievalSummary = Self.retrievalSummary(
                     hits: context.allHits,
                     attachmentCount: attachments.count,
                     agentName: agent.name
                 )
-                if !context.allHits.isEmpty || attachments.isEmpty {
-                    services.setActivity(.connecting)
-                }
+                services.setActivity(.connecting)
 
                 if searchesVault {
                     await completePipelineStep(at: assistantIndex, id: "search")
@@ -233,8 +224,14 @@ final class ChatPanelModel: ObservableObject {
                 if messages[assistantIndex].pipelineSteps.first(where: { $0.id == "connect" })?.status != .active {
                     activatePipelineStep(at: assistantIndex, id: "connect")
                 }
-                await completePipelineStep(at: assistantIndex, id: "connect")
-                activatePipelineStep(at: assistantIndex, id: "respond")
+                updatePipelineStepTitle(
+                    at: assistantIndex,
+                    id: "connect",
+                    title: "Connecting to \(services.lmConfig.chatModelDisplay)…"
+                )
+
+                // Do not complete "connect" until the HTTP stream succeeds (first token or `.streaming`).
+                var connectStepFinished = false
 
                 for try await event in services.rag.streamAnswer(
                     context: context,
@@ -248,9 +245,18 @@ final class ChatPanelModel: ObservableObject {
                             services.setActivity(state)
                         }
                         if state == .streaming {
-                            activatePipelineStep(at: assistantIndex, id: "respond")
+                            await finishConnectPipelineStep(
+                                at: assistantIndex,
+                                services: services,
+                                connectStepFinished: &connectStepFinished
+                            )
                         }
                     case .token(let token):
+                        await finishConnectPipelineStep(
+                            at: assistantIndex,
+                            services: services,
+                            connectStepFinished: &connectStepFinished
+                        )
                         recordRespondFirstToken(at: assistantIndex)
                         services.setActivity(.streaming)
                         mutateMessage(at: assistantIndex) { message in
@@ -264,10 +270,15 @@ final class ChatPanelModel: ObservableObject {
                             message.isStreaming = false
                         }
                         await completeRespondStep(at: assistantIndex, skipDelay: false)
-                        await completePipelineStep(at: assistantIndex, id: "done")
+                        await completePipelineStep(at: assistantIndex, id: "done", skipDelay: true)
                         trimMessagesIfNeeded()
                         clearPipelineTimingState(for: assistantIndex)
                     case .error(let message):
+                        await failConnectPipelineStep(
+                            at: assistantIndex,
+                            reason: message,
+                            connectStepFinished: &connectStepFinished
+                        )
                         mutateMessage(at: assistantIndex) { assistant in
                             assistant.text = OpenWriteAIServices.chatFailureBubble(message: message)
                             assistant.isError = true
@@ -289,7 +300,7 @@ final class ChatPanelModel: ObservableObject {
                 if assistantIndex < messages.count,
                    messages[assistantIndex].pipelineSteps.contains(where: { $0.id == "respond" && $0.status == .active }) {
                     await completeRespondStep(at: assistantIndex, skipDelay: false)
-                    await completePipelineStep(at: assistantIndex, id: "done")
+                    await completePipelineStep(at: assistantIndex, id: "done", skipDelay: true)
                     trimMessagesIfNeeded()
                     clearPipelineTimingState(for: assistantIndex)
                 }
@@ -298,6 +309,12 @@ final class ChatPanelModel: ObservableObject {
             } catch {
                 let diagnosed = OpenWriteAIServices.chatFailureBubble(error, config: services.lmConfig)
                 if assistantIndex < messages.count {
+                    var connectDone = false
+                    await failConnectPipelineStep(
+                        at: assistantIndex,
+                        reason: OpenWriteAIServices.shortChatFailureReason(error, config: services.lmConfig),
+                        connectStepFinished: &connectDone
+                    )
                     mutateMessage(at: assistantIndex) { message in
                         message.text = diagnosed
                         message.isError = true
@@ -520,7 +537,7 @@ final class ChatPanelModel: ObservableObject {
             steps.append(ChatPipelineStep(id: "search", title: "Searching vault…", status: .pending))
             steps.append(ChatPipelineStep(id: "sources", title: "Found sources", status: .pending))
         }
-        steps.append(ChatPipelineStep(id: "connect", title: "Connected to model", status: .pending))
+        steps.append(ChatPipelineStep(id: "connect", title: "Connecting to model…", status: .pending))
         steps.append(ChatPipelineStep(id: "respond", title: "Responding", status: .pending))
         steps.append(ChatPipelineStep(id: "done", title: "Done", status: .pending))
         return steps
@@ -610,6 +627,38 @@ final class ChatPanelModel: ObservableObject {
             guard let stepIndex = message.pipelineSteps.firstIndex(where: { $0.id == id }) else { return }
             message.pipelineSteps[stepIndex].title = title
         }
+    }
+
+    /// Marks connect complete only after LM Studio HTTP stream delivers bytes (honest stepper).
+    private func finishConnectPipelineStep(
+        at index: Int,
+        services: OpenWriteAIServices,
+        connectStepFinished: inout Bool
+    ) async {
+        guard !connectStepFinished else { return }
+        connectStepFinished = true
+        updatePipelineStepTitle(
+            at: index,
+            id: "connect",
+            title: AIActivityState.connecting.connectedStatus(
+                modelDisplay: services.lmConfig.chatModelDisplay
+            )
+        )
+        await completePipelineStep(at: index, id: "connect")
+        activatePipelineStep(at: index, id: "respond")
+    }
+
+    private func failConnectPipelineStep(
+        at index: Int,
+        reason: String,
+        connectStepFinished: inout Bool
+    ) async {
+        guard !connectStepFinished else { return }
+        connectStepFinished = true
+        let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = trimmed.isEmpty ? "Connection failed" : "Connection failed — \(trimmed)"
+        updatePipelineStepTitle(at: index, id: "connect", title: String(title.prefix(120)))
+        setPipelineStep(at: index, id: "connect", status: .failed)
     }
 
     private func markPipelineFailed(at index: Int) {
@@ -775,7 +824,6 @@ struct ChatPanelView: View {
                 conversationPanel
             }
         }
-        .id(themeManager.revision)
         .onChange(of: workbench.archivedChatThreadIDToOpen) { _, threadID in
             guard let threadID, let thread = ChatSessionStore.loadThread(id: threadID) else { return }
             model.loadArchivedThread(thread, services: aiServices)
@@ -833,7 +881,7 @@ struct ChatPanelView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(agent.name)
                         .font(OWTypography.calloutEmphasis)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .foregroundStyle(isSelected ? DesignTokens.Color.accent : DesignTokens.Color.textPrimary)
                     Text(agentHelp(agent))
                         .font(OWTypography.caption)
                         .foregroundStyle(DesignTokens.Color.textSecondary)
@@ -847,15 +895,15 @@ struct ChatPanelView: View {
             .padding(DesignTokens.Spacing.spacing2)
             .background(
                 isSelected
-                    ? DesignTokens.Color.selectionPill
+                    ? DesignTokens.Color.accent.opacity(0.16)
                     : DesignTokens.Color.surface,
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
                     .strokeBorder(
-                        isSelected ? DesignTokens.Color.accent.opacity(0.3) : DesignTokens.Color.borderSubtle.opacity(0.65),
-                        lineWidth: DesignTokens.Layout.borderWidth
+                        isSelected ? DesignTokens.Color.accent.opacity(0.72) : DesignTokens.Color.borderSubtle.opacity(0.65),
+                        lineWidth: isSelected ? 1.5 : DesignTokens.Layout.borderWidth
                     )
             }
         }
@@ -937,17 +985,18 @@ struct ChatPanelView: View {
         .background(palette.background)
     }
 
+    /// Drives stick-to-bottom only on structural chat changes — not every streamed token.
     private var chatScrollToken: Int {
         var hasher = Hasher()
-        hasher.combine(themeManager.selectedTheme.rawValue)
         hasher.combine(model.messages.count)
-        hasher.combine(streamingTail)
         hasher.combine(pipelineStepsTail)
+        if let last = model.messages.last {
+            hasher.combine(last.id)
+            hasher.combine(last.isStreaming)
+            hasher.combine(last.isError)
+            hasher.combine(last.sourceHits.count)
+        }
         return hasher.finalize()
-    }
-
-    private var streamingTail: String {
-        model.messages.last(where: { $0.isStreaming })?.text ?? ""
     }
 
     private var pipelineStepsTail: Int {
@@ -1035,8 +1084,15 @@ struct ChatPanelView: View {
     private func showsAssistantBubble(_ message: ChatMessage) -> Bool {
         if message.isError { return true }
         if !message.sourceHits.isEmpty { return true }
+        if vaultSearchHadNoSources(message) { return true }
         if !displayText(for: message).isEmpty { return true }
         return !message.isStreaming
+    }
+
+    private func vaultSearchHadNoSources(_ message: ChatMessage) -> Bool {
+        message.pipelineSteps.contains { step in
+            step.id == "sources" && step.title.localizedCaseInsensitiveContains("no matching")
+        }
     }
 
     private func systemMessageRow(_ message: ChatMessage) -> some View {
@@ -1069,6 +1125,10 @@ struct ChatPanelView: View {
                     RAGSourcePillsView(hits: message.sourceHits, onOpenDocument: { documentID in
                         vaultStore.selectedDocumentID = documentID
                     }, compact: true)
+                } else if vaultSearchHadNoSources(message) {
+                    Text("No vault sources")
+                        .font(OWTypography.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
                 }
 
                 if message.isError {
@@ -1167,13 +1227,38 @@ struct ChatPanelView: View {
     }
 
     private var composerModelCaption: some View {
-        Text(aiServices.lmConfig.chatModelDisplay)
+        Text(composerModelCaptionText)
             .font(OWTypography.caption2)
             .foregroundStyle(DesignTokens.Color.textTertiary)
             .lineLimit(1)
             .truncationMode(.tail)
             .frame(maxWidth: .infinity, minHeight: 12, maxHeight: 14, alignment: .leading)
-            .help(aiServices.lmConfig.chatModelDisplay)
+            .help(composerModelCaptionHelp)
+    }
+
+    /// Configured chat model id from Settings (`lmConfig.chatModelDisplay`), not a hardcoded default.
+    /// When LM Studio is off, `checkConnection` leaves `lmStatus` as an error — caption shows "· not connected".
+    private var composerModelCaptionText: String {
+        let model = aiServices.lmConfig.chatModelDisplay
+        if aiServices.isLMStudioConnected {
+            return model
+        }
+        if aiServices.lmStatus.hasPrefix("Error")
+            || aiServices.lmStatus.localizedCaseInsensitiveContains("unreachable") {
+            return "\(model) · not connected"
+        }
+        if aiServices.lmStatus == "Not checked" || aiServices.lmStatus == "Checking…" {
+            return "\(model) · not checked"
+        }
+        return model
+    }
+
+    private var composerModelCaptionHelp: String {
+        let model = aiServices.lmConfig.chatModelDisplay
+        return """
+        Chat model: \(model). Loaded from LM Studio (/v1/models); defaults like google/gemma-4-e4b \
+        are chosen when Check connection runs and the chat model field is empty.
+        """
     }
 
     private var composerInputRow: some View {

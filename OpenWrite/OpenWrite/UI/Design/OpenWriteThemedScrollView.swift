@@ -137,6 +137,8 @@ private final class OpenWriteThemedScrollContainer: NSScrollView {
 
 // MARK: - SwiftUI themed scroll
 
+private let openWriteScrollBottomPinThreshold: CGFloat = 56
+
 /// Theme-aware vertical scroll surface (NSScrollView + custom scroller).
 struct OpenWriteThemedScrollView<Content: View>: View {
     @Environment(\.openWritePalette) private var palette
@@ -185,7 +187,7 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
     let content: Content
 
     func makeCoordinator() -> Coordinator {
-        Coordinator()
+        Coordinator(stickToBottomOnGrowth: scrollToBottomOnTokenChange)
     }
 
     func makeNSView(context: Context) -> OpenWriteThemedScrollContainer {
@@ -200,6 +202,7 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         context.coordinator.applyCanvasColor(canvasColor, to: hosting)
         context.coordinator.hostingView = hosting
         scrollView.documentView = hosting
+        context.coordinator.installScrollTracking(on: scrollView)
 
         scrollView.onClipViewLayout = { [weak coordinator = context.coordinator, weak scrollView] in
             guard let coordinator, let scrollView else { return }
@@ -217,6 +220,7 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         scrollView.openWriteRefreshThemedScrollers()
 
         guard let hosting = context.coordinator.hostingView else { return }
+        context.coordinator.stickToBottomOnGrowth = scrollToBottomOnTokenChange
         context.coordinator.applyCanvasColor(canvasColor, to: hosting)
         hosting.rootView = content
 
@@ -229,11 +233,10 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         context.coordinator.scheduleRefreshDocumentSize(in: scrollView)
 
         if context.coordinator.lastScrollToken != scrollToken {
+            let wasNearBottom = context.coordinator.isNearBottom(in: scrollView)
             context.coordinator.lastScrollToken = scrollToken
             if scrollToBottomOnTokenChange {
-                DispatchQueue.main.async {
-                    scrollView.openWriteScrollToBottom(animated: true)
-                }
+                context.coordinator.scheduleScrollToBottomIfPinned(in: scrollView, wasNearBottom: wasNearBottom)
             } else {
                 context.coordinator.invalidateDocumentMeasurement(in: scrollView)
                 context.coordinator.scheduleRefreshDocumentSize(in: scrollView)
@@ -241,36 +244,116 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         }
     }
 
-    /// Read-only height probe — `fittingSize` only; never forces subtree layout during SwiftUI measure.
+    /// Read-only height probe — width + `fittingSize` only. Never `layoutSubtreeIfNeeded` here:
+    /// forcing layout during SwiftUI `updateNSView` / measure trips AttributeGraph ("setting value during update")
+    /// and can SIGABRT or recurse into a layout fork-bomb on long chat transcripts.
     private static func measureDocumentHeight(
         for hosting: NSHostingView<Content>,
-        width: CGFloat,
-        clipHeight: CGFloat
+        width: CGFloat
     ) -> CGFloat {
         let safeWidth = max(width, 1)
         let priorFrame = hosting.frame
         if abs(priorFrame.width - safeWidth) > 0.5 {
             hosting.frame.size.width = safeWidth
         }
-        let measured = max(hosting.fittingSize.height, hosting.intrinsicContentSize.height)
-        if abs(priorFrame.width - safeWidth) > 0.5 || abs(priorFrame.height - hosting.frame.height) > 0.5 {
-            hosting.frame = priorFrame
-        }
+        hosting.invalidateIntrinsicContentSize()
+        let fitting = hosting.fittingSize.height
+        let intrinsic = hosting.intrinsicContentSize.height
+        hosting.frame = priorFrame
+        return max(max(fitting, intrinsic), 1)
+    }
 
-        let minHeight = max(clipHeight + 1, 1)
-        return max(measured, minHeight)
+    /// Full subtree layout runs only from deferred `refreshDocumentSize` (next run-loop turn), not from measure.
+    private static func applyDocumentLayout(
+        for hosting: NSHostingView<Content>,
+        width: CGFloat
+    ) -> CGFloat {
+        let safeWidth = max(width, 1)
+        var frame = hosting.frame
+        frame.origin = .zero
+        frame.size.width = safeWidth
+        frame.size.height = 10_000_000
+        hosting.frame = frame
+        hosting.invalidateIntrinsicContentSize()
+        hosting.layoutSubtreeIfNeeded()
+        return max(hosting.fittingSize.height, hosting.intrinsicContentSize.height, 1)
     }
 
     final class Coordinator {
         var hostingView: NSHostingView<Content>?
+        var stickToBottomOnGrowth: Bool
         var lastScrollToken: Int = -1
         var lastThemeRevision: UInt = 0
         private var lastAppliedDocumentSize = NSSize.zero
         private var lastClipSize: NSSize = .zero
         private var refreshGeneration = 0
+        private var followBottomGeneration = 0
+        /// Set when clip bounds move away from the bottom; cleared when the user scrolls back down.
+        var userHasScrolledAway = false
+        private weak var trackedScrollView: NSScrollView?
+        private var boundsObserver: NSObjectProtocol?
+
+        init(stickToBottomOnGrowth: Bool) {
+            self.stickToBottomOnGrowth = stickToBottomOnGrowth
+        }
+
+        deinit {
+            if let boundsObserver {
+                NotificationCenter.default.removeObserver(boundsObserver)
+            }
+        }
+
+        func installScrollTracking(on scrollView: NSScrollView) {
+            guard trackedScrollView !== scrollView else { return }
+            if let boundsObserver {
+                NotificationCenter.default.removeObserver(boundsObserver)
+            }
+            trackedScrollView = scrollView
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            let clipView = scrollView.contentView
+            boundsObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: clipView,
+                queue: .main
+            ) { [weak self, weak scrollView] _ in
+                guard let self, let scrollView else { return }
+                if self.isNearBottom(in: scrollView) {
+                    self.userHasScrolledAway = false
+                } else {
+                    self.userHasScrolledAway = true
+                }
+            }
+        }
 
         func applyCanvasColor(_ color: Color, to hosting: NSHostingView<Content>) {
             hosting.layer?.backgroundColor = NSColor(color).cgColor
+        }
+
+        func isNearBottom(in scrollView: NSScrollView, threshold: CGFloat = openWriteScrollBottomPinThreshold) -> Bool {
+            guard let documentView = scrollView.documentView else { return true }
+            let clip = scrollView.contentView
+            let maxY = max(0, documentView.frame.height - clip.bounds.height)
+            if maxY <= threshold { return true }
+            return clip.bounds.origin.y >= maxY - threshold
+        }
+
+        func scheduleScrollToBottomIfPinned(in scrollView: NSScrollView, wasNearBottom: Bool) {
+            // Pin only when the user was already at the bottom and has not scrolled up to read history.
+            guard wasNearBottom, !userHasScrolledAway else { return }
+            followBottomGeneration += 1
+            let generation = followBottomGeneration
+            DispatchQueue.main.async { [weak self, weak scrollView] in
+                guard let self, let scrollView, generation == self.followBottomGeneration else { return }
+                self.refreshDocumentSize(in: scrollView)
+                scrollView.openWriteScrollToBottom(animated: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak scrollView] in
+                    guard let self, let scrollView, generation == self.followBottomGeneration else { return }
+                    self.refreshDocumentSize(in: scrollView)
+                    if self.isNearBottom(in: scrollView, threshold: openWriteScrollBottomPinThreshold * 2) {
+                        scrollView.openWriteScrollToBottom(animated: false)
+                    }
+                }
+            }
         }
 
         func invalidateDocumentMeasurement(in scrollView: NSScrollView) {
@@ -293,10 +376,10 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
 
             let clipSize = scrollView.contentView.bounds.size
             let width = max(clipSize.width, 1)
-            let height = OpenWriteThemedScrollRepresentable.measureDocumentHeight(
+            // Deferred apply may use subtree layout; measure path stays read-only (see `measureDocumentHeight`).
+            let height = OpenWriteThemedScrollRepresentable.applyDocumentLayout(
                 for: hosting,
-                width: width,
-                clipHeight: clipSize.height
+                width: width
             )
 
             let targetSize = NSSize(width: width, height: height)
@@ -316,6 +399,8 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
                 hosting.needsLayout = true
                 scrollView.tile()
             }
+            // Do not auto-pin on every remeasure during streaming — `scheduleScrollToBottomIfPinned`
+            // runs only when `scrollToken` changes (new message / stream start / end).
         }
     }
 }

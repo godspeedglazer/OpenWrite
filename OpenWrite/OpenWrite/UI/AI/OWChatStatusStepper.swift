@@ -25,9 +25,10 @@ struct OWChatStatusStepper: View {
     private let rowSpacing: CGFloat = 6
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            railColumn
-            labelsColumn
+        VStack(alignment: .leading, spacing: rowSpacing) {
+            ForEach(Array(steps.enumerated()), id: \.element) { index, step in
+                stepRow(step, isLast: index == steps.count - 1)
+            }
         }
         .padding(.leading, DesignTokens.Spacing.spacing1)
         .padding(.vertical, 2)
@@ -35,39 +36,30 @@ struct OWChatStatusStepper: View {
         .accessibilityLabel("Response progress")
     }
 
-    private var railColumn: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(steps.enumerated()), id: \.element) { index, step in
-                VStack(spacing: 0) {
-                    stepIndicator(step.status)
-                        .frame(width: dotSize, height: dotSize)
-                        .frame(width: railWidth, height: dotSize)
+    private func stepRow(_ step: ChatPipelineStep, isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(spacing: 0) {
+                stepIndicator(step.status)
+                    .frame(width: dotSize, height: dotSize)
+                    .frame(width: railWidth, height: dotSize)
 
-                    if index < steps.count - 1 {
-                        connector(from: step.status)
-                            .frame(width: connectorWidth)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: connectorSegmentHeight)
-                    }
+                if !isLast {
+                    connector(from: step.status)
+                        .frame(width: connectorWidth)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: connectorMinHeight, maxHeight: .infinity, alignment: .top)
                 }
             }
+            .frame(width: railWidth)
+
+            stepLabel(step)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: railWidth)
     }
 
-    private var labelsColumn: some View {
-        VStack(alignment: .leading, spacing: rowSpacing) {
-            ForEach(steps, id: \.self) { step in
-                stepLabel(step)
-                    .frame(minHeight: dotSize, alignment: .leadingFirstTextBaseline)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Caption line height plus row gap minus the dot, so the rail meets the next dot.
-    private var connectorSegmentHeight: CGFloat {
-        max(8, OWTypography.Scale.captionLineHeight * OWTypography.dynamicScale + rowSpacing - dotSize)
+    /// Minimum rail segment between dots; grows with the label so the connector meets the next dot.
+    private var connectorMinHeight: CGFloat {
+        max(10, OWTypography.Scale.captionLineHeight * OWTypography.dynamicScale + rowSpacing - dotSize)
     }
 
     @ViewBuilder
@@ -84,6 +76,7 @@ struct OWChatStatusStepper: View {
                 StepperStreamingDots()
             }
         }
+        .frame(minHeight: dotSize, alignment: .leadingFirstTextBaseline)
     }
 
     @ViewBuilder

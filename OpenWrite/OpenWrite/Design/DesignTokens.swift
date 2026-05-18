@@ -428,12 +428,19 @@ enum DesignTokens {
         static let graphNodeCardHeight: CGFloat = 56
         static let graphNodeMinSpacing: CGFloat = 20
         static let toolbarHeight: CGFloat = 52
-        /// Inset below traffic lights for custom title bar content.
+        /// Inset below custom window controls for title bar content.
         static let shellChromeSafeAreaTop: CGFloat = 28
+        /// Muted rounded-square close / minimize / zoom in the shell strip.
+        static let windowControlSize: CGFloat = 14
+        static let windowControlSpacing: CGFloat = 6
+        static let windowControlLeadingInset: CGFloat = 12
+        static let windowControlTopInset: CGFloat = 10
         /// Title + tabs row inside the filled chrome strip.
         static let shellChromeBarHeight: CGFloat = 44
-        /// Leading inset clearing traffic-light cluster (inset from window edge).
-        static let shellChromeContentLeadingInset: CGFloat = 78
+        /// Leading inset clearing custom window controls (derived from control metrics + padding).
+        static var shellChromeContentLeadingInset: CGFloat {
+            windowControlLeadingInset + (windowControlSize + windowControlSpacing) * 3 + 8
+        }
         /// Slightly tighter inset when the window is below `shellCompactBreakpoint`.
         static let shellChromeCompactLeadingInset: CGFloat = 72
         /// Aligns shell brand text with `OWSidebarSectionHeader` labels inside the navigation rail.

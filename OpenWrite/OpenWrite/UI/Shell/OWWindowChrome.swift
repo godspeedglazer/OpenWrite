@@ -101,6 +101,16 @@ enum OWWindowChrome {
             reorderTitlebarAccessories(on: window)
         }
         tintHostingRoot(window, color: chrome)
+        hideSystemTrafficLights(in: window)
+    }
+
+    /// Replaces system traffic lights on the **main** titled window only (`canApplyChrome` excludes sheets).
+    /// Sheets keep native controls so we never hide traffic lights without replacements.
+    private static func hideSystemTrafficLights(in window: NSWindow) {
+        guard canApplyChrome(to: window) else { return }
+        for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(kind)?.isHidden = true
+        }
     }
 
     /// Keeps the opaque fill behind traffic lights (first accessory wins stacking).
@@ -148,6 +158,7 @@ enum OWWindowChrome {
         contentView.layer?.backgroundColor = color.cgColor
     }
 
+    /// `NSTitlebarAccessoryViewController` crashes on unsupported windows — always guard first.
     private static func installSolidTitlebarFill(on window: NSWindow, color: NSColor) {
         guard supportsTitlebarAccessory(on: window) else { return }
         let key = ObjectIdentifier(window)
@@ -336,6 +347,90 @@ extension View {
     }
 }
 
+// MARK: - Custom window controls (muted rounded squares)
+
+/// Close / minimize / zoom controls integrated into the filled shell title bar.
+struct OWShellWindowControls: View {
+    @Environment(\.openWritePalette) private var palette
+
+    var body: some View {
+        HStack(spacing: DesignTokens.Layout.windowControlSpacing) {
+            shellWindowButton(role: .close) {
+                NSApp.keyWindow?.performClose(nil)
+            }
+            shellWindowButton(role: .minimize) {
+                NSApp.keyWindow?.miniaturize(nil)
+            }
+            shellWindowButton(role: .zoom) {
+                NSApp.keyWindow?.zoom(nil)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Window controls")
+    }
+
+    private enum ControlRole {
+        case close
+        case minimize
+        case zoom
+    }
+
+    private func shellWindowButton(role: ControlRole, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                .fill(fillColor(for: role))
+                .frame(
+                    width: DesignTokens.Layout.windowControlSize,
+                    height: DesignTokens.Layout.windowControlSize
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                        .strokeBorder(DesignTokens.Color.borderSubtle.opacity(0.85), lineWidth: DesignTokens.Layout.borderWidth)
+                }
+                .overlay {
+                    controlGlyph(role)
+                        .foregroundStyle(DesignTokens.Color.textSecondary.opacity(role == .close ? 0.9 : 0.75))
+                }
+        }
+        .buttonStyle(.plain)
+        .openWriteFocusChrome()
+        .help(helpText(for: role))
+    }
+
+    @ViewBuilder
+    private func controlGlyph(_ role: ControlRole) -> some View {
+        switch role {
+        case .close:
+            Text("×")
+                .font(.system(size: 11, weight: .semibold))
+                .offset(y: -0.5)
+        case .minimize:
+            Text("−")
+                .font(.system(size: 12, weight: .medium))
+        case .zoom:
+            Text("+")
+                .font(.system(size: 12, weight: .medium))
+        }
+    }
+
+    private func fillColor(for role: ControlRole) -> Color {
+        switch role {
+        case .close:
+            return palette.warning.opacity(0.22)
+        case .minimize, .zoom:
+            return DesignTokens.Color.surfaceElevated.opacity(0.88)
+        }
+    }
+
+    private func helpText(for role: ControlRole) -> String {
+        switch role {
+        case .close: return "Close window"
+        case .minimize: return "Minimize window"
+        case .zoom: return "Zoom window"
+        }
+    }
+}
+
 // MARK: - Filled shell title bar
 
 struct OWShellTitleBar: View {
@@ -362,6 +457,11 @@ struct OWShellTitleBar: View {
             ZStack(alignment: .top) {
                 palette.shellChrome
                     .ignoresSafeArea(edges: .top)
+
+                OWShellWindowControls()
+                    .padding(.leading, DesignTokens.Layout.windowControlLeadingInset)
+                    .padding(.top, DesignTokens.Layout.windowControlTopInset)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
                 VStack(spacing: 0) {
                     ZStack(alignment: .leading) {

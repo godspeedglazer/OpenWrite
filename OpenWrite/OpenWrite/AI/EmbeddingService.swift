@@ -110,11 +110,12 @@ actor LMStudioEmbeddingCircuit {
 }
 
 /// Caps concurrent embedding HTTP calls app-wide (indexing + retrieval share this gate).
+/// With `LMStudioEmbeddingCircuit`, prevents a launch-time storm of parallel `/v1/embeddings` when :1234 is down.
 actor EmbeddingRequestGate {
     static let shared = EmbeddingRequestGate()
 
     private var inFlight = 0
-    private let maxConcurrent = 2
+    private let maxConcurrent = 2 // P0: max 1–2 concurrent embeds; remainder waits or uses hash fallback via circuit
 
     func withPermit<T: Sendable>(_ operation: @Sendable () async throws -> T) async throws -> T {
         while inFlight >= maxConcurrent {
