@@ -4,6 +4,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainWindowPresentationAttempts = 0
     private let maxMainWindowPresentationAttempts = 40
+    private var windowChromeObservers: [NSObjectProtocol] = []
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -11,7 +12,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installWindowChromeObservers()
         presentMainWindow()
+    }
+
+    deinit {
+        for observer in windowChromeObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    private func installWindowChromeObservers() {
+        let center = NotificationCenter.default
+        let names: [Notification.Name] = [
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didBecomeMainNotification,
+            NSWindow.didResizeNotification,
+        ]
+        for name in names {
+            let observer = center.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { _ in
+                Task { @MainActor in
+                    OWWindowChrome.applyToAllWindows()
+                }
+            }
+            windowChromeObservers.append(observer)
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {

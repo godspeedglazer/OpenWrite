@@ -39,6 +39,7 @@ struct OpenWriteApp: App {
                 .environmentObject(aiServices)
                 .environmentObject(pastWrites)
         }
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .defaultSize(
             width: DesignTokens.Layout.windowDefaultWidth,
             height: DesignTokens.Layout.windowDefaultHeight

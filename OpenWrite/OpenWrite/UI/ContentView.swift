@@ -45,7 +45,7 @@ struct ContentView: View {
             .openWriteThemeAppearance()
             .frame(minWidth: 480, minHeight: 520)
         }
-        .background(DesignTokens.Color.background)
+        .background(DesignTokens.Color.shellChrome)
         .task {
             _ = try? VaultLocationPreferences.ensureDefaultVaultLayout()
             await aiServices.startFilesystemIngestionWatch()

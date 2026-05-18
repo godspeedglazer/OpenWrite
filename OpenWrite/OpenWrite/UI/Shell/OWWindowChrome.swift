@@ -54,27 +54,125 @@ enum OWWindowChrome {
     /// When true (e.g. graph canvas visible), background clicks must not move the window.
     static var suppressBackgroundWindowDrag = false
 
+    private static var titlebarFillAccessories: [ObjectIdentifier: OWSolidTitlebarAccessory] = [:]
+
     static func apply(to window: NSWindow) {
         window.title = "OpenWrite"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = !suppressBackgroundWindowDrag
+        window.isMovableByWindowBackground = false
         if #available(macOS 11.0, *) {
             window.titlebarSeparatorStyle = .none
-            window.toolbarStyle = .unified
+            window.toolbarStyle = .unifiedCompact
         }
         window.styleMask.insert(.fullSizeContentView)
-        window.isOpaque = false
         window.toolbar = nil
 
         let palette = ThemeManager.shared.palette
         let chrome = NSColor(palette.shellChrome)
+        window.isOpaque = true
         window.backgroundColor = chrome
+        paintThemeFrame(window, color: chrome)
+        installSolidTitlebarFill(on: window, color: chrome)
+        tintHostingRoot(window, color: chrome)
+    }
+
+    static func applyToAllWindows() {
+        for window in NSApp.windows where !window.isSheet {
+            apply(to: window)
+        }
     }
 
     static func reapplyToKeyWindow() {
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
         apply(to: window)
+    }
+
+    /// Recolors AppKit theme frame so the strip behind traffic lights is not system grey vibrancy.
+    private static func paintThemeFrame(_ window: NSWindow, color: NSColor) {
+        guard var view = window.contentView?.superview else { return }
+        while true {
+            let typeName = String(describing: type(of: view))
+            view.wantsLayer = true
+            view.layer?.backgroundColor = color.cgColor
+            if typeName.contains("ThemeFrame") || typeName.contains("NSFrameView") {
+                break
+            }
+            guard let parent = view.superview else { break }
+            view = parent
+        }
+    }
+
+    private static func tintHostingRoot(_ window: NSWindow, color: NSColor) {
+        guard let contentView = window.contentView else { return }
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = color.cgColor
+    }
+
+    private static func installSolidTitlebarFill(on window: NSWindow, color: NSColor) {
+        let key = ObjectIdentifier(window)
+        if let accessory = titlebarFillAccessories[key] {
+            accessory.chromeColor = color
+            return
+        }
+        let accessory = OWSolidTitlebarAccessory(color: color)
+        window.addTitlebarAccessoryViewController(accessory)
+        titlebarFillAccessories[key] = accessory
+    }
+}
+
+// MARK: - Solid titlebar fill (no vibrancy)
+
+private final class OWSolidTitlebarFillView: NSView {
+    var chromeColor: NSColor = .windowBackgroundColor {
+        didSet {
+            needsDisplay = true
+            layer?.backgroundColor = chromeColor.cgColor
+        }
+    }
+
+    override func updateLayer() {
+        super.updateLayer()
+        layer?.backgroundColor = chromeColor.cgColor
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        chromeColor.setFill()
+        dirtyRect.fill()
+    }
+}
+
+private final class OWSolidTitlebarAccessory: NSTitlebarAccessoryViewController {
+    private let fillView = OWSolidTitlebarFillView()
+
+    var chromeColor: NSColor {
+        get { fillView.chromeColor }
+        set { fillView.chromeColor = newValue }
+    }
+
+    init(color: NSColor) {
+        super.init(nibName: nil, bundle: nil)
+        fillView.wantsLayer = true
+        fillView.chromeColor = color
+        view = fillView
+        layoutAttribute = .top
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        let titlebarHeight = view.window?.standardWindowButton(.closeButton)?
+            .superview?
+            .frame
+            .maxY ?? DesignTokens.Layout.shellChromeSafeAreaTop
+        let height = max(titlebarHeight, DesignTokens.Layout.shellChromeSafeAreaTop)
+        if abs(view.frame.height - height) > 0.5 {
+            view.frame.size.height = height
+        }
     }
 }
 
@@ -114,7 +212,11 @@ final class OWTitleBarDragView: NSView {
 
 extension View {
     func openWriteWindowChrome() -> some View {
-        background(OWWindowChromeConfigurator())
+        background {
+            DesignTokens.Color.shellChrome
+                .ignoresSafeArea()
+        }
+        .background(OWWindowChromeConfigurator())
     }
 }
 
@@ -141,43 +243,44 @@ struct OWShellTitleBar: View {
                     : DesignTokens.Layout.shellChromeContentLeadingInset
             }()
 
-            VStack(spacing: 0) {
-                ZStack(alignment: .leading) {
-                    HStack(spacing: DesignTokens.Spacing.spacing3) {
-                        if !brandAlignsWithNavigationRail {
-                            HStack(spacing: DesignTokens.Spacing.spacing2) {
-                                OWBrandMark(size: compact ? 18 : 20)
-                                Text("OpenWrite")
-                                    .font(compact ? OWTypography.captionEmphasis : OWTypography.bodyEmphasis)
-                                    .foregroundStyle(DesignTokens.Color.textPrimary)
-                                    .lineLimit(1)
-                            }
-                        }
-
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.leading, leadingInset)
-                    .padding(.trailing, DesignTokens.Spacing.spacing4)
-
-                    HStack(spacing: 0) {
-                        Spacer(minLength: leadingInset)
-                        tabStrip
-                            .layoutPriority(1)
-                        Spacer(minLength: leadingInset)
-                    }
-                    .padding(.trailing, DesignTokens.Spacing.spacing4)
-                }
-                .frame(height: DesignTokens.Layout.shellChromeBarHeight, alignment: .center)
-
-                Rectangle()
-                    .fill(DesignTokens.Color.borderHairline)
-                    .frame(height: DesignTokens.Layout.borderWidth)
-            }
-            .padding(.top, DesignTokens.Layout.shellChromeSafeAreaTop)
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
-            .background {
+            ZStack(alignment: .top) {
                 palette.shellChrome
                     .ignoresSafeArea(edges: .top)
+
+                VStack(spacing: 0) {
+                    ZStack(alignment: .leading) {
+                        HStack(spacing: DesignTokens.Spacing.spacing3) {
+                            if !brandAlignsWithNavigationRail {
+                                HStack(spacing: DesignTokens.Spacing.spacing2) {
+                                    OWBrandMark(size: compact ? 18 : 20)
+                                    Text("OpenWrite")
+                                        .font(compact ? OWTypography.captionEmphasis : OWTypography.bodyEmphasis)
+                                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                                        .lineLimit(1)
+                                }
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.leading, leadingInset)
+                        .padding(.trailing, DesignTokens.Spacing.spacing4)
+
+                        HStack(spacing: 0) {
+                            Spacer(minLength: leadingInset)
+                            tabStrip
+                                .layoutPriority(1)
+                            Spacer(minLength: leadingInset)
+                        }
+                        .padding(.trailing, DesignTokens.Spacing.spacing4)
+                    }
+                    .frame(height: DesignTokens.Layout.shellChromeBarHeight, alignment: .center)
+
+                    Rectangle()
+                        .fill(DesignTokens.Color.borderHairline)
+                        .frame(height: DesignTokens.Layout.borderWidth)
+                }
+                .padding(.top, DesignTokens.Layout.shellChromeSafeAreaTop)
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
             }
         }
         .frame(height: DesignTokens.Layout.shellChromeSafeAreaTop + DesignTokens.Layout.shellChromeBarHeight + DesignTokens.Layout.borderWidth)
