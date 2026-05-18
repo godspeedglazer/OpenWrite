@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Date:** 2026-05-17  
-**Branch:** `main` (HEAD `3e5849e` + working-tree shell/editor polish)  
+**Branch:** `main` (HEAD `cfcff62` + Welcome/chat stability pass)  
 **Audience:** Next engineer, designer, or Cursor agent taking ownership
 
 This document is the **single honest snapshot** of OpenWrite as it exists today. Read it before touching code. For the mandated next workstream, start with **[AGENT_PROMPT_UI_REFACTOR.md](./AGENT_PROMPT_UI_REFACTOR.md)**.
@@ -19,15 +19,23 @@ OpenWrite is a **local macOS app-of-apps**: one encrypted vault where you **writ
 
 **Posture:** **Writing-first, AI-second** (Reor “dual-generator” model). The LLM retrieves and suggests when invoked; it does not own the center column.
 
+### Current stability (2026-05-17)
+
+| Area | Status |
+|------|--------|
+| **Welcome editor** | **Fixed (in progress on user machines)** — `cfcff62` removed async `layout()` re-entry on `BlockEditorPasteCaptureView`; measure is read-only in `sizeThatFits`; apply only from `updateNSView`. If CPU still spikes, verify no local diff re-added `scheduleLayout` in `sizeThatFits`. |
+| **Chat connect** | **Improved** — connect step stays honest until first token; **30s** cap (`AISafetyLimits.chatStreamTimeoutSeconds`) fails connect + runs `diagnoseChatFailure` when LM Studio is off. Vault search already has 15s timeout → lexical fallback. |
+| **Launch selection** | Primary vault opens **Welcome to OpenWrite** when nothing else is selected (`VaultStore.bootstrapOnLaunch`). |
+
 ### Current state (honest)
 
 | Area | Reality |
 |------|---------|
 | **UI / shell** | **Phase 0 largely landed** — custom rail, flush titlebar accessory, centered editor column, collapsible Reor-style assist strip, themed scroll remeasure. Still not App Store “done”; needs visual QA on user machines. |
 | **Backend / vault** | In-memory demo vault + encryption **stubs**. No production `.openwrite` package, Keychain unlock, or FSEvents indexer on disk. |
-| **RAG / AI** | **Largely scaffolded:** `LMStudioClient`, `RAGService`, `EmbeddingService`, `InMemoryVectorStore`, `IngestionPipeline` exist; end-to-end answers with citations, persisted index, and streaming are incomplete. |
-| **NDL / editor** | Block model + partial parser + `OWBlockEditorView` / preview rows — **not** a Logseq-grade outliner (no indent/outdent, slash menu, drag reorder). |
-| **Documentation** | Strong: master plan, ADRs, design canon, 357-row feature matrix, epics. Code has not caught up to docs. |
+| **RAG / AI** | **Works when LM Studio is up:** streaming chat, vault index + markdown ingest, hybrid retrieval, citation pills. **Fails fast** when server down (timeouts + diagnosis). Persisted index across restarts still incomplete. |
+| **NDL / editor** | Block model + `OWBlockEditorView` / AppKit per-block fields — **not** Affine BlockSuite or full Logseq outliner (no indent/outdent, slash menu, drag reorder). |
+| **Documentation** | Strong: master plan, ADRs, design canon, 357-row feature matrix, epics. Code has not caught up to docs on crypto/persistence. |
 
 **Bottom line:** The repo is a **well-documented Phase 1–2 scaffold** with recent UI iteration (themes, shell, graph fix) that still fails the bar set in [docs/ProductDirection.md](docs/ProductDirection.md) and [docs/design/FrontendPriorities.md](docs/design/FrontendPriorities.md).
 
@@ -97,7 +105,7 @@ Statuses: **done** = usable on `main`; **partial** = scaffold or weak UX; **brok
 | **Vault (in-memory)** | partial | `VaultStore`, `VaultSnapshot`, sample docs; reconcile on delete/import |
 | **Vault encryption (real)** | partial / broken for prod | `EncryptionService` protocol stub; no CryptoKit disk vault |
 | **NDL model** | partial | `NoteBlock`, `NDLParser` — not full round-trip or outliner ops |
-| **Block editor UI** | partial (improved) | `OWBlockEditorView`, `OWPreviewBlockRow`, `EditorView` — formatting toolbar, preview mode, centered column, list inset fix |
+| **Block editor UI** | partial (improved) | `OWBlockEditorView`, `OWPreviewBlockRow`, `EditorView` — measure/apply split, Welcome layout loop fix; formatting toolbar, preview mode |
 | **Typed pages** | partial | `PageType`, `PageProperties`, `TypePickerView`, `PropertyInspectorView` |
 | **Page header / hero** | partial | `OWPageHeaderEditor`, `OWPageHero`, `OWPageBanner`, `CoverStyle` |
 | **Universal databases** | partial | `OWDatabase`, `DatabaseTableView`, `CreateDatabaseSheet` — no full lens over all page kinds |
@@ -108,7 +116,7 @@ Statuses: **done** = usable on `main`; **partial** = scaffold or weak UX; **brok
 | **LM Studio client** | partial | `LMStudioClient`, health in Settings |
 | **RAG pipeline** | partial | `RAGService`, `RetrievalService`, `HybridRanker` — in-memory index only |
 | **Embeddings / ingestion** | partial | `EmbeddingService`, `IngestionPipeline`, `IngestionHealth` |
-| **Vault chat / related** | partial (improved) | `ChatPanelView`, `RelatedNotesView` — assist strip; 2×2 composer; scroll softlock fixed |
+| **Vault chat / related** | partial (improved) | `ChatPanelView` — honest connect step, 30s stream timeout, `diagnoseChatFailure`; Related notes in assist strip |
 | **Agents registry** | partial | `AgentRegistry`, `BuiltInAgents` (Reor port notes in `ReorPortNotes.md`) |
 | **Past Writes** | partial | `PastWritesService`, timeline UI, `REMImportAdapter` stub |
 | **Inline AI assist** | partial | `InlineAssistController` — popover path started, not product-grade |
@@ -136,7 +144,9 @@ Prioritize these in user demos and the UI refactor.
 |-------|---------|---------|
 | **Source Serif 4 “not loading” banner** | Yellow/warning strip on page header/banner | `OWTypography.isBundledSerifAvailable` false at runtime → `OWTypographyFontWarningBanner`. Fonts exist under `Resources/Fonts/` and `Info.plist` `UIAppFonts`; PostScript names must match (`SourceSerif4-Regular`, etc.). Banner is intentional honesty, still **embarrassing** if it shows in every build. |
 | **Titlebar grey strip** | Native vibrancy band above cream shell on some macOS builds | `OWSolidTitlebarAccessory` + theme-frame paint; verify after theme switch / fullscreen |
-| **Block editor layout** | Residual spacing edge cases in preview vs edit | Toolbar, preview mode, and scroll remeasure landed; outliner ops still missing |
+| **Welcome editor crash / CPU** | Was SIGABRT / 99% CPU on Welcome | **cfcff62** + follow-up: no `layout()` async re-entry; read-only `sizeThatFits`. Re-test after build. |
+| **Chat stuck on “Connecting…”** | Spinner forever when LM Studio off | **30s timeout** + failed connect step + diagnosis message. |
+| **Block editor layout** | Residual spacing edge cases in preview vs edit | Toolbar, preview mode, scroll remeasure; outliner ops still missing |
 | **Anytype gap** | Density / object rows vs reference captures | Assist strip capped and off by default; rail uses custom rows not `List` |
 | **Graph was broken; now “OK scaffold”** | Pre-**932e576**: huge circles, bad edges, missing nodes | Fixed: rounded-rect cards, force-directed lite, border edges, all docs visible. **UI overall still weak** — graph is not the product win yet. |
 | **RAG without citations** | Chat feels generic when LM Studio is up | E-03 not complete; undermines “research” story. |
@@ -186,6 +196,10 @@ Read with `git show <hash>`. Messages are the changelog.
 
 | Hash | Summary |
 |------|---------|
+| **(next)** | Welcome `sizeThatFits` measure-only; chat 30s connect timeout; launch selects Welcome; HANDOFF refresh. |
+| **cfcff62** | Fix Welcome editor layout loop (remove async `layout()` on paste host); chat connect honesty; vector store / stepper polish. |
+| **cd731b5** | Consolidation: honest chat pipeline, scroll pin, theme propagation, layout safety. |
+| **218bdc1** | Unify editor layout, themes, window chrome stability. |
 | **3e5849e** | Tighten chat composer vertical layout in assist strip. |
 | **60d5513** | Fix editor preview mode toggle relayout in block host. |
 | **04bffeb** | Flush titlebar chrome, theme Create page sheet, Solarized cover preset. |
@@ -196,6 +210,43 @@ Read with `git show <hash>`. Messages are the changelog.
 | **932e576** | `fix(graph): rect nodes, layout spacing, and edge rendering` — Graph layout/edges; `OWPageHeaderEditor`, sidebar sections, typography expansion, vault attachments, cover styles. |
 
 Earlier: **0ce1c1c** (window on launch), **ad26135** (initial scaffold).
+
+### Writing core (what landed vs not)
+
+| Landed | Not done |
+|--------|----------|
+| `EditorView` + `OpenWriteThemedScrollView` with `editorScrollLayoutToken` remeasure on rail/assist toggle | Affine / BlockSuite document model |
+| `OWBlockEditorView` AppKit host; per-block `OWBlockTextEditor`; structure vs content revisions | Logseq indent/outdent, slash menu, drag reorder |
+| Measure/apply split on paste host (AttributeGraph-safe) | Full NDL round-trip + property blocks in body |
+| Block formatting toolbar, preview mode, image paste | Persistent vault bundle on disk |
+
+### Inline AI
+
+| Piece | Status |
+|-------|--------|
+| `InlineAssistController` + selection refine presets | **Partial** — refine sheet/popover; needs LM Studio + selection |
+| Chat strip refine | Separate from inline; vault context when indexed |
+
+### RAG / ingestion
+
+- **Requires LM Studio** (or compatible OpenAI API) for chat completions and preferred embeddings.
+- **Circuit breaker:** embedding failures cool down remote calls (`embeddingCircuitCooldownSeconds`); hash fallback vectors.
+- **Index:** in-memory + launch `prepareVaultIndex`; on-disk `Welcome.md` + vault markdown catalog; Settings shows rebuild status.
+- **Chat:** 15s vault search timeout → lexical fallback; **30s** connect/stream timeout when model never responds.
+
+### Themes
+
+- **13 palettes** via `ThemeManager` / `ThemePickerView` — see [docs/design/Themes.md](docs/design/Themes.md).
+- **Known gaps:** titlebar vibrancy on some builds; Source Serif banner if PostScript names mismatch; not all tokens propagate to AppKit text views until `themeRevision` bump.
+
+### QA checklist (agents)
+
+1. **Build:** `xcodebuild -scheme OpenWrite -configuration Debug build -derivedDataPath /tmp/OpenWriteDerived`
+2. **Welcome:** launch → open Welcome → scroll entire page → CPU stable, no blank column.
+3. **Chat (LM Studio off):** send message → connect step fails within **30s** with actionable text (not infinite dots).
+4. **Chat (LM Studio on):** first token completes connect step; sources pills when vault search on.
+5. **Themes:** switch palette → editor + chat readable; no white void in scroll column.
+6. **Graph:** open Graph object → nodes visible, resize window without runaway layout.
 
 ---
 

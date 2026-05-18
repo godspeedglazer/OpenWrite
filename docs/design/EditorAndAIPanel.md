@@ -106,8 +106,8 @@ Future: collapse inspector below ~900pt window width per [Components.md § Workb
 
 | Phase | Where | Rules |
 |-------|--------|--------|
-| **Measure (read-only)** | `sizeThatFits`, `intrinsicContentSize`, scroll height probe | Width probe + `fittingSize` / `intrinsicContentSize` only — **never** `layoutSubtreeIfNeeded` (AttributeGraph precondition). |
-| **Apply (async)** | `BlockEditorPasteHost.updateNSView` → `scheduleLayout` → `applyDocumentLayout` | Full subtree layout on next run-loop turn; sets paste-host + hosted frames. |
+| **Measure (read-only)** | `BlockEditorPasteHost.sizeThatFits`, `measureDocumentSize`, scroll height probe | Width probe + `fittingSize` / `intrinsicContentSize` only — **never** `layoutSubtreeIfNeeded` or `scheduleLayout` (AttributeGraph precondition). |
+| **Apply (async)** | `BlockEditorPasteHost.updateNSView` → `scheduleLayout` → `applyDocumentLayout` | Full subtree layout on next run-loop turn only; early-outs when width/height unchanged. |
 | **Revisions** | `blocksStructureRevision` (kind/attrs/id), `blocksContentRevision` (text/checked) | Structure rebuilds hosted root; content schedules apply without rebuilding rows. |
 
 | Piece | Role |

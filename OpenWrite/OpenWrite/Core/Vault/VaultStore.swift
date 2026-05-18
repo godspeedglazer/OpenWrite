@@ -283,6 +283,11 @@ final class VaultStore: ObservableObject {
             VaultLaunchPreferences.didSeedDemoOnFirstLaunch = true
             _ = installDemoVault(selectHub: false)
         }
+        reconcileSelections()
+        if selectedDocumentID == nil,
+           documents.contains(where: { $0.id == VaultDocument.welcomeDocumentID && $0.belongsToVault(activeVaultID) }) {
+            selectedDocumentID = VaultDocument.welcomeDocumentID
+        }
     }
 
     /// Idempotent demo install. Returns `true` when new pages were added.

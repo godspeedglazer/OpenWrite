@@ -237,6 +237,7 @@ final class ChatPanelModel: ObservableObject {
 
                 // Do not complete "connect" until the HTTP stream succeeds (first token or `.streaming`).
                 var connectStepFinished = false
+                let connectDeadline = Date().addingTimeInterval(AISafetyLimits.chatStreamTimeoutSeconds)
 
                 for try await event in services.rag.streamAnswer(
                     context: context,
@@ -244,6 +245,15 @@ final class ChatPanelModel: ObservableObject {
                     history: priorHistory
                 ) {
                     try Task.checkCancellation()
+                    if !connectStepFinished, Date() >= connectDeadline {
+                        throw ChatPanelStreamError(
+                            message: """
+                            Timed out connecting to \(services.lmConfig.chatModelDisplay) after \
+                            \(Int(AISafetyLimits.chatStreamTimeoutSeconds)) seconds. \
+                            Start LM Studio (or your configured server) and load the chat model.
+                            """
+                        )
+                    }
                     switch event.kind {
                     case .activity(let state):
                         if state != .idle {
@@ -296,6 +306,31 @@ final class ChatPanelModel: ObservableObject {
                         clearPipelineTimingState(for: assistantIndex)
                         services.setActivity(.idle)
                     }
+                }
+
+                if !connectStepFinished {
+                    await failConnectPipelineStep(
+                        at: assistantIndex,
+                        reason: "Timed out after \(Int(AISafetyLimits.chatStreamTimeoutSeconds))s",
+                        connectStepFinished: &connectStepFinished
+                    )
+                    let diagnosed = await services.diagnoseChatFailure(
+                        ChatPanelStreamError(
+                            message: """
+                            Timed out connecting to \(services.lmConfig.chatModelDisplay). \
+                            Start LM Studio and load the chat model, or change Chat model in Settings.
+                            """
+                        )
+                    )
+                    mutateMessage(at: assistantIndex) { message in
+                        message.text = diagnosed
+                        message.isError = true
+                        message.isStreaming = false
+                    }
+                    markPipelineFailed(at: assistantIndex)
+                    clearPipelineTimingState(for: assistantIndex)
+                    services.setActivity(.idle)
+                    return
                 }
 
                 if assistantIndex < messages.count,

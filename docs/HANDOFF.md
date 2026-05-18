@@ -3,6 +3,14 @@
 **Last updated:** 2026-05-17  
 **Scope:** Frontend perception pass (Refactor Phase 0) — not backend, NDL grammar, or vault crypto.
 
+### Current stability (2026-05-17)
+
+| Area | Status |
+|------|--------|
+| **Welcome editor** | Layout loop fix in **cfcff62**; follow-up keeps `sizeThatFits` measure-only. Re-test Welcome after each editor host change. |
+| **Chat** | Honest connect until first token; **30s** timeout + `diagnoseChatFailure` when server/model unavailable. |
+| **Launch** | `VaultStore.bootstrapOnLaunch` selects Welcome when no document selected. |
+
 ### Implementation snapshot (2026-05-17)
 
 | Area | Shipped in code |
@@ -12,7 +20,8 @@
 | **Editor column** | `openWriteEditorContentWidth()` centers readable column (~880pt); `editorScrollLayoutToken` remeasures `OpenWriteThemedScrollView` when assist/rail toggles. |
 | **Chat** | `ChatPanelView` — 2×2 composer board (`composerBoardHeight`), `scrollToBottomOnTokenChange` for transcript only; `OWChatStatusStepper` baseline-aligned rail. |
 | **Scroll** | `OpenWriteThemedScrollContainer` remeasures hosting height on clip resize (deferred apply; read-only measure). |
-| **Editor layout** | Block paste host: measure in `sizeThatFits`, apply on next run loop — fixes example-workspace SIGABRT from `layoutSubtreeIfNeeded` during AttributeGraph update. |
+| **Editor layout** | Block paste host: **read-only** measure in `sizeThatFits`; apply only from `updateNSView` → `scheduleLayout` — fixes Welcome SIGABRT / CPU loop. |
+| **Chat timeout** | `AISafetyLimits.chatStreamTimeoutSeconds` (30s); failed connect step + diagnosis when LM Studio off. |
 | **Graph** | `GraphView` + `OWRoundedRect.editorPanel` maxHeight; empty overlay when linkless; layout clamp on resize. |
 | **Sheets** | `openWriteSheetPresentationChrome()` — cream `background` token on Create page / database sheets. |
 | **AI / RAG** | Agent presets differ by topK, excerpt width, temperature, and answer format (`AgentRegistry`). Vault index: active-vault pages + `VaultMarkdownCatalog` `.md`; launch `prepareVaultIndex`; search timeout → lexical fallback. Settings shows index + ingestion status. |

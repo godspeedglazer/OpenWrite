@@ -41,6 +41,8 @@ enum AISafetyLimits {
     static let embeddingUnreachableNoticeIntervalSeconds: TimeInterval = 90
     /// Whole vault search phase in chat (embed + vector scan); then chat continues with no hits.
     static let vaultSearchTimeoutSeconds: TimeInterval = 15
+    /// Chat HTTP connect + first streamed token; fails connect step when LM Studio is down.
+    static let chatStreamTimeoutSeconds: TimeInterval = 30
     static let webFetchMaxRedirects = 3
     static let maxWebURLsPerMessage = 2
     static let maxWebTextChars = 12_000

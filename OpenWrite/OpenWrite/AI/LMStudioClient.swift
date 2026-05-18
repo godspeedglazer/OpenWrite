@@ -184,7 +184,10 @@ struct LMStudioClient: Sendable {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        request.timeoutInterval = config.timeoutSeconds
+        request.timeoutInterval = min(
+            config.timeoutSeconds,
+            AISafetyLimits.chatStreamTimeoutSeconds
+        )
         applyAuth(&request)
 
         let body: [String: Any] = [

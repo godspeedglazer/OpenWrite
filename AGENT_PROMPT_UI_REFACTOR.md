@@ -8,7 +8,7 @@ Copy everything below the line into a **new Cursor agent** (Agent mode) at the O
 
 Refactor OpenWrite’s **entire product UI** to **Anytype-level polish and cohesion** (density, filled surfaces, calm rail, editorial typography, object-row quality) while **never copying Anytype code** (ASAL) or shipping their Electron framework.
 
-OpenWrite is **writing-first, AI-second**. The editor column is the hero; local AI is a secondary inspector strip. Backend/RAG completeness is **out of scope** for this mission unless a tiny UI hook requires a stub fix.
+OpenWrite is **writing-first, AI-second**. The editor column is the hero; local AI is a secondary inspector strip. Backend/RAG completeness is **out of scope** for this mission unless a tiny UI hook requires a stub fix. **Do not regress:** Welcome editor measure/apply split (`OWBlockEditorView`), chat connect timeout (`ChatPanelView` + `AISafetyLimits.chatStreamTimeoutSeconds`).
 
 **Workspace:** `/Users/erichspringer/Downloads/OpenWrite`  
 **Shipping code only:** `OpenWrite/OpenWrite/` and `OpenWrite/OpenWrite.xcodeproj`  
@@ -18,7 +18,7 @@ OpenWrite is **writing-first, AI-second**. The editor column is the hero; local 
 
 ## Read first (in order)
 
-1. **[HANDOFF.md](./HANDOFF.md)** — honest current state, broken list, commits, build steps.
+1. **[HANDOFF.md](./HANDOFF.md)** — honest current state, **Welcome/chat stability**, broken list, commits, build steps.
 2. **[docs/ProductDirection.md](docs/ProductDirection.md)** — writing-first layout, reference screenshots table, competitor roles.
 3. **[docs/design/ProductDirection.md](docs/design/ProductDirection.md)** — UI non-negotiables.
 4. **[docs/design/FrontendPriorities.md](docs/design/FrontendPriorities.md)** — P0 checklist and sequencing.
