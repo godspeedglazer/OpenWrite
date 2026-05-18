@@ -33,6 +33,7 @@ struct WorkbenchInspectorView: View {
                     RelatedNotesView()
                 case .pastWrites:
                     PastWritesTimelineView(
+                        workbench: workbench,
                         pastWrites: pastWrites,
                         filterNoteID: vaultStore.selectedDocumentID
                     )

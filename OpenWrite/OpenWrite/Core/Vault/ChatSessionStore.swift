@@ -54,6 +54,12 @@ enum ChatSessionStore {
         return thread.id
     }
 
+    static func loadThread(id: UUID) -> SavedChatThread? {
+        let url = sessionsDirectory.appendingPathComponent("\(id.uuidString).json")
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(SavedChatThread.self, from: data)
+    }
+
     static func loadRecent(limit: Int = 20) -> [SavedChatThread] {
         guard let urls = try? FileManager.default.contentsOfDirectory(
             at: sessionsDirectory,

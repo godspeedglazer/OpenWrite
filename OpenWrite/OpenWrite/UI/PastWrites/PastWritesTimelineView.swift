@@ -1,5 +1,86 @@
 import SwiftUI
 
+private enum PastTimelineMode: String, CaseIterable, Hashable {
+    case edits = "Edits"
+    case chats = "Chats"
+}
+
+/// Archived vault chat threads (saved when the user taps Clear).
+struct PastChatSessionsView: View {
+    @ObservedObject var workbench: WorkbenchState
+    @State private var threads: [SavedChatThread] = []
+
+    var body: some View {
+        Group {
+            if threads.isEmpty {
+                OWEmptyState(
+                    title: "No past chats yet",
+                    icon: .chat,
+                    description: Text("Tap Clear in Chat to archive a conversation here.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                        ForEach(threads) { thread in
+                            chatRow(thread)
+                        }
+                    }
+                    .padding(.top, DesignTokens.Spacing.spacing1)
+                }
+            }
+        }
+        .onAppear { reload() }
+    }
+
+    private func reload() {
+        threads = ChatSessionStore.loadRecent(limit: 40)
+    }
+
+    private func chatRow(_ thread: SavedChatThread) -> some View {
+        Button {
+            workbench.archivedChatThreadIDToOpen = thread.id
+            workbench.aiAssistExpanded = true
+            workbench.persistChromePreferences()
+        } label: {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(thread.contextSummary.map { String($0.prefix(72)) } ?? "Chat")
+                        .font(OWTypography.subheadlineEmphasis)
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Spacer(minLength: DesignTokens.Spacing.spacing2)
+                    Text("\(thread.turns.count)")
+                        .font(OWTypography.caption2.monospacedDigit())
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                }
+                Text(thread.savedAt, style: .relative)
+                    .font(OWTypography.caption2)
+                    .foregroundStyle(DesignTokens.Color.textTertiary)
+                if let preview = thread.turns.last(where: { $0.role == "assistant" })?.text {
+                    Text(preview)
+                        .font(OWTypography.caption)
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .lineLimit(2)
+                }
+            }
+            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+            .padding(.vertical, DesignTokens.Spacing.spacing3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                DesignTokens.Color.surfaceElevated,
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .strokeBorder(DesignTokens.Color.borderSubtle.opacity(0.65), lineWidth: DesignTokens.Layout.borderWidth)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private enum PastWritesWindow: Double, CaseIterable, Hashable {
     case sixHours = 6
     case twentyFourHours = 24
@@ -16,9 +97,12 @@ private enum PastWritesWindow: Double, CaseIterable, Hashable {
 
 /// Minimal Past Writes timeline for the workbench inspector (vault edit sessions + future REM rows).
 struct PastWritesTimelineView: View {
+    @ObservedObject var workbench: WorkbenchState
     @ObservedObject var pastWrites: InMemoryPastWritesService
     var filterNoteID: UUID?
+    @State private var mode: PastTimelineMode = .chats
     @State private var window: PastWritesWindow = .twentyFourHours
+    @State private var chatsRefreshToken = 0
 
     private var entries: [WritingContextEntry] {
         let since = Date().addingTimeInterval(-window.rawValue * 3600)
@@ -32,7 +116,10 @@ struct PastWritesTimelineView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
             header
-            if entries.isEmpty {
+            if mode == .chats {
+                PastChatSessionsView(workbench: workbench)
+                    .id(chatsRefreshToken)
+            } else if entries.isEmpty {
                 OWEmptyState(
                     title: "No past writes yet",
                     icon: .pastWrites,
@@ -53,21 +140,36 @@ struct PastWritesTimelineView: View {
         .padding(DesignTokens.Spacing.assistStripContentPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(DesignTokens.Color.background)
+        .onAppear {
+            if mode == .chats { chatsRefreshToken += 1 }
+        }
+        .onChange(of: mode) { _, newMode in
+            if newMode == .chats { chatsRefreshToken += 1 }
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-            Text("Past Writes")
+            Text("Past")
                 .font(OWTypography.panelTitle)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
-            Text("Writing sessions from vault edits (optional rem+ import).")
+            Text(mode == .chats
+                ? "Archived chat threads from Clear."
+                : "Writing sessions from vault edits (optional rem+ import).")
                 .font(OWTypography.caption)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
             OWThemedSegmentedControl(
-                selection: $window,
-                options: Array(PastWritesWindow.allCases),
-                title: \.label
+                selection: $mode,
+                options: Array(PastTimelineMode.allCases),
+                title: \.rawValue
             )
+            if mode == .edits {
+                OWThemedSegmentedControl(
+                    selection: $window,
+                    options: Array(PastWritesWindow.allCases),
+                    title: \.label
+                )
+            }
         }
     }
 
@@ -126,6 +228,6 @@ struct PastWritesTimelineView: View {
 }
 
 #Preview {
-    PastWritesTimelineView(pastWrites: .preview)
+    PastWritesTimelineView(workbench: WorkbenchState(), pastWrites: .preview)
         .frame(width: 280, height: 400)
 }

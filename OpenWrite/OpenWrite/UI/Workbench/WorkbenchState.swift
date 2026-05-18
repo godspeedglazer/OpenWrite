@@ -12,6 +12,8 @@ final class WorkbenchState: ObservableObject {
     @Published var centerTab: CenterWorkbenchTab = .editor
     @Published var inspectorTab: InspectorTab = .chat
     @Published var aiAssistNavigation = AIAssistNavigationState()
+    /// Set by Past chat list; consumed by `ChatPanelView` to restore an archived thread.
+    @Published var archivedChatThreadIDToOpen: UUID?
     /// Optional filter when an object-type row is chosen in the sidebar (scoped per vault).
     @Published var vaultTypeFilter: PageType?
     private var vaultTypeFilters: [UUID: PageType?] = [:]

@@ -27,6 +27,10 @@ struct AIAssistStripView: View {
         measuredWidth < DesignTokens.Layout.assistStripDefaultWidth
     }
 
+    private var stripIconsOnly: Bool {
+        measuredWidth < DesignTokens.Layout.assistStripIconsOnlyThreshold
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             assistToolbar
@@ -76,6 +80,7 @@ struct AIAssistStripView: View {
             RelatedNotesView()
         case .pastWrites:
             PastWritesTimelineView(
+                workbench: workbench,
                 pastWrites: pastWrites,
                 filterNoteID: vaultStore.selectedDocumentID
             )
@@ -94,7 +99,7 @@ struct AIAssistStripView: View {
                         options: Array(InspectorTab.allCases),
                         title: \.title,
                         icon: \.owIcon,
-                        iconsOnly: stripIsCompact
+                        iconsOnly: stripIconsOnly
                     )
                 } trailing: {
                     assistToolbarTrailing

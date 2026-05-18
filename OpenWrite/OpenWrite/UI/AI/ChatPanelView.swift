@@ -152,10 +152,25 @@ final class ChatPanelModel: ObservableObject {
                                 title: "Fetched \(count) page\(count == 1 ? "" : "s")"
                             )
                         } else {
-                            updatePipelineStepTitle(at: assistantIndex, id: "web", title: "Web fetch failed")
+                            updatePipelineStepTitle(at: assistantIndex, id: "web", title: "Couldn't fetch page")
+                            setPipelineStep(at: assistantIndex, id: "web", status: .failed)
                         }
                     }
-                    await completePipelineStep(at: assistantIndex, id: "web")
+                    await completePipelineStep(at: assistantIndex, id: "web", skipDelay: webPages.isEmpty)
+                    if webPages.isEmpty {
+                        await MainActor.run {
+                            guard assistantIndex < messages.count else { return }
+                            messages[assistantIndex].text = """
+                            Couldn't load the linked page. Turn on Web, use HTTPS, and check Settings if you use a domain allowlist.
+                            """
+                            messages[assistantIndex].isError = true
+                            messages[assistantIndex].isStreaming = false
+                            markPipelineFailed(at: assistantIndex)
+                            clearPipelineTimingState(for: assistantIndex)
+                            services.setActivity(.idle)
+                        }
+                        return
+                    }
                     await MainActor.run {
                         guard assistantIndex < messages.count else { return }
                         if searchesVault {
@@ -369,9 +384,40 @@ final class ChatPanelModel: ObservableObject {
         }
 
         messages.removeAll()
+        pipelineStepActivatedAt.removeAll()
+        respondStepFirstTokenAt.removeAll()
         retrievalSummary = nil
+        draft = ""
         pendingAttachments = []
         attachmentError = nil
+        services.setActivity(.idle)
+        services.lastChatError = nil
+    }
+
+    /// Restores a thread archived via Clear (read-only transcript; user can continue by sending a new message).
+    func loadArchivedThread(_ thread: SavedChatThread, services: OpenWriteAIServices) {
+        streamTask?.cancel()
+        streamTask = nil
+        messages = thread.turns.map { turn in
+            let role: ChatMessage.Role = turn.role == "user" ? .user : .assistant
+            return ChatMessage(
+                role: role,
+                text: turn.text,
+                sourceHits: [],
+                attachmentNames: [],
+                isStreaming: false,
+                isError: false
+            )
+        }
+        pipelineStepActivatedAt.removeAll()
+        respondStepFirstTokenAt.removeAll()
+        retrievalSummary = nil
+        draft = ""
+        pendingAttachments = []
+        attachmentError = nil
+        if services.selectedAgentID != thread.agentID {
+            services.selectedAgentID = thread.agentID
+        }
         services.setActivity(.idle)
         services.lastChatError = nil
     }
@@ -655,6 +701,10 @@ struct ChatPanelView: View {
         assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
     }
 
+    private var composerTogglesIconOnly: Bool {
+        assistStripWidth < DesignTokens.Layout.assistStripIconsOnlyThreshold
+    }
+
     var body: some View {
         Group {
             switch effectiveScreen {
@@ -663,6 +713,13 @@ struct ChatPanelView: View {
             case .conversation:
                 conversationPanel
             }
+        }
+        .onChange(of: workbench.archivedChatThreadIDToOpen) { _, threadID in
+            guard let threadID, let thread = ChatSessionStore.loadThread(id: threadID) else { return }
+            model.loadArchivedThread(thread, services: aiServices)
+            workbench.archivedChatThreadIDToOpen = nil
+            workbench.inspectorTab = .chat
+            navigation.openChatThread()
         }
     }
 
@@ -896,6 +953,7 @@ struct ChatPanelView: View {
                     steps: message.pipelineSteps,
                     showsStreamingDots: message.isStreaming
                 )
+                .padding(.leading, DesignTokens.Spacing.spacing1)
             }
 
             if showsAssistantBubble(message) {
@@ -1029,21 +1087,29 @@ struct ChatPanelView: View {
                 pendingAttachmentRow
             }
 
-            if stripIsCompact {
-                HStack(spacing: 12) {
-                    OWThemedToggle(label: "Search notes", isOn: $model.searchVaultEnabled)
-                    OWThemedToggle(label: "Web", isOn: $model.webLookupEnabled)
-                }
-            } else {
-                HStack(spacing: 12) {
-                    OWThemedToggle(label: "Search notes", isOn: $model.searchVaultEnabled)
-                    OWThemedToggle(label: "Web", isOn: $model.webLookupEnabled)
-                        .help("Fetch HTTPS links in your message (off by default). No in-page JavaScript.")
+            HStack(spacing: composerTogglesIconOnly ? 8 : 12) {
+                OWThemedToggle(
+                    label: "Search notes",
+                    isOn: $model.searchVaultEnabled,
+                    showsLabel: !composerTogglesIconOnly
+                )
+                .help("Search notes")
+                .frame(maxWidth: composerTogglesIconOnly ? nil : .infinity, alignment: .leading)
+
+                OWThemedToggle(
+                    label: "Web",
+                    isOn: $model.webLookupEnabled,
+                    showsLabel: !composerTogglesIconOnly
+                )
+                .help("Fetch HTTPS links in your message (off by default). No in-page JavaScript.")
+
+                if !composerTogglesIconOnly {
                     Spacer(minLength: 0)
                     Text(aiServices.lmConfig.embeddingModelDisplay)
                         .font(OWTypography.caption2)
                         .foregroundStyle(DesignTokens.Color.textTertiary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
 
