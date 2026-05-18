@@ -698,23 +698,11 @@ struct ChatPanelView: View {
     @Environment(\.aiAssistStripWidth) private var assistStripWidth
     @StateObject private var model = ChatPanelModel()
     @State private var showFileImporter = false
-    /// Hysteresis latch so crossing `assistStripIconsOnlyThreshold` does not flicker chip ↔ icon layout.
-    @State private var composerTogglesIconOnly = false
 
     private var navigation: AIAssistNavigationState { workbench.aiAssistNavigation }
 
     private var stripIsCompact: Bool {
         assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
-    }
-
-    /// Between default strip width and icon-only threshold: shorter toggle captions.
-    private var composerTogglesAbbreviated: Bool {
-        assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
-            && !composerTogglesIconOnly
-    }
-
-    private var showsComposerModelLabel: Bool {
-        !composerTogglesIconOnly
     }
 
     var body: some View {
@@ -733,27 +721,11 @@ struct ChatPanelView: View {
             workbench.inspectorTab = .chat
             navigation.openChatThread()
         }
-        .onAppear {
-            syncComposerToggleLayout(for: assistStripWidth)
-        }
-        .onChange(of: assistStripWidth) { _, width in
-            syncComposerToggleLayout(for: width)
-        }
         .onChange(of: model.searchVaultEnabled) { _, _ in
             model.persistComposerToggles()
         }
         .onChange(of: model.webLookupEnabled) { _, _ in
             model.persistComposerToggles()
-        }
-    }
-
-    private func syncComposerToggleLayout(for width: CGFloat) {
-        let threshold = DesignTokens.Layout.assistStripIconsOnlyThreshold
-        let release = threshold + 8
-        if composerTogglesIconOnly {
-            if width >= release { composerTogglesIconOnly = false }
-        } else if width < threshold {
-            composerTogglesIconOnly = true
         }
     }
 
@@ -1112,7 +1084,6 @@ struct ChatPanelView: View {
                 pendingAttachmentRow
             }
 
-            composerToggleRow
             composerInputRow
         }
         .padding(DesignTokens.Spacing.assistStripContentPadding)
@@ -1124,43 +1095,6 @@ struct ChatPanelView: View {
                 .fill(DesignTokens.Color.borderSubtle)
                 .frame(height: DesignTokens.Layout.borderWidth)
         }
-    }
-
-    private var composerToggleRow: some View {
-        HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
-            OWThemedToggleButton(
-                label: "Search notes",
-                isOn: $model.searchVaultEnabled,
-                icon: .search,
-                showsLabel: !composerTogglesIconOnly,
-                abbreviatedLabel: composerTogglesAbbreviated ? "Notes" : nil
-            )
-            .help("Search notes")
-
-            OWThemedToggleButton(
-                label: "Web",
-                isOn: $model.webLookupEnabled,
-                icon: .wiki,
-                showsLabel: !composerTogglesIconOnly
-            )
-            .help("Fetch HTTPS links in your message (off by default). No in-page JavaScript.")
-
-            Spacer(minLength: 0)
-
-            if showsComposerModelLabel {
-                Text(aiServices.lmConfig.embeddingModelDisplay)
-                    .font(OWTypography.caption2)
-                    .foregroundStyle(DesignTokens.Color.textTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .layoutPriority(-1)
-                    .minimumScaleFactor(0.85)
-                    .help(aiServices.lmConfig.embeddingModelDisplay)
-            }
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(minHeight: DesignTokens.Layout.composerActionSize)
-        .animation(nil, value: composerTogglesIconOnly)
     }
 
     private var composerInputRow: some View {
@@ -1177,18 +1111,47 @@ struct ChatPanelView: View {
             .frame(maxWidth: .infinity)
             .disabled(model.isBusy)
 
-            HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
+            composerActionBoard
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// 2×2 control board: Notes / Web on top; Attach + Send (or Stop) on bottom.
+    private var composerActionBoard: some View {
+        let gap = DesignTokens.Layout.composerBoardSpacing
+        let iconSize = DesignTokens.Layout.composerBoardIconSize
+
+        return VStack(spacing: gap) {
+            HStack(spacing: gap) {
+                OWThemedToggleButton(
+                    label: "Search vault notes",
+                    isOn: $model.searchVaultEnabled,
+                    icon: .search,
+                    showsLabel: false
+                )
+                .help("Search vault notes")
+
+                OWThemedToggleButton(
+                    label: "Fetch web pages",
+                    isOn: $model.webLookupEnabled,
+                    icon: .wiki,
+                    showsLabel: false
+                )
+                .help("Fetch web pages")
+            }
+
+            HStack(spacing: gap) {
                 Button {
                     showFileImporter = true
                 } label: {
                     OWUnicodeIconView(
                         icon: .document,
-                        size: 17,
+                        size: iconSize,
                         color: DesignTokens.Color.textSecondary
                     )
                 }
                 .buttonStyle(OWComposerIconButtonStyle())
-                .help("Attach .md, .txt, or .pdf")
+                .help("Attach file")
                 .disabled(model.isBusy)
                 .fileImporter(
                     isPresented: $showFileImporter,
@@ -1207,29 +1170,28 @@ struct ChatPanelView: View {
                     Button {
                         model.cancelSend(services: aiServices)
                     } label: {
-                        OWUnicodeIconView(icon: .stop, size: 14, color: DesignTokens.Color.warning)
+                        OWUnicodeIconView(icon: .stop, size: iconSize, color: DesignTokens.Color.warning)
                     }
                     .buttonStyle(OWComposerStopButtonStyle())
-                    .help("Stop response")
+                    .help("Stop generation")
                 } else {
                     Button {
                         model.send(services: aiServices, agent: aiServices.selectedAgent)
                     } label: {
                         OWUnicodeIconView(
                             icon: .send,
-                            size: 17,
+                            size: iconSize,
                             color: DesignTokens.Color.selectionPill
                         )
                     }
                     .buttonStyle(OWComposerSendButtonStyle(isEnabled: canSendMessage))
                     .disabled(!canSendMessage)
-                    .help("Send")
+                    .help("Send message")
                     .keyboardShortcut(.return, modifiers: [.command])
                 }
             }
-            .fixedSize(horizontal: true, vertical: false)
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .fixedSize(horizontal: true, vertical: true)
     }
 
     private var canSendMessage: Bool {

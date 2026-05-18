@@ -394,7 +394,6 @@ struct AnytypeShellView: View {
                             OWPreviewBlockRow(block: block)
                         }
                     }
-                    .openWriteEditorLeadingInset()
                     .openWriteEditorContentWidth(
                         readableMaxWidth: DesignTokens.Layout.editorMaxContentWidth
                     )

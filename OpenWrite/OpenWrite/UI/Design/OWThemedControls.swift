@@ -165,17 +165,17 @@ struct OWSecondaryRectButtonStyle: ButtonStyle {
     }
 }
 
-/// Composer attach / secondary actions — matches `OWThemedComposerField` height.
+/// Composer attach / secondary actions — square cell in the 2×2 board (`owRect`).
 struct OWComposerIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .frame(width: DesignTokens.Layout.composerActionSize, height: DesignTokens.Layout.composerActionSize)
             .background(
                 DesignTokens.Color.surface.opacity(configuration.isPressed ? 0.85 : 1),
-                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                     .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
             }
             .openWriteFocusChrome()
@@ -193,7 +193,7 @@ struct OWComposerSendButtonStyle: ButtonStyle {
                 DesignTokens.Color.accent.opacity(
                     !isEnabled ? 0.35 : (configuration.isPressed ? 0.82 : 1)
                 ),
-                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
             )
             .openWriteFocusChrome()
     }
@@ -206,10 +206,10 @@ struct OWComposerStopButtonStyle: ButtonStyle {
             .frame(width: DesignTokens.Layout.composerActionSize, height: DesignTokens.Layout.composerActionSize)
             .background(
                 DesignTokens.Color.surfaceElevated.opacity(configuration.isPressed ? 0.8 : 0.95),
-                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                     .strokeBorder(DesignTokens.Color.warning.opacity(0.45), lineWidth: DesignTokens.Layout.borderWidth)
             }
             .openWriteFocusChrome()
@@ -288,7 +288,8 @@ struct OWThemedComposerField: View {
                 maxHeight: DesignTokens.Layout.composerFieldMaxHeight,
                 alignment: .topLeading
             )
-            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+            .padding(.leading, DesignTokens.Layout.composerFieldLeadingInset)
+            .padding(.trailing, DesignTokens.Layout.composerFieldTrailingInset)
             .padding(.vertical, DesignTokens.Spacing.spacing2)
             .background(
                 DesignTokens.Color.surface,
@@ -557,7 +558,7 @@ struct OWThemedToggleButton: View {
         if let icon {
             OWUnicodeIconView(
                 icon,
-                size: 17,
+                size: DesignTokens.Layout.composerBoardIconSize,
                 color: isOn ? DesignTokens.Color.accent : DesignTokens.Color.textSecondary
             )
         }

@@ -336,8 +336,15 @@ enum DesignTokens {
         static let inspectorMaxWidth: CGFloat = assistStripMaxWidth
         static let assistBottomBarHeight: CGFloat = 32
         static let assistStripComposerBottomInset: CGFloat = Spacing.spacing4
-        /// Chat composer attach / send / stop control height (matches `OWThemedComposerField`).
+        /// Chat composer attach / send / stop / toggle cell size (2×2 board beside field).
         static let composerActionSize: CGFloat = 36
+        /// Gap between cells in the composer 2×2 action board.
+        static let composerBoardSpacing: CGFloat = Spacing.spacing2
+        /// Inner text inset for multiline composer (clears left edge of field chrome).
+        static let composerFieldLeadingInset: CGFloat = Spacing.spacing3
+        static let composerFieldTrailingInset: CGFloat = Spacing.spacing2
+        /// Glyph size for composer 2×2 board icons (Notes, Web, attach, send).
+        static let composerBoardIconSize: CGFloat = 18
         /// Max height for multiline chat composer before internal scroll.
         static let composerFieldMaxHeight: CGFloat = 120
         static let centerCardOuterPadding: CGFloat = Spacing.spacing2

@@ -423,10 +423,11 @@ struct OWPreviewBlockRow: View {
 // MARK: - Block card padding
 
 private extension View {
-    /// Inner card breathing room; leading edge comes from `editorContentLeadingInset` on the block list.
+    /// Inner card breathing room; pairs with `openWriteEditorLeadingInset` on the block column.
     func owBlockCardPadding() -> some View {
         padding(.top, DesignTokens.Spacing.spacing3)
             .padding(.bottom, DesignTokens.Spacing.spacing3)
+            .padding(.leading, DesignTokens.Spacing.spacing3)
             .padding(.trailing, DesignTokens.Spacing.spacing3)
     }
 }
