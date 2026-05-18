@@ -2,7 +2,7 @@
 
 Paste or attach this when starting a UI refactor session. Mirror: [docs/AGENT_PROMPT_UI_REFACTOR.md](./docs/AGENT_PROMPT_UI_REFACTOR.md).
 
-**Source of truth for all open issues (P0–P3), file paths, and acceptance criteria:** [HANDOFF.md](./HANDOFF.md) — *OpenWrite — Opus 4.7 Execution Handoff*. Index: [docs/HANDOFF.md](./docs/HANDOFF.md).
+**Source of truth for all open issues (P0–P3), file paths, and acceptance criteria:** [docs/HANDOFF.md](./docs/HANDOFF.md) — *OpenWrite — Opus 4.7 xhigh Execution Handoff*. Pointer: [HANDOFF.md](./HANDOFF.md).
 
 ---
 
@@ -12,8 +12,8 @@ Paste or attach this when starting a UI refactor session. Mirror: [docs/AGENT_PR
 
 ### Current reality (verify on machine)
 
-- **User reports P0 still open:** empty editor body, chat scroll broken, layout/RAM regressions possible — see [HANDOFF.md § Priority 0](./HANDOFF.md#priority-0--app-unusable-fix-in-order).
-- Commits (`dbb8f66`, `efd890b`, `8c228e4`, etc.) are **claims**, not verification — see [What's already committed](./HANDOFF.md#whats-already-committed-honest--may-not-work-for-user).
+- **User reports P0 still open:** empty editor body, chat scroll broken, layout/RAM regressions possible — see [docs/HANDOFF.md §B](./docs/HANDOFF.md#b-p0-blockers-user-verified-screenshots).
+- Commits (`dbb8f66`, `efd890b`, `8c228e4`, etc.) are **claims**, not verification — see [trust table](./docs/HANDOFF.md#whats-already-committed-honest-trust-table).
 
 ### How to verify
 
