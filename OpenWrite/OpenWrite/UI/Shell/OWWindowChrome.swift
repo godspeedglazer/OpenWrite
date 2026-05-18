@@ -318,10 +318,14 @@ private final class OWSolidTitlebarAccessory: NSTitlebarAccessoryViewController 
             .frame
             .maxY ?? 0
         let layoutChrome = window.frame.height - window.contentLayoutRect.maxY
+        let controlsMinimum = DesignTokens.Layout.windowControlTopInset
+            + DesignTokens.Layout.windowControlSize
+            + DesignTokens.Spacing.spacing1
         let height = max(
             trafficLightHeight,
             layoutChrome,
-            DesignTokens.Layout.shellChromeSafeAreaTop
+            DesignTokens.Layout.shellChromeSafeAreaTop,
+            controlsMinimum
         )
 
         if abs(view.frame.height - height) > 0.5 {
@@ -480,6 +484,7 @@ struct OWShellTitleBar: View {
     var body: some View {
         GeometryReader { geometry in
             let compact = geometry.size.width < DesignTokens.Layout.shellCompactBreakpoint
+            let chromeContentHeight = DesignTokens.Layout.shellChromeSafeAreaTop + DesignTokens.Layout.shellChromeBarHeight
             let leadingInset: CGFloat = {
                 if brandAlignsWithNavigationRail {
                     return DesignTokens.Layout.navigationRailBrandLeadingInset
@@ -511,6 +516,7 @@ struct OWShellTitleBar: View {
 
                             Spacer(minLength: 0)
                         }
+                        .padding(.top, DesignTokens.Layout.windowControlTopInset)
                         .padding(.trailing, DesignTokens.Spacing.spacing4)
 
                         HStack(spacing: 0) {
@@ -519,15 +525,15 @@ struct OWShellTitleBar: View {
                                 .layoutPriority(1)
                             Spacer(minLength: leadingInset)
                         }
+                        .padding(.top, DesignTokens.Layout.windowControlTopInset)
                         .padding(.trailing, DesignTokens.Spacing.spacing4)
                     }
-                    .frame(height: DesignTokens.Layout.shellChromeBarHeight, alignment: .center)
+                    .frame(height: chromeContentHeight, alignment: .top)
 
                     Rectangle()
                         .fill(DesignTokens.Color.borderHairline)
                         .frame(height: DesignTokens.Layout.borderWidth)
                 }
-                .padding(.top, DesignTokens.Layout.shellChromeSafeAreaTop)
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
             }
         }

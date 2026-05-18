@@ -131,6 +131,9 @@ struct AISettingsView: View {
             let id = aiServices.lmConfig.embeddingModel
             useCustomEmbeddingID = !EmbeddingModelPreset.allCases.contains { $0.rawValue == id }
         }
+        .task {
+            await aiServices.checkConnection()
+        }
     }
 
     private var lmStudioFooter: String {

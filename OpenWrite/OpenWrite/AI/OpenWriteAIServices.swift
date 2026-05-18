@@ -8,15 +8,27 @@ final class OpenWriteAIServices: ObservableObject {
         case checking
         case connecting
         case connected
+        case noModelLoaded
         case offline
 
         var shortLabel: String {
             switch self {
             case .notChecked: return "not checked"
-            case .checking: return "checking"
-            case .connecting: return "connecting"
+            case .checking: return "checking…"
+            case .connecting: return "connecting…"
             case .connected: return "connected"
-            case .offline: return "offline"
+            case .noModelLoaded: return "no model loaded"
+            case .offline: return "not connected"
+            }
+        }
+
+        var composerCaption: String {
+            switch self {
+            case .notChecked, .checking: return "checking…"
+            case .connecting: return "connecting…"
+            case .connected: return "connected"
+            case .noModelLoaded: return "no model loaded"
+            case .offline: return "LM Studio offline"
             }
         }
     }
@@ -56,15 +68,17 @@ final class OpenWriteAIServices: ObservableObject {
         lmConnectionState == .connected
     }
 
-    /// User-facing label for model status chip in the chat composer.
+    /// User-facing connection suffix for the chat composer caption (`model · connected`).
     var modelConnectionLabel: String {
         if activityState == .streaming {
-            return LMConnectionState.connected.shortLabel
+            return LMConnectionState.connected.composerCaption
         }
-        if activityState == .connecting, lmConnectionState != .connected {
-            return LMConnectionState.connecting.shortLabel
+        if activityState == .connecting,
+           lmConnectionState != .connected,
+           lmConnectionState != .noModelLoaded {
+            return LMConnectionState.connecting.composerCaption
         }
-        return lmConnectionState.shortLabel
+        return lmConnectionState.composerCaption
     }
 
     init() {
@@ -227,23 +241,21 @@ final class OpenWriteAIServices: ObservableObject {
         do {
             let models = try await lmClient.listModels()
             availableModels = models
-            if !models.isEmpty {
-                let chat = lmConfig.chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
-                let needsDefault = chat.isEmpty || chat == "local-model"
-                let preferred = models.first { $0.id.localizedCaseInsensitiveContains("gemma") }
-                if needsDefault {
-                    lmConfig.chatModel = preferred?.id ?? models[0].id
-                    LMStudioConfigPersistence.save(lmConfig)
-                    rebuildPipeline()
-                } else if !models.contains(where: { $0.id == lmConfig.chatModel }),
-                          let preferred {
-                    lmConfig.chatModel = preferred.id
-                    LMStudioConfigPersistence.save(lmConfig)
-                    rebuildPipeline()
-                }
+            if let resolved = Self.resolveChatModelID(
+                current: lmConfig.chatModel,
+                available: models.map(\.id)
+            ), resolved != lmConfig.chatModel {
+                lmConfig.chatModel = resolved
+                LMStudioConfigPersistence.save(lmConfig)
+                rebuildPipeline()
             }
-            lmStatus = models.isEmpty ? "Connected (no models)" : "Connected · \(models.count) models"
-            lmConnectionState = .connected
+            if models.isEmpty {
+                lmStatus = "Connected (no models loaded)"
+                lmConnectionState = .noModelLoaded
+            } else {
+                lmStatus = "Connected · \(models.count) model\(models.count == 1 ? "" : "s")"
+                lmConnectionState = .connected
+            }
             setActivity(.idle)
         } catch {
             availableModels = []
@@ -251,6 +263,16 @@ final class OpenWriteAIServices: ObservableObject {
             lmConnectionState = .offline
             setActivity(.error(Self.actionableConnectionError(error)))
         }
+    }
+
+    /// Picks the saved chat model when listed; otherwise the first `/v1/models` entry (never Gemma-specific).
+    static func resolveChatModelID(current: String, available: [String]) -> String? {
+        guard let first = available.first else { return nil }
+        let chat = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        let needsDefault = chat.isEmpty || chat == "local-model"
+        if needsDefault { return first }
+        if available.contains(chat) { return nil }
+        return first
     }
 
     /// Runs a connection check after chat failure and returns a user-facing message.
@@ -273,8 +295,13 @@ final class OpenWriteAIServices: ObservableObject {
             if !embedListed, lmConfig.usesDedicatedEmbeddingModel {
                 hints.append("Embedding model “\(lmConfig.resolvedEmbeddingModel)” is not loaded — set Embedding model or load it in LM Studio.")
             }
-            lmStatus = models.isEmpty ? "Connected (no models)" : "Connected · \(models.count) models"
-            lmConnectionState = .connected
+            if models.isEmpty {
+                lmStatus = "Connected (no models loaded)"
+                lmConnectionState = .noModelLoaded
+            } else {
+                lmStatus = "Connected · \(models.count) model\(models.count == 1 ? "" : "s")"
+                lmConnectionState = .connected
+            }
             setActivity(.error("\(base)\n\n\(hints.joined(separator: " "))"))
             lastChatError = activityState.statusMessage
             return lastChatError ?? base

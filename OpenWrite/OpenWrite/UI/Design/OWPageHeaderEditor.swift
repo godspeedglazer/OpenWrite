@@ -61,7 +61,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .topTrailing) {
             pageOptionsMenu
-                .padding(.top, DesignTokens.Layout.editorChromeTopInset)
+                .padding(.top, DesignTokens.Spacing.spacing2)
                 .padding(.trailing, DesignTokens.Layout.editorChromePadding)
         }
         .onAppear { syncDescriptionFromDocument() }
@@ -189,8 +189,9 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             showPageOptions = true
         } label: {
             Text("⋯")
-                .font(OWTypography.captionEmphasis)
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(DesignTokens.Color.textTertiary)
+                .offset(y: -1)
                 .frame(width: 28, height: 28)
                 .background(
                     Circle()

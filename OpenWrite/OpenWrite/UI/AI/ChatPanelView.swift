@@ -1010,6 +1010,9 @@ struct ChatPanelView: View {
             composer
         }
         .background(palette.background)
+        .task {
+            await aiServices.checkConnection()
+        }
     }
 
     private var conversationHeader: some View {
@@ -1304,6 +1307,7 @@ struct ChatPanelView: View {
 
             composerInputRow
         }
+        .help("Paste images with ⌘V or attach files with the document button.")
         .padding(DesignTokens.Spacing.assistStripComposerPadding)
         .padding(.bottom, DesignTokens.Layout.assistStripComposerBottomInset)
         .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing1)
@@ -1333,30 +1337,32 @@ struct ChatPanelView: View {
     private var composerModelCaptionHelp: String {
         let model = aiServices.lmConfig.chatModelDisplay
         return """
-        Chat model: \(model). Loaded from LM Studio (/v1/models); defaults like google/gemma-4-e4b \
-        are chosen when Check connection runs and the chat model field is empty.
+        Chat model: \(model). Set in Settings → AI or auto-filled from the first model returned by \
+        LM Studio GET /v1/models when the chat model field is empty.
         """
     }
 
     private var composerInputRow: some View {
-        HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
-            OWThemedComposerField(
-                placeholder: stripIsCompact ? "Ask…" : "Ask about your notes…",
-                text: $model.draft,
-                lineLimit: 1 ... 6,
-                minHeight: DesignTokens.Layout.composerBoardHeight
-            ) {
-                if !model.isBusy {
-                    model.send(services: aiServices, agent: aiServices.selectedAgent)
+        ChatComposerPasteHost(onPasteImage: { model.importImageFromPasteboard() }) {
+            HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
+                OWThemedComposerField(
+                    placeholder: stripIsCompact ? "Ask…" : "Ask about your notes…",
+                    text: $model.draft,
+                    lineLimit: 1 ... 6,
+                    minHeight: DesignTokens.Layout.composerBoardHeight
+                ) {
+                    if !model.isBusy {
+                        model.send(services: aiServices, agent: aiServices.selectedAgent)
+                    }
                 }
-            }
-            .frame(maxWidth: .infinity)
-            .disabled(model.isBusy)
-            .onPasteCommand(of: [.image]) { _ in
-                model.importImageFromPasteboard()
-            }
+                .frame(maxWidth: .infinity)
+                .disabled(model.isBusy)
+                .onPasteCommand(of: [.image]) { _ in
+                    model.importImageFromPasteboard()
+                }
 
-            composerActionBoard
+                composerActionBoard
+            }
         }
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -1449,7 +1455,7 @@ struct ChatPanelView: View {
                 ForEach(model.pendingAttachments) { attachment in
                     HStack(spacing: 6) {
                         if attachment.kind == .image {
-                            AttachmentPreviewThumbnail(url: attachment.storedURL)
+                            AttachmentPreviewThumbnail(url: attachment.storedURL, size: 28)
                         } else {
                             OWUnicodeIconView(icon: .document, size: 12, color: DesignTokens.Color.textSecondary)
                         }
@@ -1479,16 +1485,78 @@ struct ChatPanelView: View {
     }
 }
 
+// MARK: - Chat composer paste (Cmd+V images)
+
+private struct ChatComposerPasteHost<Content: View>: NSViewRepresentable {
+    let onPasteImage: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> ChatComposerPasteCaptureView {
+        let hosting = NSHostingView(rootView: content())
+        let wrapper = ChatComposerPasteCaptureView(hostedView: hosting)
+        wrapper.onPasteImage = onPasteImage
+        context.coordinator.wrapper = wrapper
+        context.coordinator.hosting = hosting
+        return wrapper
+    }
+
+    func updateNSView(_ wrapper: ChatComposerPasteCaptureView, context: Context) {
+        wrapper.onPasteImage = onPasteImage
+        context.coordinator.hosting?.rootView = content()
+    }
+
+    final class Coordinator {
+        weak var wrapper: ChatComposerPasteCaptureView?
+        var hosting: NSHostingView<Content>?
+    }
+}
+
+private final class ChatComposerPasteCaptureView: NSView {
+    let hostedView: NSView
+    var onPasteImage: (() -> Void)?
+
+    init(hostedView: NSView) {
+        self.hostedView = hostedView
+        super.init(frame: .zero)
+        openWriteSuppressFocusRing()
+        hostedView.openWriteSuppressFocusRing()
+        addSubview(hostedView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func layout() {
+        super.layout()
+        hostedView.frame = bounds
+    }
+
+    @objc func paste(_ sender: Any?) {
+        if ImagePasteSupport.imageFromPasteboard() != nil {
+            onPasteImage?()
+            return
+        }
+        NSApp.sendAction(#selector(NSTextView.paste(_:)), to: nil, from: sender)
+    }
+}
+
 private struct AttachmentPreviewThumbnail: View {
     let url: URL
+    var size: CGFloat = 16
 
     var body: some View {
         if let image = NSImage(contentsOf: url) {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 16, height: 16)
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         } else {
             OWUnicodeIconView(icon: .document, size: 12, color: DesignTokens.Color.textSecondary)
         }

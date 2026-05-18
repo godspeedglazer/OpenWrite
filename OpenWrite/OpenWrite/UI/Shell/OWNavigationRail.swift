@@ -578,6 +578,10 @@ struct OWNavigationRail: View {
             return DesignTokens.Color.success
         }
 
+        if aiServices.lmConnectionState == .noModelLoaded {
+            return DesignTokens.Color.warning
+        }
+
         return DesignTokens.Color.textTertiary
     }
 
@@ -599,6 +603,10 @@ struct OWNavigationRail: View {
 
         if aiServices.isLMStudioConnected {
             return "Local AI connected · \(health.statusLabel.lowercased())"
+        }
+
+        if aiServices.lmConnectionState == .noModelLoaded {
+            return "LM Studio reachable — load a chat model in LM Studio"
         }
 
         if aiServices.lmStatus == "Not checked" {

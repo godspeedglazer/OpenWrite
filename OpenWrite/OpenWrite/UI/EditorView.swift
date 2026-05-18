@@ -427,27 +427,51 @@ struct EditorView: View {
             selectedText: selectedText
         )
         inlineAssist.commitPendingCapture()
-        let excerpt = editingBlocks
-            .map(\.text)
-            .joined(separator: "\n")
-            .prefix(1200)
-        inlineAssist.refineSelection(
-            using: aiServices.rag,
-            preset: preset,
-            noteExcerpt: String(excerpt)
-        )
+        Task {
+            if let lmMessage = await ensureLMReadyForRefine() {
+                await MainActor.run { inlineAssist.presentRefineMessage(lmMessage) }
+                return
+            }
+            await MainActor.run {
+                let excerpt = editingBlocks
+                    .map(\.text)
+                    .joined(separator: "\n")
+                    .prefix(1200)
+                inlineAssist.refineSelection(
+                    using: aiServices.rag,
+                    preset: preset,
+                    noteExcerpt: String(excerpt)
+                )
+            }
+        }
     }
 
     private func requestInlineRefine(preset: InlineRefinePreset) {
-        guard let document else { return }
+        guard document != nil else { return }
         inlineAssist.commitPendingCapture()
+        Task {
+            if let lmMessage = await ensureLMReadyForRefine() {
+                await MainActor.run { inlineAssist.presentRefineMessage(lmMessage) }
+                return
+            }
+            await MainActor.run { performToolbarInlineRefine(preset: preset) }
+        }
+    }
+
+    private func ensureLMReadyForRefine() async -> String? {
+        if aiServices.lmConnectionState == .notChecked || aiServices.lmConnectionState == .checking {
+            await aiServices.checkConnection()
+        }
+        return await MainActor.run {
+            Self.refineLMUnavailableMessage(connectionState: aiServices.lmConnectionState)
+        }
+    }
+
+    @MainActor
+    private func performToolbarInlineRefine(preset: InlineRefinePreset) {
         guard inlineAssist.canRefineSelection else {
             inlineAssist.presentRefineMessage(
-                """
-                Select text inside a block (drag across words), then choose Refine again.
-
-                Local AI uses LM Studio on this Mac — start the server and load a chat model in Settings → AI if refine fails.
-                """
+                "Select text inside a block (drag across words), then choose Refine again."
             )
             return
         }
@@ -460,6 +484,27 @@ struct EditorView: View {
             preset: preset,
             noteExcerpt: String(excerpt)
         )
+    }
+
+    private static func refineLMUnavailableMessage(
+        connectionState: OpenWriteAIServices.LMConnectionState
+    ) -> String? {
+        switch connectionState {
+        case .offline, .notChecked:
+            return """
+            Start LM Studio on this Mac, load a chat model, then try Refine again. \
+            Open Settings → AI to verify the server URL and chat model.
+            """
+        case .noModelLoaded:
+            return """
+            LM Studio is reachable but no chat model is loaded. Load a model in LM Studio, \
+            then try Refine again.
+            """
+        case .checking, .connecting:
+            return "Checking LM Studio connection… try Refine again in a moment."
+        case .connected:
+            return nil
+        }
     }
 
     private func applyRefinementToDocument() {
