@@ -54,9 +54,13 @@ struct OWBlockTextEditor: NSViewRepresentable {
         if layoutWidth > 1 {
             context.coordinator.layout(toWidth: layoutWidth)
         }
+        let attributesChanged = context.coordinator.lastAppliedAttributes != blockAttributes
+        if attributesChanged {
+            context.coordinator.lastAppliedAttributes = blockAttributes
+        }
         if !context.coordinator.isProgrammaticUpdate {
             let current = InlineMarkdown.markdown(from: textView.textStorage ?? NSAttributedString())
-            if current != markdown {
+            if current != markdown || attributesChanged {
                 context.coordinator.applyContent()
             }
         }
@@ -77,6 +81,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
         var isProgrammaticUpdate = false
         private var lastLayoutWidth: CGFloat = 0
         private var lastLayoutHeight: CGFloat = 24
+        var lastAppliedAttributes: [String: String] = [:]
 
         init(parent: OWBlockTextEditor) {
             self.parent = parent
@@ -114,6 +119,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
             isProgrammaticUpdate = true
             textView.textStorage?.setAttributedString(parsed)
             isProgrammaticUpdate = false
+            lastAppliedAttributes = parent.blockAttributes
             layout(toWidth: textView.frame.width > 1 ? textView.frame.width : textView.bounds.width)
         }
 
@@ -147,16 +153,15 @@ struct OWBlockTextEditor: NSViewRepresentable {
             parent.onSelectionChange?(ns.substring(with: range))
         }
 
-        func textDidBeginEditing(_ notification: Notification) {
+        func registerWithFormattingState() {
             guard let textView else { return }
             parent.formatting.register(textView: textView, blockID: parent.blockID) { [weak self] markdown in
                 self?.parent.markdown = markdown
             }
         }
 
-        func textDidEndEditing(_ notification: Notification) {
-            guard let textView else { return }
-            parent.formatting.resign(textView: textView)
+        func textDidBeginEditing(_ notification: Notification) {
+            registerWithFormattingState()
         }
 
         private func resolvedPointSize() -> CGFloat {
@@ -214,6 +219,7 @@ final class BlockFormattingTextView: NSTextView {
         let ok = super.becomeFirstResponder()
         if ok {
             formattingCoordinator?.applySelectionChrome()
+            formattingCoordinator?.registerWithFormattingState()
         }
         return ok
     }

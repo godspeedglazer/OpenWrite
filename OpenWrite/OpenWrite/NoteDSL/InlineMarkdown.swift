@@ -74,10 +74,11 @@ enum InlineMarkdown {
             if attrs[.underlineStyle] != nil {
                 wrapped = "\(underlineOpen)\(wrapped)\(underlineClose)"
             }
-            if isItalic(attrs) {
+            let fragmentBase = (attrs[.font] as? NSFont) ?? baseNSFont(family: nil, pointSize: nil)
+            if isItalic(attrs, baseFont: fragmentBase) {
                 wrapped = "*\(wrapped)*"
             }
-            if isBold(attrs) {
+            if isBold(attrs, baseFont: fragmentBase) {
                 wrapped = "**\(wrapped)**"
             }
             output += wrapped
@@ -90,6 +91,37 @@ enum InlineMarkdown {
         if range.length > 0 { return range }
         let length = (textView.string as NSString).length
         return length > 0 ? NSRange(location: 0, length: length) : range
+    }
+
+    /// Range used to reflect toolbar toggle state at the caret or selection.
+    static func inspectionRange(in textView: NSTextView) -> NSRange {
+        let selected = textView.selectedRange()
+        if selected.length > 0 { return selected }
+        let length = (textView.string as NSString).length
+        guard length > 0 else { return NSRange(location: 0, length: 0) }
+        let index = min(max(selected.location, 0), length - 1)
+        return NSRange(location: index, length: 1)
+    }
+
+    struct FormatState: Equatable {
+        var isBold = false
+        var isItalic = false
+        var isUnderline = false
+        var isStrikethrough = false
+    }
+
+    static func formatState(in textView: NSTextView, baseFont: NSFont) -> FormatState {
+        guard let storage = textView.textStorage else { return FormatState() }
+        let range = inspectionRange(in: textView)
+        guard range.length > 0 else { return FormatState() }
+        var state = FormatState()
+        storage.enumerateAttributes(in: range) { attrs, _, _ in
+            if isBold(attrs, baseFont: baseFont) { state.isBold = true }
+            if isItalic(attrs, baseFont: baseFont) { state.isItalic = true }
+            if attrs[.underlineStyle] != nil { state.isUnderline = true }
+            if attrs[.strikethroughStyle] != nil { state.isStrikethrough = true }
+        }
+        return state
     }
 
     static func toggleBold(in textView: NSTextView, baseFont: NSFont) {
@@ -236,13 +268,13 @@ enum InlineMarkdown {
         return converted.pointSize > 0 ? converted : NSFontManager.shared.convert(base, toHaveTrait: .italicFontMask)
     }
 
-    private static func isBold(_ attrs: [NSAttributedString.Key: Any]) -> Bool {
-        guard let font = attrs[.font] as? NSFont else { return false }
+    private static func isBold(_ attrs: [NSAttributedString.Key: Any], baseFont: NSFont) -> Bool {
+        let font = (attrs[.font] as? NSFont) ?? baseFont
         return font.fontDescriptor.symbolicTraits.contains(.bold)
     }
 
-    private static func isItalic(_ attrs: [NSAttributedString.Key: Any]) -> Bool {
-        guard let font = attrs[.font] as? NSFont else { return false }
+    private static func isItalic(_ attrs: [NSAttributedString.Key: Any], baseFont: NSFont) -> Bool {
+        let font = (attrs[.font] as? NSFont) ?? baseFont
         return font.fontDescriptor.symbolicTraits.contains(.italic)
     }
 }

@@ -4,10 +4,15 @@ import SwiftUI
 /// Tracks the focused block editor and applies formatting to the active `NSTextView`.
 final class BlockFormattingState: ObservableObject {
     @Published private(set) var focusedBlockID: UUID?
-    @Published private(set) var hasSelection = false
+    @Published private(set) var hasEditableText = false
+    @Published private(set) var formatState = InlineMarkdown.FormatState()
 
     private weak var activeTextView: NSTextView?
     private var onMarkdownChange: ((String) -> Void)?
+
+    var canApplyFormatting: Bool {
+        focusedBlockID != nil && activeTextView != nil && hasEditableText
+    }
 
     func register(
         textView: NSTextView,
@@ -20,17 +25,12 @@ final class BlockFormattingState: ObservableObject {
         refreshSelectionState(textView)
     }
 
-    func resign(textView: NSTextView) {
-        guard activeTextView === textView else { return }
-        activeTextView = nil
-        onMarkdownChange = nil
-        focusedBlockID = nil
-        hasSelection = false
-    }
-
     func refreshSelectionState(_ textView: NSTextView) {
         guard activeTextView === textView else { return }
-        hasSelection = InlineMarkdown.selectionOrAll(in: textView).length > 0
+        let inspect = InlineMarkdown.inspectionRange(in: textView)
+        hasEditableText = (textView.string as NSString).length > 0
+            || inspect.length > 0
+        formatState = InlineMarkdown.formatState(in: textView, baseFont: baseFont(for: textView))
     }
 
     func syncMarkdownFromActiveView() {
@@ -44,13 +44,17 @@ final class BlockFormattingState: ObservableObject {
     func toggleStrikethrough() { run { InlineMarkdown.toggleStrikethrough(in: $0) } }
 
     func applyFontFamily(_ family: InlineMarkdown.FontFamily, attributes: Binding<[String: String]>) {
-        attributes.wrappedValue["fontFamily"] = family.rawValue
-        reloadActiveBlock(attributes: attributes.wrappedValue)
+        var updated = attributes.wrappedValue
+        updated["fontFamily"] = family.rawValue
+        attributes.wrappedValue = updated
+        reloadActiveBlock(attributes: updated)
     }
 
     func applyFontSize(points: CGFloat, attributes: Binding<[String: String]>) {
-        attributes.wrappedValue["fontSize"] = String(Int(points))
-        reloadActiveBlock(attributes: attributes.wrappedValue)
+        var updated = attributes.wrappedValue
+        updated["fontSize"] = String(Int(points))
+        attributes.wrappedValue = updated
+        reloadActiveBlock(attributes: updated)
     }
 
     private func run(_ work: (NSTextView) -> Void) {
@@ -58,10 +62,12 @@ final class BlockFormattingState: ObservableObject {
         work(textView)
         syncMarkdownFromActiveView()
         refreshSelectionState(textView)
+        restoreEditingFocus(textView)
     }
 
     private func reloadActiveBlock(attributes: [String: String]) {
         guard let activeTextView, let storage = activeTextView.textStorage else { return }
+        let selection = activeTextView.selectedRange()
         let markdown = InlineMarkdown.markdown(from: storage)
         let family = InlineMarkdown.FontFamily(attribute: attributes["fontFamily"])
         let size = attributes["fontSize"].flatMap { Int($0) }.flatMap { $0 > 0 ? CGFloat($0) : nil }
@@ -69,7 +75,20 @@ final class BlockFormattingState: ObservableObject {
         storage.setAttributedString(
             InlineMarkdown.attributedString(from: markdown, family: family, pointSize: size, textColor: color)
         )
+        let length = (activeTextView.string as NSString).length
+        if length > 0 {
+            let safeLocation = min(selection.location, max(length - 1, 0))
+            let safeLength = min(selection.length, length - safeLocation)
+            activeTextView.setSelectedRange(NSRange(location: safeLocation, length: safeLength))
+        }
         onMarkdownChange?(markdown)
+        refreshSelectionState(activeTextView)
+        restoreEditingFocus(activeTextView)
+    }
+
+    private func restoreEditingFocus(_ textView: NSTextView) {
+        guard textView.window?.firstResponder !== textView else { return }
+        textView.window?.makeFirstResponder(textView)
     }
 
     private func baseFont(for textView: NSTextView) -> NSFont {
@@ -88,10 +107,18 @@ struct OWBlockFormattingToolbar: View {
 
     var body: some View {
         HStack(spacing: DesignTokens.Spacing.spacing2) {
-            formatButton("B", help: "Bold") { formatting.toggleBold() }
-            formatButton("I", help: "Italic") { formatting.toggleItalic() }
-            formatButton("U", help: "Underline") { formatting.toggleUnderline() }
-            formatButton("S", help: "Strikethrough") { formatting.toggleStrikethrough() }
+            formatButton("B", help: "Bold", isActive: formatting.formatState.isBold) {
+                formatting.toggleBold()
+            }
+            formatButton("I", help: "Italic", isActive: formatting.formatState.isItalic) {
+                formatting.toggleItalic()
+            }
+            formatButton("U", help: "Underline", isActive: formatting.formatState.isUnderline) {
+                formatting.toggleUnderline()
+            }
+            formatButton("S", help: "Strikethrough", isActive: formatting.formatState.isStrikethrough) {
+                formatting.toggleStrikethrough()
+            }
 
             Divider().frame(height: 18)
 
@@ -103,6 +130,7 @@ struct OWBlockFormattingToolbar: View {
                 minWidth: 72,
                 compact: true
             )
+            .disabled(!formatting.canApplyFormatting)
 
             OWThemedDropdown(
                 accessibilityLabel: "Font size",
@@ -112,6 +140,7 @@ struct OWBlockFormattingToolbar: View {
                 minWidth: 52,
                 compact: true
             )
+            .disabled(!formatting.canApplyFormatting)
 
             Spacer(minLength: 0)
         }
@@ -127,6 +156,7 @@ struct OWBlockFormattingToolbar: View {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                 .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
         }
+        .focusable(false)
         .opacity(formatting.focusedBlockID == nil ? 0.55 : 1)
     }
 
@@ -149,19 +179,27 @@ struct OWBlockFormattingToolbar: View {
         )
     }
 
-    private func formatButton(_ title: String, help: String, action: @escaping () -> Void) -> some View {
+    private func formatButton(
+        _ title: String,
+        help: String,
+        isActive: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(title)
                 .frame(minWidth: 26, minHeight: 26)
                 .background(
-                    DesignTokens.Color.surfaceElevated.opacity(0.9),
+                    isActive
+                        ? DesignTokens.Color.accent.opacity(0.22)
+                        : DesignTokens.Color.surfaceElevated.opacity(0.9),
                     in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
                 )
+                .foregroundStyle(isActive ? DesignTokens.Color.accent : DesignTokens.Color.textSecondary)
         }
         .buttonStyle(.plain)
         .openWriteFocusChrome()
         .help(help)
-        .disabled(formatting.focusedBlockID == nil)
+        .disabled(!formatting.canApplyFormatting)
     }
 }
 
