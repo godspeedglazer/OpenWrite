@@ -283,6 +283,7 @@ struct OWThemedComposerField: View {
     let placeholder: String
     @Binding var text: String
     var lineLimit: ClosedRange<Int> = 1 ... 6
+    var minHeight: CGFloat = DesignTokens.Layout.composerActionSize
     var onSubmit: (() -> Void)?
 
     @FocusState private var isFocused: Bool
@@ -296,7 +297,7 @@ struct OWThemedComposerField: View {
             .focused($isFocused)
             .openWriteFocusChrome(.suppressSystemRing)
             .frame(
-                minHeight: DesignTokens.Layout.composerActionSize,
+                minHeight: minHeight,
                 maxHeight: DesignTokens.Layout.composerFieldMaxHeight,
                 alignment: .topLeading
             )

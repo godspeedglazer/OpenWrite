@@ -824,13 +824,7 @@ struct ChatPanelView: View {
                 Text("Ask vault")
                     .font(OWTypography.calloutEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                    HStack(alignment: .center, spacing: 6) {
-                        AgentPickerView(selectedAgentID: $aiServices.selectedAgentID)
-                        Text(aiServices.lmConfig.chatModelDisplay)
-                            .font(OWTypography.caption)
-                            .foregroundStyle(DesignTokens.Color.textTertiary)
-                            .lineLimit(1)
-                    }
+                    AgentPickerView(selectedAgentID: $aiServices.selectedAgentID)
                 }
             },
             trailing: {
@@ -872,7 +866,7 @@ struct ChatPanelView: View {
                         .id(message.id)
                 }
             }
-            .padding(DesignTokens.Spacing.assistStripContentPadding)
+            .padding(DesignTokens.Spacing.assistStripMessageListPadding)
         }
         .background(DesignTokens.Color.background)
     }
@@ -1072,7 +1066,9 @@ struct ChatPanelView: View {
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            composerModelCaption
+
             if let attachmentError = model.attachmentError {
                 Text(attachmentError)
                     .font(OWTypography.caption)
@@ -1086,9 +1082,9 @@ struct ChatPanelView: View {
 
             composerInputRow
         }
-        .padding(DesignTokens.Spacing.assistStripContentPadding)
+        .padding(DesignTokens.Spacing.assistStripComposerPadding)
         .padding(.bottom, DesignTokens.Layout.assistStripComposerBottomInset)
-        .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing2)
+        .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing1)
         .background(DesignTokens.Color.background)
         .overlay(alignment: .top) {
             Rectangle()
@@ -1097,12 +1093,23 @@ struct ChatPanelView: View {
         }
     }
 
+    private var composerModelCaption: some View {
+        Text(aiServices.lmConfig.chatModelDisplay)
+            .font(OWTypography.caption2)
+            .foregroundStyle(DesignTokens.Color.textTertiary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, minHeight: 12, maxHeight: 14, alignment: .leading)
+            .help(aiServices.lmConfig.chatModelDisplay)
+    }
+
     private var composerInputRow: some View {
         HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
             OWThemedComposerField(
                 placeholder: stripIsCompact ? "Ask…" : "Ask about your notes…",
                 text: $model.draft,
-                lineLimit: 1 ... 6
+                lineLimit: 1 ... 6,
+                minHeight: DesignTokens.Layout.composerBoardHeight
             ) {
                 if !model.isBusy {
                     model.send(services: aiServices, agent: aiServices.selectedAgent)
@@ -1216,10 +1223,11 @@ struct ChatPanelView: View {
                     .openWriteFocusChrome()
                     }
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 3)
                     .background(DesignTokens.Color.surface.opacity(0.9), in: Capsule())
                 }
             }
+            .padding(.bottom, DesignTokens.Spacing.spacing1)
         }
     }
 

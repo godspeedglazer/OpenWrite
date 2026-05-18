@@ -213,6 +213,14 @@ enum DesignTokens {
         static let assistStripContentPadding = EdgeInsets(
             top: spacing3, leading: spacing3, bottom: spacing3, trailing: spacing3
         )
+        /// Message list in chat — tighter bottom gap above the composer inset.
+        static let assistStripMessageListPadding = EdgeInsets(
+            top: spacing3, leading: spacing3, bottom: spacing2, trailing: spacing3
+        )
+        /// Chat composer footer — less vertical chrome than generic strip padding.
+        static let assistStripComposerPadding = EdgeInsets(
+            top: spacing2, leading: spacing3, bottom: spacing2, trailing: spacing3
+        )
         static let captureSheetPadding = EdgeInsets(
             top: spacing6, leading: spacing6, bottom: spacing6, trailing: spacing6
         )
@@ -335,11 +343,13 @@ enum DesignTokens {
         static let inspectorIdealWidth: CGFloat = 280
         static let inspectorMaxWidth: CGFloat = assistStripMaxWidth
         static let assistBottomBarHeight: CGFloat = 32
-        static let assistStripComposerBottomInset: CGFloat = Spacing.spacing4
+        static let assistStripComposerBottomInset: CGFloat = Spacing.spacing2
         /// Chat composer attach / send / stop / toggle cell size (2×2 board beside field).
         static let composerActionSize: CGFloat = 36
         /// Gap between cells in the composer 2×2 action board.
-        static let composerBoardSpacing: CGFloat = Spacing.spacing2
+        static let composerBoardSpacing: CGFloat = Spacing.spacing1
+        /// Height of the 2×2 action board (field min height aligns to this).
+        static var composerBoardHeight: CGFloat { composerActionSize * 2 + composerBoardSpacing }
         /// Inner text inset for multiline composer (clears left edge of field chrome).
         static let composerFieldLeadingInset: CGFloat = Spacing.spacing3
         static let composerFieldTrailingInset: CGFloat = Spacing.spacing2
