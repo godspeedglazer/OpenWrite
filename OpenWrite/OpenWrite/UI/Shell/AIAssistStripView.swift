@@ -7,6 +7,14 @@ private struct AIAssistStripWidthKey: EnvironmentKey {
     static let defaultValue: CGFloat = DesignTokens.Layout.assistStripDefaultWidth
 }
 
+private struct AIAssistStripMeasuredWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 extension EnvironmentValues {
     var aiAssistStripWidth: CGFloat {
         get { self[AIAssistStripWidthKey.self] }
@@ -48,10 +56,16 @@ struct AIAssistStripView: View {
         .background {
             GeometryReader { geometry in
                 Color.clear
-                    .onAppear { measuredWidth = geometry.size.width }
-                    .onChange(of: geometry.size.width) { _, newWidth in
-                        measuredWidth = newWidth
-                    }
+                    .preference(key: AIAssistStripMeasuredWidthKey.self, value: geometry.size.width)
+            }
+        }
+        .onPreferenceChange(AIAssistStripMeasuredWidthKey.self) { width in
+            guard width > 0, abs(measuredWidth - width) > 0.5 else { return }
+            measuredWidth = width
+        }
+        .onAppear {
+            if measuredWidth <= 0 {
+                measuredWidth = ShellChromePreferences.assistStripWidth
             }
         }
         .environment(\.aiAssistStripWidth, measuredWidth)

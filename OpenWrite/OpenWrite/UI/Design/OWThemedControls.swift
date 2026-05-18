@@ -493,56 +493,90 @@ struct OWThemedSegmentedControl<Option: Hashable>: View {
     }
 }
 
-// MARK: - Toggle
+// MARK: - Toggle button
 
-struct OWThemedToggle: View {
+/// Square composer toggle — matches attach/send controls (`owRect`), not an iOS pill switch.
+struct OWThemedToggleButton: View {
     let label: String
     @Binding var isOn: Bool
-    /// When false, only the switch is shown (label remains for accessibility / help).
+    var icon: OWUnicodeIcon?
+    /// When false, renders a fixed 36×36 icon-only square (accessibility / `.help` use `label`).
     var showsLabel: Bool = true
-    /// Shorter visible label for narrow assist strip widths (accessibility still uses `label`).
+    /// Shorter visible caption in chip layout (accessibility still uses `label`).
     var abbreviatedLabel: String?
 
-    private var visibleLabel: String {
-        abbreviatedLabel ?? label
-    }
+    private var visibleLabel: String { abbreviatedLabel ?? label }
+    private var actionSize: CGFloat { DesignTokens.Layout.composerActionSize }
 
     var body: some View {
-        Button {
-            withAnimation(DesignTokens.Motion.animationFast) {
-                isOn.toggle()
-            }
-        } label: {
-            HStack(spacing: DesignTokens.Spacing.spacing2) {
+        Button { isOn.toggle() } label: {
+            Group {
                 if showsLabel {
-                    Text(visibleLabel)
-                        .font(OWTypography.caption)
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .fixedSize(horizontal: true, vertical: false)
+                    chipLabel
+                } else {
+                    iconOnlyLabel
                 }
-                toggleTrack
             }
         }
         .buttonStyle(.plain)
         .openWriteFocusChrome()
         .accessibilityLabel(label)
         .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 
-    private var toggleTrack: some View {
-        ZStack(alignment: isOn ? .trailing : .leading) {
-            Capsule()
-                .fill(isOn ? DesignTokens.Color.accent : DesignTokens.Color.borderSubtle)
-                .frame(width: 36, height: 20)
-            Circle()
-                .fill(DesignTokens.Color.selectionPill)
-                .frame(width: 16, height: 16)
-                .padding(2)
+    private var iconOnlyLabel: some View {
+        toggleChrome {
+            toggleGlyph
+                .frame(width: actionSize, height: actionSize)
         }
-        .animation(DesignTokens.Motion.animationFast, value: isOn)
-        .fixedSize()
+    }
+
+    private var chipLabel: some View {
+        toggleChrome {
+            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                toggleGlyph
+                    .frame(width: actionSize, height: actionSize)
+                Text(visibleLabel)
+                    .font(OWTypography.caption)
+                    .foregroundStyle(
+                        isOn ? DesignTokens.Color.textPrimary : DesignTokens.Color.textSecondary
+                    )
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(1)
+            }
+            .padding(.trailing, DesignTokens.Spacing.spacing2)
+        }
+        .frame(height: actionSize)
+    }
+
+    @ViewBuilder
+    private var toggleGlyph: some View {
+        if let icon {
+            OWUnicodeIconView(
+                icon,
+                size: 17,
+                color: isOn ? DesignTokens.Color.accent : DesignTokens.Color.textSecondary
+            )
+        }
+    }
+
+    private func toggleChrome<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .background(
+                isOn ? DesignTokens.Color.accentMuted : DesignTokens.Color.surface,
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
+                    .strokeBorder(
+                        isOn
+                            ? DesignTokens.Color.accent.opacity(0.35)
+                            : DesignTokens.Color.borderSubtle,
+                        lineWidth: DesignTokens.Layout.borderWidth
+                    )
+            }
     }
 }
 

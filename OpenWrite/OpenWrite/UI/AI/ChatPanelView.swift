@@ -54,6 +54,11 @@ final class ChatPanelModel: ObservableObject {
         static let respondStepMinimumDwell: TimeInterval = 0.65
     }
 
+    func persistComposerToggles() {
+        UserDefaults.standard.set(searchVaultEnabled, forKey: Self.searchVaultDefaultsKey)
+        UserDefaults.standard.set(webLookupEnabled, forKey: Self.webLookupDefaultsKey)
+    }
+
     var isBusy: Bool {
         streamTask != nil
     }
@@ -79,8 +84,7 @@ final class ChatPanelModel: ObservableObject {
         pendingAttachments = []
         attachmentError = nil
         streamTask?.cancel()
-        UserDefaults.standard.set(searchVaultEnabled, forKey: Self.searchVaultDefaultsKey)
-        UserDefaults.standard.set(webLookupEnabled, forKey: Self.webLookupDefaultsKey)
+        persistComposerToggles()
 
         let effectiveAgent = agent.withVaultRetrieval(searchVaultEnabled)
         let webURLs = webLookupEnabled ? WebURLExtractor.extract(from: query) : []
@@ -694,21 +698,13 @@ struct ChatPanelView: View {
     @Environment(\.aiAssistStripWidth) private var assistStripWidth
     @StateObject private var model = ChatPanelModel()
     @State private var showFileImporter = false
+    /// Hysteresis latch so crossing `assistStripIconsOnlyThreshold` does not flicker chip ↔ icon layout.
+    @State private var composerTogglesIconOnly = false
 
     private var navigation: AIAssistNavigationState { workbench.aiAssistNavigation }
 
     private var stripIsCompact: Bool {
         assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
-    }
-
-    private var composerTogglesIconOnly: Bool {
-        assistStripWidth < DesignTokens.Layout.assistStripIconsOnlyThreshold
-    }
-
-    /// Between default strip width and icon-only threshold: shorter toggle captions.
-    private var composerTogglesAbbreviated: Bool {
-        assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
-            && !composerTogglesIconOnly
     }
 
     private var showsComposerModelLabel: Bool {
@@ -730,6 +726,28 @@ struct ChatPanelView: View {
             workbench.archivedChatThreadIDToOpen = nil
             workbench.inspectorTab = .chat
             navigation.openChatThread()
+        }
+        .onAppear {
+            syncComposerToggleLayout(for: assistStripWidth)
+        }
+        .onChange(of: assistStripWidth) { _, width in
+            syncComposerToggleLayout(for: width)
+        }
+        .onChange(of: model.searchVaultEnabled) { _, _ in
+            model.persistComposerToggles()
+        }
+        .onChange(of: model.webLookupEnabled) { _, _ in
+            model.persistComposerToggles()
+        }
+    }
+
+    private func syncComposerToggleLayout(for width: CGFloat) {
+        let threshold = DesignTokens.Layout.assistStripIconsOnlyThreshold
+        let release = threshold + 8
+        if composerTogglesIconOnly {
+            if width >= release { composerTogglesIconOnly = false }
+        } else if width < threshold {
+            composerTogglesIconOnly = true
         }
     }
 
@@ -809,6 +827,8 @@ struct ChatPanelView: View {
         VStack(spacing: 0) {
             conversationHeader
             messageList
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             composer
         }
         .background(DesignTokens.Color.background)
@@ -1101,18 +1121,20 @@ struct ChatPanelView: View {
     }
 
     private var composerToggleRow: some View {
-        HStack(spacing: DesignTokens.Spacing.spacing2) {
-            OWThemedToggle(
+        HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
+            OWThemedToggleButton(
                 label: "Search notes",
                 isOn: $model.searchVaultEnabled,
+                icon: .search,
                 showsLabel: !composerTogglesIconOnly,
-                abbreviatedLabel: composerTogglesAbbreviated ? "Notes" : nil
+                abbreviatedLabel: "Notes"
             )
             .help("Search notes")
 
-            OWThemedToggle(
+            OWThemedToggleButton(
                 label: "Web",
                 isOn: $model.webLookupEnabled,
+                icon: .wiki,
                 showsLabel: !composerTogglesIconOnly
             )
             .help("Fetch HTTPS links in your message (off by default). No in-page JavaScript.")
@@ -1126,10 +1148,13 @@ struct ChatPanelView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .layoutPriority(-1)
+                    .minimumScaleFactor(0.85)
                     .help(aiServices.lmConfig.embeddingModelDisplay)
             }
         }
-        .help(composerTogglesIconOnly ? aiServices.lmConfig.embeddingModelDisplay : "")
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(minHeight: DesignTokens.Layout.composerActionSize)
+        .animation(nil, value: composerTogglesIconOnly)
     }
 
     private var composerInputRow: some View {
@@ -1198,6 +1223,7 @@ struct ChatPanelView: View {
             }
             .fixedSize(horizontal: true, vertical: false)
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var canSendMessage: Bool {
