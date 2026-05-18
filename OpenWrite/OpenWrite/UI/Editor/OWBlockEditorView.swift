@@ -255,7 +255,6 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         )
         let measured = host.measureDocumentSize(width: measureWidth, contentRevision: contentRevision)
         context.coordinator.publishDocumentHeight(measured.height)
-        host.notifyContentHeightMayHaveChanged()
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BlockEditorPasteCaptureView, context: Context) -> CGSize? {
@@ -292,7 +291,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         }
 
         func publishDocumentHeight(_ height: CGFloat) {
-            let safe = max(height, 120)
+            let safe = max(Self.roundedLayoutHeight(height), 120)
             guard abs(laidOutHeight.wrappedValue - safe) > 0.5 else { return }
             laidOutHeight.wrappedValue = safe
         }
@@ -300,6 +299,10 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         /// Pixel-stable width — subpixel oscillation in `host.bounds` was re-triggering apply every frame.
         static func roundedLayoutWidth(_ width: CGFloat) -> CGFloat {
             max(floor(max(width, 320) + 0.5), 320)
+        }
+
+        static func roundedLayoutHeight(_ height: CGFloat) -> CGFloat {
+            max(floor(max(height, 1) + 0.5), 1)
         }
 
         func roundedLayoutWidth(_ width: CGFloat) -> CGFloat {

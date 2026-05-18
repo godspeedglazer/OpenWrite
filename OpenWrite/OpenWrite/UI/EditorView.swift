@@ -65,7 +65,7 @@ struct EditorView: View {
         }
         .onChange(of: document?.updatedAt) { _, _ in
             guard let doc = self.document else { return }
-            let body = doc.rootBlocks.filter { $0.kind != .property }
+            let body = ensureEditableBodyBlocks(doc.rootBlocks.filter { $0.kind != .property })
             if editingBlocks.isEmpty, !body.isEmpty {
                 syncFromDocument(doc)
                 syncHeaderFromDocument(doc)
@@ -184,7 +184,9 @@ struct EditorView: View {
 
             Button("Apply welcome starter blocks") {
                 guard let doc = document else { return }
-                editingBlocks = VaultDocument.welcomeSample.rootBlocks.filter { $0.kind != .property }
+                editingBlocks = ensureEditableBodyBlocks(
+                    VaultDocument.welcomeSample.rootBlocks.filter { $0.kind != .property }
+                )
                 commitBlocks(document: doc, blocks: editingBlocks)
             }
             .buttonStyle(.plain)
@@ -333,7 +335,7 @@ struct EditorView: View {
 
     private func syncFromDocument(_ document: VaultDocument?) {
         guard let document else { return }
-        editingBlocks = document.rootBlocks.filter { $0.kind != .property }
+        editingBlocks = ensureEditableBodyBlocks(document.rootBlocks.filter { $0.kind != .property })
         if !appliedEditorPresentation {
             appliedEditorPresentation = true
         }
@@ -495,17 +497,27 @@ struct EditorView: View {
     }
 
     private func commitBlocks(document: VaultDocument, blocks: [NoteBlock]) {
-        commitBlocks(documentID: document.id, noteTitle: document.displayTitle, blocks: blocks)
+        commitBlocks(
+            documentID: document.id,
+            noteTitle: document.displayTitle,
+            blocks: ensureEditableBodyBlocks(blocks)
+        )
     }
 
     private func commitBlocks(documentID: UUID, noteTitle: String, blocks: [NoteBlock]) {
-        vaultStore.updateRootBlocks(for: documentID, bodyBlocks: blocks)
-        let excerpt = blocks.map(\.text).joined(separator: "\n")
+        let stableBlocks = ensureEditableBodyBlocks(blocks)
+        vaultStore.updateRootBlocks(for: documentID, bodyBlocks: stableBlocks)
+        let excerpt = stableBlocks.map(\.text).joined(separator: "\n")
         pastWrites.recordEdit(
             noteID: documentID,
             noteTitle: noteTitle,
             plainText: excerpt
         )
+    }
+
+    private func ensureEditableBodyBlocks(_ blocks: [NoteBlock]) -> [NoteBlock] {
+        if !blocks.isEmpty { return blocks }
+        return [NoteBlock(kind: .paragraph, text: "")]
     }
 
 }
