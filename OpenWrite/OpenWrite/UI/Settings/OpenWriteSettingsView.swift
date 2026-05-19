@@ -6,7 +6,7 @@ struct OpenWriteSettingsView: View {
     @State private var demoInstallMessage: String?
 
     var body: some View {
-        OpenWriteThemedScrollView {
+        ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing6) {
                 vaultSection
 
@@ -37,6 +37,7 @@ struct OpenWriteSettingsView: View {
             .padding(DesignTokens.Spacing.spacing4)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(DesignTokens.Color.background)
     }
 

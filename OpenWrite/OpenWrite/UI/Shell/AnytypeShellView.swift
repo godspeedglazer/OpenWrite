@@ -1,7 +1,5 @@
 // Anytype / Logseq-inspired workbench shell (clean-room SwiftUI).
-// Sidebar density patterns studied from anytype-ts-develop; outliner rail ideas from logseq-master (AGPL).
-// AI posture from reor-main (AGPL) — compact assist, not 50% split. See docs/ProductDirection.md.
-// Leading navigation: OWNavigationRail — custom rects, draggable width, filled shell title bar.
+// Layout widths: WorkbenchLayoutCoordinator (Phase 2 spine) — no nested preference chains.
 
 import SwiftUI
 
@@ -20,6 +18,12 @@ struct AnytypeShellView: View {
     @State private var searchQuery: String = ""
     @State private var navigationRailWidth: CGFloat = ShellChromePreferences.navigationRailWidth
     @State private var assistStripWidth: CGFloat = ShellChromePreferences.assistStripWidth
+    @State private var centerLayout: WorkbenchCenterLayout = WorkbenchLayoutCoordinator.resolve(
+        centerRegionWidth: DesignTokens.Layout.windowDefaultWidth
+            - DesignTokens.Layout.sidebarMinWidth,
+        assistExpanded: ShellChromePreferences.assistStripExpanded,
+        preferredAssistWidth: ShellChromePreferences.assistStripWidth
+    )
 
     var body: some View {
         let _ = themeManager.revision
@@ -34,14 +38,11 @@ struct AnytypeShellView: View {
             shellBody
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        // Ignore the macOS title-bar safe area so the cream chrome paints from y=0 — without this,
-        // OWShellTitleBar started ~28pt below the window edge and AppKit drew its vibrancy material
-        // in the gap, producing the visible "gray void" above the custom traffic lights.
-        .ignoresSafeArea(edges: .top)
         .animation(DesignTokens.Motion.animationStandard, value: workbench.sidebarVisible)
-        .animation(DesignTokens.Motion.animationStandard, value: workbench.aiAssistExpanded)
         .animation(DesignTokens.Motion.animationStandard, value: workbench.navigationRailCollapsed)
         .background(palette.shellChrome.ignoresSafeArea())
+        .environment(\.workbenchCenterLayout, centerLayout)
+        .environment(\.editorWorkbenchWidth, centerLayout.editorBodyWidth)
         .onChange(of: workbench.sidebarVisible) { _, _ in workbench.persistChromePreferences() }
         .onChange(of: workbench.aiAssistExpanded) { _, _ in workbench.persistChromePreferences() }
         .onChange(of: workbench.navigationRailCollapsed) { _, collapsed in
@@ -51,20 +52,16 @@ struct AnytypeShellView: View {
             } else {
                 navigationRailWidth = ShellChromePreferences.navigationRailWidth
             }
-            reconcileWorkbenchChromeLayout()
-        }
-        .onChange(of: workbench.sidebarVisible) { _, _ in
-            reconcileWorkbenchChromeLayout()
-        }
-        .onAppear {
-            if workbench.navigationRailCollapsed {
-                navigationRailWidth = DesignTokens.Layout.navigationRailCollapsedWidth
-            }
         }
         .onChange(of: vaultStore.databases.map(\.id)) { _, databaseIDs in
             if case .database(let active) = workbench.centerTab,
                !databaseIDs.contains(active.id) {
                 workbench.showEditor()
+            }
+        }
+        .onAppear {
+            if workbench.navigationRailCollapsed {
+                navigationRailWidth = DesignTokens.Layout.navigationRailCollapsedWidth
             }
         }
     }
@@ -82,6 +79,9 @@ struct AnytypeShellView: View {
                     onCommitWidth: { ShellChromePreferences.navigationRailWidth = $0 }
                 ) {
                     navigationRailColumn
+                        .overlay(alignment: .trailing) {
+                            shellColumnDivider
+                        }
                         .transition(.move(edge: .leading).combined(with: .opacity))
                 } trailing: {
                     centerWorkbench
@@ -91,6 +91,7 @@ struct AnytypeShellView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(edges: .top)
     }
 
     private var navigationRailMinWidth: CGFloat {
@@ -141,101 +142,110 @@ struct AnytypeShellView: View {
 
     private var centerWorkbench: some View {
         GeometryReader { geometry in
-            let paddedWidth = max(
-                0,
-                geometry.size.width - DesignTokens.Layout.centerCardOuterPadding * 2
-            )
-            let editorMin = OWShellLayout.flexibleMinimum(
-                forCenterWidth: paddedWidth,
-                assistExpanded: workbench.aiAssistExpanded
+            let regionWidth = geometry.size.width
+            let layout = WorkbenchLayoutCoordinator.resolve(
+                centerRegionWidth: regionWidth,
+                assistExpanded: workbench.aiAssistExpanded,
+                preferredAssistWidth: assistStripWidth
             )
 
-            Group {
-                if workbench.aiAssistExpanded {
-                    OWResizableColumnSplit(
-                        fixedWidth: $assistStripWidth,
-                        minWidth: DesignTokens.Layout.assistStripMinWidth,
-                        maxWidth: DesignTokens.Layout.assistStripMaxWidth,
-                        fixedColumn: .trailing,
-                        flexibleMinWidth: editorMin,
-                        onCommitWidth: { ShellChromePreferences.assistStripWidth = $0 }
-                    ) {
-                        centerEditorColumn
-                            .frame(
-                                minWidth: editorMin,
-                                maxWidth: .infinity,
-                                maxHeight: .infinity
-                            )
-                            .layoutPriority(1)
-                    } trailing: {
-                        AIAssistStripView(workbench: workbench, pastWrites: pastWrites) {
-                            withAnimation(DesignTokens.Motion.animationStandard) {
-                                workbench.aiAssistExpanded = false
-                                workbench.persistChromePreferences()
-                            }
-                        }
-                        .frame(
-                            minWidth: DesignTokens.Layout.assistStripMinWidth,
-                            maxHeight: .infinity
-                        )
-                        .layoutPriority(0)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                    }
-                } else {
-                    centerEditorColumn
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+            centerWorkbenchColumns(layout: layout)
+                .frame(
+                    width: layout.paddedInnerWidth,
+                    height: geometry.size.height,
+                    alignment: .topLeading
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.horizontal, DesignTokens.Layout.centerCardOuterPadding)
+                .padding(.bottom, DesignTokens.Layout.centerCardOuterPadding)
+                .environment(\.workbenchCenterLayout, layout)
+                .environment(\.editorWorkbenchWidth, layout.editorBodyWidth)
+                .environment(\.aiAssistStripWidth, layout.assistColumnWidth)
+                .onChange(of: layout, initial: true) { _, resolved in
+                    guard centerLayout != resolved else { return }
+                    centerLayout = resolved
                 }
-            }
-            .frame(
-                maxWidth: .infinity,
-                maxHeight: .infinity,
-                alignment: workbench.aiAssistExpanded ? .leading : .center
-            )
-            .id(workbench.aiAssistExpanded)
-            .padding(DesignTokens.Layout.centerCardOuterPadding)
-            .onAppear {
-                reconcileCenterWorkbenchLayout(centerWidth: paddedWidth)
-            }
-            .onChange(of: paddedWidth) { _, newWidth in
-                reconcileCenterWorkbenchLayout(centerWidth: newWidth)
-            }
-            .onChange(of: workbench.aiAssistExpanded) { _, _ in
-                reconcileWorkbenchChromeLayout(centerWidth: paddedWidth)
-            }
+                .onChange(of: regionWidth) { _, width in
+                    handleCenterRegionWidthChange(width)
+                }
+                .onChange(of: workbench.aiAssistExpanded) { _, expanded in
+                    if expanded, WorkbenchLayoutCoordinator.shouldCollapseAssist(centerRegionWidth: regionWidth) {
+                        withAnimation(DesignTokens.Motion.animationStandard) {
+                            workbench.aiAssistExpanded = false
+                            workbench.persistChromePreferences()
+                        }
+                    }
+                }
+                .onChange(of: assistStripWidth) { _, width in
+                    let resolved = WorkbenchLayoutCoordinator.resolve(
+                        centerRegionWidth: regionWidth,
+                        assistExpanded: workbench.aiAssistExpanded,
+                        preferredAssistWidth: width
+                    )
+                    if resolved.assistColumnWidth > 0,
+                       abs(width - resolved.assistColumnWidth) > 0.5 {
+                        assistStripWidth = resolved.assistColumnWidth
+                        ShellChromePreferences.assistStripWidth = resolved.assistColumnWidth
+                    }
+                }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(palette.workbenchChrome)
     }
 
-    private func reconcileWorkbenchChromeLayout(centerWidth: CGFloat? = nil) {
-        if let centerWidth {
-            reconcileCenterWorkbenchLayout(centerWidth: centerWidth)
+    @ViewBuilder
+    private func centerWorkbenchColumns(layout: WorkbenchCenterLayout) -> some View {
+        if workbench.aiAssistExpanded, layout.assistColumnWidth > 0 {
+            HStack(alignment: .top, spacing: 0) {
+                centerEditorColumn
+                    .frame(width: layout.editorColumnWidth, alignment: .topLeading)
+                    .frame(maxHeight: .infinity, alignment: .top)
+
+                WorkbenchAssistColumnDivider(
+                    assistWidth: $assistStripWidth,
+                    minWidth: DesignTokens.Layout.assistStripMinWidth,
+                    maxWidth: DesignTokens.Layout.assistStripMaxWidth,
+                    availableWidth: layout.paddedInnerWidth
+                )
+
+                assistColumn
+                    .frame(width: layout.assistColumnWidth, alignment: .topLeading)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .overlay(alignment: .leading) {
+                        shellColumnDivider
+                    }
+            }
+        } else {
+            centerEditorColumn
+                .frame(width: layout.paddedInnerWidth, alignment: .topLeading)
+                .frame(maxHeight: .infinity, alignment: .top)
         }
-        // Editor re-layout is driven by `editorScrollLayoutToken` (theme/rail flags) inside `EditorView`,
-        // so we no longer rebuild the EditorView identity here — that path used to wipe `editingBlocks`
-        // back to `[]` and leave the welcome body invisible until `.onAppear` re-fired.
     }
 
-    private func reconcileCenterWorkbenchLayout(centerWidth: CGFloat) {
-        guard workbench.aiAssistExpanded else { return }
+    private var shellColumnDivider: some View {
+        Rectangle()
+            .fill(palette.borderSubtle)
+            .frame(width: DesignTokens.Layout.borderWidth)
+    }
 
-        if OWShellLayout.shouldAutoCollapseAssist(centerWidth: centerWidth) {
+    private func handleCenterRegionWidthChange(_ regionWidth: CGFloat) {
+        if workbench.aiAssistExpanded,
+           WorkbenchLayoutCoordinator.shouldCollapseAssist(centerRegionWidth: regionWidth) {
             withAnimation(DesignTokens.Motion.animationStandard) {
                 workbench.aiAssistExpanded = false
                 workbench.persistChromePreferences()
             }
-            return
         }
+    }
 
-        let resolvedAssist = OWShellLayout.maxAssistWidth(
-            centerWidth: centerWidth,
-            preferredAssistWidth: assistStripWidth,
-            assistExpanded: true
-        )
-        if abs(assistStripWidth - resolvedAssist) > 0.5 {
-            assistStripWidth = resolvedAssist
-            ShellChromePreferences.assistStripWidth = resolvedAssist
+    private var assistColumn: some View {
+        AIAssistStripView(workbench: workbench, pastWrites: pastWrites) {
+            withAnimation(DesignTokens.Motion.animationStandard) {
+                workbench.aiAssistExpanded = false
+                workbench.persistChromePreferences()
+            }
         }
+        .transition(.move(edge: .trailing).combined(with: .opacity))
     }
 
     private var centerEditorColumn: some View {
@@ -252,6 +262,7 @@ struct AnytypeShellView: View {
                 }
             }
         }
+        .workbenchAssistBottomBarEnvironment(active: !workbench.aiAssistExpanded)
     }
 
     private var centerTabBarItems: [CenterWorkbenchTab] {
@@ -272,8 +283,8 @@ struct AnytypeShellView: View {
             case .graph:
                 workbench.showGraph()
             case .database(let database):
-                vaultStore.selectedDatabaseID = database.id
                 vaultStore.selectedDocumentID = nil
+                vaultStore.selectedDatabaseID = database.id
                 workbench.showDatabase(database)
             }
         }
@@ -302,12 +313,13 @@ struct AnytypeShellView: View {
                         }
                     )
                     .id(vaultStore.activeVaultID)
+                    .id(workbench.graphRefreshToken)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.large, style: .continuous))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
@@ -330,9 +342,6 @@ struct AnytypeShellView: View {
     @ViewBuilder
     private var editorCenter: some View {
         if let doc = vaultStore.selectedDocument {
-            // Pass the full doc so EditorView seeds editingBlocks/header from the active vault content
-            // synchronously at init. Identity is keyed on doc id — switching pages re-runs init.
-            // No more EditorView rebuild on rail/assist toggle (used to wipe state to [] every time).
             EditorView(document: doc)
                 .id(doc.id)
         } else {
@@ -390,10 +399,10 @@ struct AnytypeShellView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                    .openWriteFocusChrome()
+                        .openWriteFocusChrome()
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if let welcome = vaultStore.documents.first(where: { $0.id == VaultDocument.welcomeDocumentID }) {
                     VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
@@ -410,8 +419,8 @@ struct AnytypeShellView: View {
                 }
             }
             .openWriteEditorLeadingInset()
-            .padding(DesignTokens.Spacing.spacing5)
-            .frame(maxWidth: .infinity, alignment: .top)
+            .padding(.vertical, DesignTokens.Spacing.spacing5)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(palette.editorCanvas)

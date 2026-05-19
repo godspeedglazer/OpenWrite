@@ -53,8 +53,10 @@ struct TypePickerView: View {
                     ForEach(types) { pageType in
                         typeButton(pageType)
                     }
+                    Spacer(minLength: 0)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DesignTokens.Spacing.spacing2) {

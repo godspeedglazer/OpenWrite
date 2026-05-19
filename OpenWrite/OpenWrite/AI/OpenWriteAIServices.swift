@@ -31,6 +31,35 @@ final class OpenWriteAIServices: ObservableObject {
             case .offline: return "LM Studio offline"
             }
         }
+
+        /// Composer status pill — one label per `LMConnectionState` (no streaming override).
+        var statusPillLabel: String {
+            switch self {
+            case .connected: return "Model loaded"
+            case .noModelLoaded: return "No model loaded"
+            case .offline: return "Offline"
+            case .notChecked: return "Not checked"
+            case .checking: return "Checking…"
+            case .connecting: return "Connecting…"
+            }
+        }
+
+        /// Visual tone for the chat composer connection pill.
+        enum StatusPillTone: Equatable {
+            case ready
+            case warning
+            case offline
+            case pending
+        }
+
+        var statusPillTone: StatusPillTone {
+            switch self {
+            case .connected: return .ready
+            case .noModelLoaded: return .warning
+            case .offline: return .offline
+            case .notChecked, .checking, .connecting: return .pending
+            }
+        }
     }
 
     @Published var lmConfig: LMStudioConfig = .default
@@ -57,6 +86,7 @@ final class OpenWriteAIServices: ObservableObject {
 
     private var ingestionPipeline: IngestionPipeline?
     private var indexingTask: Task<Void, Never>?
+    private var connectionMonitorTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     /// Vault content signature reflected in the last successful `prepareVaultIndex` / `reindex`.
     private(set) var lastPreparedVaultSignature: Int?
@@ -234,10 +264,30 @@ final class OpenWriteAIServices: ObservableObject {
         }
     }
 
-    func checkConnection() async {
-        lmConnectionState = .checking
-        setActivity(.connecting)
-        lmStatus = "Checking…"
+    /// Polls LM Studio while the app is open so load/unload is reflected without relaunching.
+    func startConnectionMonitoring(intervalSeconds: TimeInterval = 18) {
+        connectionMonitorTask?.cancel()
+        connectionMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.checkConnection(silent: true)
+                let delay = UInt64(max(intervalSeconds, 8) * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: delay)
+            }
+        }
+    }
+
+    func stopConnectionMonitoring() {
+        connectionMonitorTask?.cancel()
+        connectionMonitorTask = nil
+    }
+
+    func checkConnection(silent: Bool = false) async {
+        if !silent {
+            lmConnectionState = .checking
+            setActivity(.connecting)
+            lmStatus = "Checking…"
+        }
         do {
             let models = try await lmClient.listModels()
             availableModels = models
@@ -249,19 +299,42 @@ final class OpenWriteAIServices: ObservableObject {
                 LMStudioConfigPersistence.save(lmConfig)
                 rebuildPipeline()
             }
-            if models.isEmpty {
-                lmStatus = "Connected (no models loaded)"
-                lmConnectionState = .noModelLoaded
-            } else {
-                lmStatus = "Connected · \(models.count) model\(models.count == 1 ? "" : "s")"
-                lmConnectionState = .connected
+            applyLMConnectionState(from: models)
+            if !silent {
+                setActivity(.idle)
             }
-            setActivity(.idle)
         } catch {
             availableModels = []
             lmStatus = "Error: \(error.localizedDescription)"
             lmConnectionState = .offline
-            setActivity(.error(Self.actionableConnectionError(error)))
+            if silent {
+                if case .error = activityState {
+                    // Keep an active user-facing error until the next explicit check.
+                } else if activityState == .streaming || activityState == .connecting {
+                    // Do not clobber an in-flight chat session.
+                } else {
+                    setActivity(.idle)
+                }
+            } else {
+                setActivity(.error(Self.actionableConnectionError(error)))
+            }
+        }
+    }
+
+    private func applyLMConnectionState(from models: [LMStudioModel]) {
+        if models.isEmpty {
+            lmStatus = "Connected (no models loaded)"
+            lmConnectionState = .noModelLoaded
+            return
+        }
+        let chatID = lmConfig.chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let modelIDs = models.map(\.id)
+        if !chatID.isEmpty, !modelIDs.contains(chatID) {
+            lmStatus = "Connected — load “\(chatID)” in LM Studio"
+            lmConnectionState = .noModelLoaded
+        } else {
+            lmStatus = "Connected · \(models.count) model\(models.count == 1 ? "" : "s")"
+            lmConnectionState = .connected
         }
     }
 
@@ -295,13 +368,7 @@ final class OpenWriteAIServices: ObservableObject {
             if !embedListed, lmConfig.usesDedicatedEmbeddingModel {
                 hints.append("Embedding model “\(lmConfig.resolvedEmbeddingModel)” is not loaded — set Embedding model or load it in LM Studio.")
             }
-            if models.isEmpty {
-                lmStatus = "Connected (no models loaded)"
-                lmConnectionState = .noModelLoaded
-            } else {
-                lmStatus = "Connected · \(models.count) model\(models.count == 1 ? "" : "s")"
-                lmConnectionState = .connected
-            }
+            applyLMConnectionState(from: models)
             setActivity(.error("\(base)\n\n\(hints.joined(separator: " "))"))
             lastChatError = activityState.statusMessage
             return lastChatError ?? base
@@ -316,8 +383,15 @@ final class OpenWriteAIServices: ObservableObject {
         }
     }
 
+    /// Stream bytes prove reachability only — `/v1/models` confirms the configured chat model is loaded.
     func markChatStreamConnected() {
-        lmConnectionState = .connected
+        if lmConnectionState == .offline || lmConnectionState == .notChecked {
+            lmConnectionState = .connecting
+        }
+    }
+
+    func confirmConnectionAfterStream() async {
+        await checkConnection()
     }
 
     func markChatStreamFailed() {
@@ -450,6 +524,7 @@ final class OpenWriteAIServices: ObservableObject {
                 }
                 indexedChunkCount = await vectorStore.chunkCount
                 ingestionHealth.updateIndexedChunkCount(indexedChunkCount)
+                ingestionHealth.markCompleted(indexedChunks: indexedChunkCount)
                 lastPreparedVaultSignature = Self.vaultContentSignature(documents: documents)
             } catch is CancellationError {
                 ingestionHealth.markCancelled()
@@ -481,6 +556,7 @@ final class OpenWriteAIServices: ObservableObject {
             indexedDocumentFingerprints[document.id] = Self.entryFingerprint(entry)
             indexedChunkCount = await vectorStore.chunkCount
             ingestionHealth.updateIndexedChunkCount(indexedChunkCount)
+            ingestionHealth.markCompleted(indexedChunks: indexedChunkCount)
         } catch {
             ingestionHealth.recordError(error.localizedDescription)
             lmStatus = "Index error: \(error.localizedDescription)"

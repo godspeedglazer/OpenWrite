@@ -363,13 +363,15 @@ enum DesignTokens {
         static let assistStripMaxWidth: CGFloat = 360
         static let assistStripDefaultWidth: CGFloat = 280
         static let assistStripCollapsedWidth: CGFloat = 44
+        /// Below this assist column width, chat uses the compact vertical composer (not at min 240).
+        static let assistStripHorizontalComposerMinWidth: CGFloat = 252
         /// Below this measured strip width, composer toggles show icon-only switches.
         static let assistStripIconsOnlyThreshold: CGFloat = 268
         /// Hysteresis before auto-collapsing assist on window shrink (avoids flicker on minor resize).
         static let assistCollapseHysteresis: CGFloat = 40
         /// Smaller editor floor when assist is open so the strip can narrow before collapsing.
         static let editorMinWidthWhenAssistOpen: CGFloat = 360
-        static let editorMinWidthWhenAssistFraction: CGFloat = 0.42
+        static let editorMinWidthWhenAssistFraction: CGFloat = 0.55
         static let inspectorMinWidth: CGFloat = assistStripMinWidth
         static let inspectorIdealWidth: CGFloat = 280
         static let inspectorMaxWidth: CGFloat = assistStripMaxWidth
@@ -388,6 +390,10 @@ enum DesignTokens {
         static let composerBoardIconSize: CGFloat = 20
         /// Max height for multiline chat composer before internal scroll.
         static let composerFieldMaxHeight: CGFloat = 120
+        /// Bottom inset for chat transcript above the composer (compact vertical stack + caption).
+        static var assistTranscriptBottomReserve: CGFloat {
+            composerBoardHeight + composerFieldMaxHeight + Spacing.spacing6 * 2
+        }
         static let centerCardOuterPadding: CGFloat = Spacing.spacing2
         static let shellColumnGutter: CGFloat = Spacing.spacing2
         /// Below this width, collapse assist before shrinking editor (see LayoutAndResize.md).
@@ -422,6 +428,15 @@ enum DesignTokens {
         /// Vertical gap between block rows in the WYSIWYG editor.
         static let editorBlockStackSpacing: CGFloat = Spacing.spacing2
         static let editorMetadataToToolbarSpacing: CGFloat = Spacing.spacing3
+        /// Left-rail refine assistant beside the editor column.
+        static let refinePanelWidth: CGFloat = 380
+        /// Panel width plus the editor HStack gap when the refine rail is visible.
+        static var editorRefineColumnReserve: CGFloat {
+            refinePanelWidth + Spacing.spacing2
+        }
+        static let refinePanelMinHeight: CGFloat = 280
+        static let refinePanelMaxHeight: CGFloat = 520
+        static let refinePanelRailWidth: CGFloat = 148
         static let captureSheetWidth: CGFloat = 520
         static let captureSheetMinHeight: CGFloat = 200
         static let graphNodeMinSize: CGFloat = 44
@@ -430,14 +445,16 @@ enum DesignTokens {
         static let graphNodeCardHeight: CGFloat = 56
         static let graphNodeMinSpacing: CGFloat = 20
         static let toolbarHeight: CGFloat = 52
-        /// Top reserved titlebar band above tab row (traffic lights sit in this band).
-        /// Kept minimal — SwiftUI paints from y=0 via `ignoresSafeArea`; excess inset pushed controls below the visible titlebar.
-        static let shellChromeSafeAreaTop: CGFloat = 0
+        /// Titlebar band for custom traffic lights (must match `NSWindow` chrome above `contentLayoutRect`).
+        static let shellChromeSafeAreaTop: CGFloat = 28
         /// Muted rounded-square close / minimize / zoom in the shell strip.
         static let windowControlSize: CGFloat = 14
         static let windowControlSpacing: CGFloat = 6
         static let windowControlLeadingInset: CGFloat = 12
-        static let windowControlTopInset: CGFloat = 10
+        /// Fallback top inset for custom traffic lights before `NSWindow` layout resolves.
+        /// At runtime `NSWindow.openWriteWindowControlTopInset` centers controls in the
+        /// `contentLayoutRect` titlebar band (see `OWWindowChrome.swift`).
+        static let windowControlTopInset: CGFloat = 8
         /// Title + tabs row inside the filled chrome strip.
         static let shellChromeBarHeight: CGFloat = 36
         /// Leading inset clearing custom window controls (derived from control metrics + padding).
@@ -456,6 +473,31 @@ enum DesignTokens {
         static let focusRingWidth: CGFloat = 2
         static let quoteBarWidth: CGFloat = 3
         static let borderWidth: CGFloat = 1
+    }
+}
+
+// MARK: - Layout preferences
+
+struct EditorColumnWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let next = nextValue()
+        if next > value {
+            value = next
+        }
+    }
+}
+
+private struct EditorWorkbenchWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// Measured width of the center editor card (from `AnytypeShellView`).
+    var editorWorkbenchWidth: CGFloat {
+        get { self[EditorWorkbenchWidthKey.self] }
+        set { self[EditorWorkbenchWidthKey.self] = newValue }
     }
 }
 
@@ -484,6 +526,12 @@ extension View {
     /// Applies the canonical editor column leading/trailing inset (use once per row — not on scroll + blocks).
     func openWriteEditorLeadingInset() -> some View {
         padding(.horizontal, DesignTokens.Layout.editorContentLeadingInset)
+    }
+
+    /// Aligns toolbars, type picker, and preview controls with the page title column (leading, not centered).
+    func openWriteEditorChromeRow() -> some View {
+        frame(maxWidth: .infinity, alignment: .leading)
+            .openWriteEditorLeadingInset()
     }
 
     /// Full-width editor canvas; content is responsible for its own vertical scroll when needed.

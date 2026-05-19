@@ -450,12 +450,7 @@ struct OWNavigationRail: View {
                     showAISettings = true
                 }
 
-                railBottomButton(
-                    icon: .sparkles,
-                    help: "Cycle theme (\(themeManager.selectedTheme.displayName))"
-                ) {
-                    themeManager.selectNext()
-                }
+                OWNavigationRailThemeControl()
 
                 Spacer()
 
@@ -617,10 +612,145 @@ struct OWNavigationRail: View {
     }
 }
 
+// MARK: - Rail theme control
+
+/// Compact cycle + theme menu for the sidebar footer (same pattern as `ThemeQuickToggle`).
+private struct OWNavigationRailThemeControl: View {
+    @Environment(ThemeManager.self) private var themeManager
+    @State private var pickerTheme: ThemeID = .openWriteLight
+
+    private var buttonSize: CGFloat { DesignTokens.Layout.sidebarBottomButtonSize }
+
+    var body: some View {
+        let _ = themeManager.selectedTheme
+        HStack(spacing: DesignTokens.Spacing.spacing1) {
+            Button {
+                themeManager.selectNext()
+            } label: {
+                railThemeMiniSwatch(themeManager.palette)
+                    .frame(width: buttonSize, height: buttonSize)
+                    .background(DesignTokens.Color.selectionPill.opacity(0.9), in: Circle())
+                    .overlay {
+                        Circle()
+                            .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 0.5)
+                    }
+            }
+            .buttonStyle(.plain)
+            .openWriteFocusChrome()
+            .help("Cycle theme (\(themeManager.selectedTheme.displayName))")
+            .accessibilityLabel("Cycle theme, currently \(themeManager.selectedTheme.displayName)")
+
+            OWThemedDropdown(
+                accessibilityLabel: "Choose theme",
+                selection: $pickerTheme,
+                options: Array(ThemeID.allCases),
+                optionTitle: { $0.displayName },
+                minWidth: 44,
+                compact: true,
+                leadingIcon: .sliders,
+                iconOnly: true
+            )
+            .frame(width: buttonSize, height: buttonSize)
+            .background(DesignTokens.Color.selectionPill.opacity(0.9), in: Circle())
+            .overlay {
+                Circle()
+                    .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 0.5)
+            }
+            .onAppear { pickerTheme = themeManager.selectedTheme }
+            .onChange(of: pickerTheme) { _, theme in
+                themeManager.select(theme)
+            }
+            .onChange(of: themeManager.selectedTheme) { _, theme in
+                pickerTheme = theme
+            }
+            .help("Choose theme (\(themeManager.selectedTheme.displayName))")
+        }
+    }
+
+    private func railThemeMiniSwatch(_ palette: ThemePalette) -> some View {
+        HStack(spacing: 0) {
+            palette.sidebarBackground.frame(width: 9)
+            VStack(spacing: 0) {
+                palette.workbenchChrome.frame(height: 5)
+                palette.editorCanvas
+                palette.accent.frame(height: 3)
+            }
+        }
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+}
+
+/// Icon-rail variant: swatch cycles on tap; sliders opens the theme list popover.
+private struct OWNavigationRailCollapsedThemeControl: View {
+    @Environment(ThemeManager.self) private var themeManager
+    @State private var pickerTheme: ThemeID = .openWriteLight
+
+    var body: some View {
+        let _ = themeManager.selectedTheme
+        VStack(spacing: DesignTokens.Spacing.spacing1) {
+            Button {
+                themeManager.selectNext()
+            } label: {
+                railThemeMiniSwatch(themeManager.palette)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        palette.surface.opacity(0.55),
+                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    )
+            }
+            .buttonStyle(.plain)
+            .openWriteFocusChrome()
+            .help("Cycle theme (\(themeManager.selectedTheme.displayName))")
+            .accessibilityLabel("Cycle theme, currently \(themeManager.selectedTheme.displayName)")
+
+            OWThemedDropdown(
+                accessibilityLabel: "Choose theme",
+                selection: $pickerTheme,
+                options: Array(ThemeID.allCases),
+                optionTitle: { $0.displayName },
+                minWidth: 44,
+                compact: true,
+                leadingIcon: .sliders,
+                iconOnly: true
+            )
+            .frame(width: 36, height: 36)
+            .background(
+                palette.surface.opacity(0.55),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+            )
+            .onAppear { pickerTheme = themeManager.selectedTheme }
+            .onChange(of: pickerTheme) { _, theme in
+                themeManager.select(theme)
+            }
+            .onChange(of: themeManager.selectedTheme) { _, theme in
+                pickerTheme = theme
+            }
+            .help("Choose theme (\(themeManager.selectedTheme.displayName))")
+        }
+    }
+
+    @Environment(\.openWritePalette) private var palette
+
+    private func railThemeMiniSwatch(_ palette: ThemePalette) -> some View {
+        HStack(spacing: 0) {
+            palette.sidebarBackground.frame(width: 10)
+            VStack(spacing: 0) {
+                palette.workbenchChrome.frame(height: 6)
+                palette.editorCanvas
+                palette.accent.frame(height: 4)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous))
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Collapsed icon rail
 
 /// Narrow (~48pt) navigation rail when the full sidebar is collapsed.
 struct OWNavigationRailCollapsed: View {
+    @Environment(ThemeManager.self) private var themeManager
     @Environment(\.openWritePalette) private var palette
     @EnvironmentObject private var vaultStore: VaultStore
     @ObservedObject var workbench: WorkbenchState
@@ -661,6 +791,8 @@ struct OWNavigationRailCollapsed: View {
             collapsedIconButton(icon: .plus, help: "New page") {
                 showNewPageSheet = true
             }
+
+            OWNavigationRailCollapsedThemeControl()
 
             collapsedIconButton(icon: .settings, help: "Settings") {
                 showAISettings = true

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 import PDFKit
 import UniformTypeIdentifiers
 
@@ -26,13 +27,20 @@ enum ChatAttachmentStore {
     static let supportedImageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "tiff", "tif", "bmp", "webp"]
 
     static var allowedContentTypes: [UTType] {
-        [
+        var types: [UTType] = [
             .plainText,
             .pdf,
             .image,
+            .png,
+            .jpeg,
+            .gif,
+            .tiff,
             UTType(filenameExtension: "md") ?? .plainText,
             UTType(filenameExtension: "txt") ?? .plainText
         ]
+        if let heic = UTType(filenameExtension: "heic") { types.append(heic) }
+        if let webp = UTType(filenameExtension: "webp") { types.append(webp) }
+        return types
     }
 
     static func attachmentsDirectory(vaultRoot: URL) -> URL {
@@ -67,20 +75,26 @@ enum ChatAttachmentStore {
         let ext = sourceURL.pathExtension.lowercased()
         let isTextLike = supportedExtensions.contains(ext)
         let isImage = supportedImageExtensions.contains(ext)
+            || (try? sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType?.conforms(to: .image)) == true
         guard isTextLike || isImage else {
             throw ChatAttachmentError.unsupportedType(ext)
         }
 
-        let data = try Data(contentsOf: sourceURL, options: [.mappedIfSafe])
+        let data: Data
+        if sourceURL.isFileURL {
+            data = try Data(contentsOf: sourceURL, options: [.mappedIfSafe])
+        } else {
+            data = try Data(contentsOf: sourceURL)
+        }
         let maxBytes = isImage ? maxImageBytes : maxFileBytes
         guard data.count <= maxBytes else { throw ChatAttachmentError.tooLarge(maxBytes) }
 
         let displayName = sourceURL.lastPathComponent
         if isImage {
-            guard let image = NSImage(data: data) else {
-                throw ChatAttachmentError.decodeFailed
+            if let image = decodeImage(data: data, url: sourceURL) {
+                return try importImage(image, displayName: displayName)
             }
-            return try importImage(image, displayName: displayName)
+            throw ChatAttachmentError.decodeFailed
         }
 
         let text = try extractText(from: sourceURL, extension: ext, data: data)
@@ -126,12 +140,20 @@ enum ChatAttachmentStore {
         }
     }
 
-    private static func importImage(_ image: NSImage, displayName: String) throws -> ChatAttachment {
-        guard let tiff = image.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let pngData = rep.representation(using: .png, properties: [:]) else {
-            throw ChatAttachmentError.decodeFailed
+    private static func decodeImage(data: Data, url: URL) -> NSImage? {
+        if let image = NSImage(data: data) {
+            return image
         }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil)
+            ?? CGImageSourceCreateWithURL(url as CFURL, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return nil
+        }
+        return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+    }
+
+    private static func importImage(_ image: NSImage, displayName: String) throws -> ChatAttachment {
+        let pngData = try pngData(from: image)
         guard pngData.count <= maxImageBytes else {
             throw ChatAttachmentError.tooLarge(maxImageBytes)
         }
@@ -144,13 +166,33 @@ enum ChatAttachmentStore {
         }
         try pngData.write(to: destination)
 
+        let size = image.size
+        let dimNote = (size.width > 1 && size.height > 1)
+            ? String(format: " (%d×%d px)", Int(size.width), Int(size.height))
+            : ""
         return ChatAttachment(
             id: id,
             displayName: displayName,
             storedURL: destination,
-            excerpt: "Image attachment: \(displayName)",
+            excerpt: "Image attachment: \(displayName)\(dimNote). File: \(destination.lastPathComponent)",
             kind: .image
         )
+    }
+
+    private static func pngData(from image: NSImage) throws -> Data {
+        if let tiff = image.tiffRepresentation,
+           let rep = NSBitmapImageRep(data: tiff),
+           let png = rep.representation(using: .png, properties: [:]) {
+            return png
+        }
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            throw ChatAttachmentError.decodeFailed
+        }
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        guard let png = rep.representation(using: .png, properties: [:]) else {
+            throw ChatAttachmentError.decodeFailed
+        }
+        return png
     }
 
     private static func extractText(from url: URL, extension ext: String, data: Data) throws -> String {

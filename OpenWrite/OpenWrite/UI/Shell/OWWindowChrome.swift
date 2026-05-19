@@ -11,6 +11,69 @@ extension NSView {
     }
 }
 
+// MARK: - NSWindow titlebar metrics
+
+extension NSWindow {
+    /// Non-client titlebar height above `contentLayoutRect` (toolbar + traffic-light row).
+    var openWriteTitlebarChromeHeight: CGFloat {
+        guard frame.height > 0 else { return 0 }
+        return frame.height - contentLayoutRect.maxY
+    }
+
+    /// SwiftUI title-bar band height — tracks AppKit `contentLayoutRect` so shell chrome stays flush (no gray void).
+    var openWriteShellChromeSafeAreaTop: CGFloat {
+        let measured = openWriteTitlebarChromeHeight
+        guard measured >= DesignTokens.Spacing.spacing2 else {
+            return DesignTokens.Layout.shellChromeSafeAreaTop
+        }
+        let rounded = (measured * 2).rounded() / 2
+        return max(rounded, DesignTokens.Layout.shellChromeSafeAreaTop)
+    }
+
+    /// Leading inset clearing native traffic lights (content layout rect + button geometry).
+    var openWriteShellChromeContentLeadingInset: CGFloat {
+        let fallback = DesignTokens.Layout.shellChromeContentLeadingInset
+        guard frame.height > 0 else { return fallback }
+        let layoutLeading = max(contentLayoutRect.minX, 0) + DesignTokens.Spacing.spacing2
+        guard let contentView else {
+            return max(layoutLeading, DesignTokens.Layout.shellChromeCompactLeadingInset)
+        }
+        let buttons: [NSButton] = [
+            standardWindowButton(.closeButton),
+            standardWindowButton(.miniaturizeButton),
+            standardWindowButton(.zoomButton),
+        ].compactMap { $0 }
+        let buttonTrailing: CGFloat
+        if buttons.isEmpty {
+            buttonTrailing = 0
+        } else {
+            buttonTrailing = buttons
+                .map { $0.convert($0.bounds, to: contentView).maxX }
+                .max() ?? 0
+            + DesignTokens.Spacing.spacing2
+        }
+        let measured = max(layoutLeading, buttonTrailing)
+        return max(
+            measured,
+            DesignTokens.Layout.shellChromeCompactLeadingInset
+        )
+    }
+
+    /// Top padding that vertically centers custom traffic-light squares in the titlebar band.
+    /// Falls back to `DesignTokens.Layout.windowControlTopInset` when layout is not yet resolved.
+    var openWriteWindowControlTopInset: CGFloat {
+        let chrome = openWriteTitlebarChromeHeight
+        let controlSize = DesignTokens.Layout.windowControlSize
+        let fallback = DesignTokens.Layout.windowControlTopInset
+        guard chrome >= controlSize + 2 else { return fallback }
+        let centered = (chrome - controlSize) * 0.5
+        let clamped = centered.clamped(
+            to: DesignTokens.Spacing.spacing1 ... max(fallback, chrome - controlSize - DesignTokens.Spacing.spacing1)
+        )
+        return (clamped * 2).rounded() / 2
+    }
+}
+
 // MARK: - NSWindow configuration
 
 /// Applies unified transparent titlebar so custom shell chrome can sit behind traffic lights.
@@ -91,7 +154,9 @@ struct OWWindowChromeConfigurator: NSViewRepresentable {
             ]
             for name in notifications {
                 let token = center.addObserver(forName: name, object: window, queue: .main) { _ in
-                    OWWindowChrome.apply(to: window)
+                    DispatchQueue.main.async {
+                        OWWindowChrome.apply(to: window)
+                    }
                 }
                 observers.append(token)
             }
@@ -104,7 +169,9 @@ struct OWWindowChromeConfigurator: NSViewRepresentable {
             ) { [weak self, weak window] _ in
                 guard let self, let window else { return }
                 self.lastAppliedRevision = ThemeManager.shared.revision
-                OWWindowChrome.apply(to: window)
+                DispatchQueue.main.async {
+                    OWWindowChrome.apply(to: window)
+                }
             }
             observers.append(themeToken)
         }
@@ -138,26 +205,20 @@ struct OWBrandMark: View {
     var size: CGFloat = 20
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(DesignTokens.Color.accentMuted)
-            Circle()
-                .strokeBorder(DesignTokens.Color.accent.opacity(0.35), lineWidth: 1)
-            Text("◎")
-                .font(.system(size: size * 0.55, weight: .medium))
-                .foregroundStyle(DesignTokens.Color.accent)
-        }
-        .frame(width: size, height: size)
-        .accessibilityLabel("OpenWrite")
+        OWBrandLogoView(size: size)
     }
 }
 
 enum OWWindowChrome {
+    /// OpenWrite-drawn close / minimize / zoom (muted squares). Native traffic lights are hidden.
+    static let usesCustomWindowControls = true
+
     /// When true (e.g. graph canvas visible), background clicks must not move the window.
     static var suppressBackgroundWindowDrag = false
 
     private static var titlebarFillAccessories: [ObjectIdentifier: OWSolidTitlebarAccessory] = [:]
     private static var installedWindowCloseObserver = false
+    private static var isApplyingChrome = false
 
     private static func installWindowCloseObserverIfNeeded() {
         guard !installedWindowCloseObserver else { return }
@@ -169,9 +230,10 @@ enum OWWindowChrome {
         ) { notification in
             guard let window = notification.object as? NSWindow else { return }
             let key = ObjectIdentifier(window)
-            guard let accessory = titlebarFillAccessories.removeValue(forKey: key) else { return }
-            if let index = window.titlebarAccessoryViewControllers.firstIndex(where: { $0 === accessory }) {
-                window.removeTitlebarAccessoryViewController(at: index)
+            if let accessory = titlebarFillAccessories.removeValue(forKey: key) {
+                if let index = window.titlebarAccessoryViewControllers.firstIndex(where: { $0 === accessory }) {
+                    window.removeTitlebarAccessoryViewController(at: index)
+                }
             }
         }
     }
@@ -194,6 +256,9 @@ enum OWWindowChrome {
 
     static func apply(to window: NSWindow) {
         guard canApplyChrome(to: window) else { return }
+        guard !isApplyingChrome else { return }
+        isApplyingChrome = true
+        defer { isApplyingChrome = false }
 
         window.title = "OpenWrite"
         window.titleVisibility = .hidden
@@ -201,41 +266,62 @@ enum OWWindowChrome {
         window.isMovableByWindowBackground = false
         if #available(macOS 11.0, *) {
             window.titlebarSeparatorStyle = .none
-            window.toolbarStyle = .unifiedCompact
         }
         if window.styleMask.contains(.titled) {
             window.styleMask.insert(.fullSizeContentView)
+        }
+        window.collectionBehavior.insert(.fullScreenPrimary)
+        if #available(macOS 10.12, *) {
+            window.collectionBehavior.insert(.fullScreenAllowsTiling)
         }
         window.toolbar = nil
 
         let theme = ThemeManager.shared.selectedTheme
         let palette = ThemeManager.shared.palette
         let chrome = NSColor(palette.shellChrome)
-        window.appearance = NSAppearance(named: theme.prefersDarkAppearance ? .darkAqua : .aqua)
+        let appearance = NSAppearance(named: theme.prefersDarkAppearance ? .darkAqua : .aqua)
+        if window.appearance?.name != appearance?.name {
+            window.appearance = appearance
+        }
         window.isOpaque = true
         window.backgroundColor = chrome
         paintThemeFrame(window, color: chrome)
         stripTitlebarVibrancy(in: window, fill: chrome)
-        // NOTE: Previously we installed an `OWSolidTitlebarAccessory` at `layoutAttribute = .top`
-        // to fill the title-bar with cream. With `AnytypeShellView` now applying
-        // `.ignoresSafeArea(edges: .top)`, the SwiftUI shell chrome already paints y=0…57 cream,
-        // and the accessory was layered ON TOP of the content view — which made it paint over
-        // the custom `OWShellWindowControls` traffic lights, causing them to disappear from the
-        // window. We rely on `paintThemeFrame` + `stripTitlebarVibrancy` + the SwiftUI background
-        // to cover the title-bar zone instead; the accessory must NOT be re-introduced unless the
-        // SwiftUI hierarchy stops ignoring the top safe area.
-        removeLegacyTitlebarFill(from: window)
+        installSolidTitlebarFill(on: window, color: chrome)
         tintHostingRoot(window, color: chrome)
-        hideSystemTrafficLights(in: window)
+        if usesCustomWindowControls {
+            hideSystemTrafficLights(in: window)
+        } else {
+            showSystemTrafficLights(in: window)
+        }
+
+        if window.contentView?.superview == nil {
+            DispatchQueue.main.async {
+                guard window.contentView?.superview != nil else { return }
+                apply(to: window)
+            }
+        }
     }
 
-    /// Replaces system traffic lights on the **main** titled window only (`canApplyChrome` excludes sheets).
-    /// Sheets keep native controls so we never hide traffic lights without replacements.
+    private static func showSystemTrafficLights(in window: NSWindow) {
+        guard canApplyChrome(to: window) else { return }
+        window.standardWindowButton(.closeButton)?.superview?.isHidden = false
+        for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
+            guard let button = window.standardWindowButton(kind) else { continue }
+            button.isHidden = false
+            button.alphaValue = 1
+            button.isEnabled = true
+        }
+    }
+
     private static func hideSystemTrafficLights(in window: NSWindow) {
         guard canApplyChrome(to: window) else { return }
         for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
-            window.standardWindowButton(kind)?.isHidden = true
+            guard let button = window.standardWindowButton(kind) else { continue }
+            button.isHidden = true
+            button.alphaValue = 0
         }
+        window.standardWindowButton(.closeButton)?.superview?.isHidden = true
     }
 
     /// Removes legacy solid titlebar fill accessories (see `apply` — we no longer install them).
@@ -262,16 +348,21 @@ enum OWWindowChrome {
 
     /// Recolors AppKit theme frame so the strip behind traffic lights is not system grey vibrancy.
     private static func paintThemeFrame(_ window: NSWindow, color: NSColor) {
-        guard var view = window.contentView?.superview else { return }
-        while true {
-            let typeName = String(describing: type(of: view))
-            view.wantsLayer = true
-            view.layer?.backgroundColor = color.cgColor
+        guard let contentSuperview = window.contentView?.superview else { return }
+        var view: NSView? = contentSuperview
+        while let current = view {
+            tintChromeLayer(current, color: color, skipButtons: true)
+            let typeName = String(describing: type(of: current))
             if typeName.contains("ThemeFrame") || typeName.contains("NSFrameView") {
                 break
             }
-            guard let parent = view.superview else { break }
-            view = parent
+            view = current.superview
+        }
+        if let root = window.contentView?.superview {
+            for effect in visualEffectViews(in: root) {
+                effect.isHidden = true
+                effect.alphaValue = 0
+            }
         }
     }
 
@@ -321,26 +412,43 @@ enum OWWindowChrome {
         while let current = view {
             let typeName = String(describing: type(of: current))
             if let effect = current as? NSVisualEffectView {
-                effect.material = .windowBackground
-                effect.blendingMode = .withinWindow
-                effect.state = .active
-                effect.isEmphasized = false
-                effect.wantsLayer = true
-                effect.layer?.backgroundColor = chrome.cgColor
+                effect.isHidden = true
+                effect.alphaValue = 0
+                effect.state = .inactive
             } else if typeName.contains("Titlebar") || typeName.contains("TitleBar") || typeName.contains("ThemeFrame") {
-                current.wantsLayer = true
-                current.layer?.backgroundColor = chrome.cgColor
+                tintChromeLayer(current, color: chrome, skipButtons: true)
             }
             view = current.superview
         }
         for effect in visualEffectViews(in: root) {
-            effect.material = .windowBackground
-            effect.blendingMode = .withinWindow
-            effect.state = .active
-            effect.isEmphasized = false
-            effect.wantsLayer = true
-            effect.layer?.backgroundColor = chrome.cgColor
+            effect.isHidden = true
+            effect.alphaValue = 0
+            effect.state = .inactive
         }
+        walkChromeSubviews(in: root, chrome: chrome)
+    }
+
+    private static func walkChromeSubviews(in root: NSView, chrome: NSColor) {
+        func walk(_ view: NSView) {
+            let typeName = String(describing: type(of: view))
+            if view is NSVisualEffectView {
+                view.isHidden = true
+                view.alphaValue = 0
+            } else if typeName.contains("Titlebar") || typeName.contains("TitleBar") || typeName.contains("ThemeFrame") {
+                tintChromeLayer(view, color: chrome, skipButtons: true)
+            }
+            for child in view.subviews {
+                walk(child)
+            }
+        }
+        walk(root)
+    }
+
+    private static func tintChromeLayer(_ view: NSView, color: NSColor, skipButtons: Bool) {
+        if skipButtons, view is NSButton { return }
+        view.wantsLayer = true
+        view.layer?.backgroundColor = color.cgColor
+        view.layer?.isOpaque = true
     }
 
     private static func visualEffectViews(in root: NSView) -> [NSVisualEffectView] {
@@ -492,6 +600,127 @@ extension View {
     }
 }
 
+// MARK: - Titlebar layout metrics (contentLayoutRect)
+
+/// Publishes AppKit titlebar metrics into SwiftUI when the hosting window lays out or resizes.
+private struct OWWindowChromeLayoutReader: NSViewRepresentable {
+    @Binding var windowControlTopInset: CGFloat
+    @Binding var shellChromeSafeAreaTop: CGFloat
+    @Binding var shellChromeContentLeadingInset: CGFloat
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            windowControlTopInset: $windowControlTopInset,
+            shellChromeSafeAreaTop: $shellChromeSafeAreaTop,
+            shellChromeContentLeadingInset: $shellChromeContentLeadingInset
+        )
+    }
+
+    func makeNSView(context: Context) -> OWWindowChromeLayoutProbeView {
+        let view = OWWindowChromeLayoutProbeView(coordinator: context.coordinator)
+        view.openWriteSuppressFocusRing()
+        return view
+    }
+
+    func updateNSView(_ nsView: OWWindowChromeLayoutProbeView, context: Context) {
+        context.coordinator.sync(from: nsView)
+    }
+
+    final class Coordinator {
+        @Binding var windowControlTopInset: CGFloat
+        @Binding var shellChromeSafeAreaTop: CGFloat
+        @Binding var shellChromeContentLeadingInset: CGFloat
+        private var boundWindowID: ObjectIdentifier?
+        private var observers: [NSObjectProtocol] = []
+
+        init(
+            windowControlTopInset: Binding<CGFloat>,
+            shellChromeSafeAreaTop: Binding<CGFloat>,
+            shellChromeContentLeadingInset: Binding<CGFloat>
+        ) {
+            _windowControlTopInset = windowControlTopInset
+            _shellChromeSafeAreaTop = shellChromeSafeAreaTop
+            _shellChromeContentLeadingInset = shellChromeContentLeadingInset
+        }
+
+        deinit {
+            observers.forEach(NotificationCenter.default.removeObserver)
+        }
+
+        func sync(from view: NSView) {
+            guard let window = view.window else { return }
+            publish(from: window)
+            let windowID = ObjectIdentifier(window)
+            guard windowID != boundWindowID else { return }
+            boundWindowID = windowID
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers.removeAll()
+            let center = NotificationCenter.default
+            let names: [Notification.Name] = [
+                NSWindow.didResizeNotification,
+                NSWindow.didEnterFullScreenNotification,
+                NSWindow.didExitFullScreenNotification,
+                NSWindow.didChangeBackingPropertiesNotification,
+            ]
+            for name in names {
+                let token = center.addObserver(forName: name, object: window, queue: .main) { [weak self, weak window] _ in
+                    guard let self, let window else { return }
+                    self.publish(from: window)
+                }
+                observers.append(token)
+            }
+        }
+
+        private func publish(from window: NSWindow) {
+            let nextInset = window.openWriteWindowControlTopInset
+            let nextSafeTop = window.openWriteShellChromeSafeAreaTop
+            let nextLeading = OWWindowChrome.usesCustomWindowControls
+                ? DesignTokens.Layout.shellChromeContentLeadingInset
+                : window.openWriteShellChromeContentLeadingInset
+            let changed = abs(windowControlTopInset - nextInset) > 0.25
+                || abs(shellChromeSafeAreaTop - nextSafeTop) > 0.25
+                || abs(shellChromeContentLeadingInset - nextLeading) > 0.25
+            guard changed else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                if abs(self.windowControlTopInset - nextInset) > 0.25 {
+                    self.windowControlTopInset = nextInset
+                }
+                if abs(self.shellChromeSafeAreaTop - nextSafeTop) > 0.25 {
+                    self.shellChromeSafeAreaTop = nextSafeTop
+                }
+                if abs(self.shellChromeContentLeadingInset - nextLeading) > 0.25 {
+                    self.shellChromeContentLeadingInset = nextLeading
+                }
+            }
+        }
+    }
+}
+
+private final class OWWindowChromeLayoutProbeView: NSView {
+    weak var coordinator: OWWindowChromeLayoutReader.Coordinator?
+
+    init(coordinator: OWWindowChromeLayoutReader.Coordinator) {
+        self.coordinator = coordinator
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        coordinator?.sync(from: self)
+    }
+
+    override func layout() {
+        super.layout()
+        coordinator?.sync(from: self)
+    }
+}
+
 // MARK: - Custom window controls (muted rounded squares)
 
 /// Close / minimize / zoom controls integrated into the filled shell title bar.
@@ -507,7 +736,8 @@ struct OWShellWindowControls: View {
                 NSApp.keyWindow?.miniaturize(nil)
             }
             shellWindowButton(role: .zoom) {
-                NSApp.keyWindow?.zoom(nil)
+                guard let window = NSApp.keyWindow else { return }
+                window.toggleFullScreen(nil)
             }
         }
         .accessibilityElement(children: .contain)
@@ -561,9 +791,9 @@ struct OWShellWindowControls: View {
     private func fillColor(for role: ControlRole) -> Color {
         switch role {
         case .close:
-            return palette.warning.opacity(0.22)
+            return palette.warning.opacity(0.32)
         case .minimize, .zoom:
-            return DesignTokens.Color.surfaceElevated.opacity(0.88)
+            return DesignTokens.Color.surfaceElevated.opacity(0.95)
         }
     }
 
@@ -571,7 +801,7 @@ struct OWShellWindowControls: View {
         switch role {
         case .close: return "Close window"
         case .minimize: return "Minimize window"
-        case .zoom: return "Zoom window"
+        case .zoom: return "Enter full screen"
         }
     }
 }
@@ -580,6 +810,9 @@ struct OWShellWindowControls: View {
 
 struct OWShellTitleBar: View {
     @Environment(\.openWritePalette) private var palette
+    @State private var windowControlTopInset = DesignTokens.Layout.windowControlTopInset
+    @State private var shellChromeSafeAreaTop = DesignTokens.Layout.shellChromeSafeAreaTop
+    @State private var shellChromeContentLeadingInset = DesignTokens.Layout.shellChromeContentLeadingInset
 
     let tabs: [CenterWorkbenchTab]
     let selectedTab: CenterWorkbenchTab
@@ -590,52 +823,55 @@ struct OWShellTitleBar: View {
     var body: some View {
         GeometryReader { geometry in
             let compact = geometry.size.width < DesignTokens.Layout.shellCompactBreakpoint
-            let chromeContentHeight = DesignTokens.Layout.shellChromeSafeAreaTop + DesignTokens.Layout.shellChromeBarHeight
             let leadingInset: CGFloat = {
                 if brandAlignsWithNavigationRail {
                     return DesignTokens.Layout.navigationRailBrandLeadingInset
                 }
                 return compact
                     ? DesignTokens.Layout.shellChromeCompactLeadingInset
-                    : DesignTokens.Layout.shellChromeContentLeadingInset
+                    : shellChromeContentLeadingInset
             }()
 
-            ZStack(alignment: .top) {
+            ZStack(alignment: .topLeading) {
                 palette.shellChrome
                     .ignoresSafeArea(edges: .top)
 
                 VStack(spacing: 0) {
-                    ZStack(alignment: .leading) {
-                        HStack(spacing: DesignTokens.Spacing.spacing3) {
+                    HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
+                        if OWWindowChrome.usesCustomWindowControls {
                             OWShellWindowControls()
                                 .padding(.leading, DesignTokens.Layout.windowControlLeadingInset)
-                                .zIndex(2)
+                        } else {
+                            Color.clear
+                                .frame(width: shellChromeContentLeadingInset)
+                                .accessibilityHidden(true)
+                        }
 
-                            if !brandAlignsWithNavigationRail {
-                                HStack(spacing: DesignTokens.Spacing.spacing2) {
-                                    OWBrandMark(size: compact ? 18 : 20)
-                                    Text("OpenWrite")
-                                        .font(compact ? OWTypography.captionEmphasis : OWTypography.bodyEmphasis)
-                                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                                        .lineLimit(1)
-                                }
+                        if !brandAlignsWithNavigationRail {
+                            HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
+                                OWBrandMark(size: compact ? 18 : 20)
+                                Text("OpenWrite")
+                                    .font(compact ? OWTypography.captionEmphasis : OWTypography.bodyEmphasis)
+                                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                                    .lineLimit(1)
                             }
-
-                            Spacer(minLength: 0)
                         }
-                        .padding(.top, DesignTokens.Layout.windowControlTopInset)
-                        .padding(.trailing, DesignTokens.Spacing.spacing4)
 
-                        HStack(spacing: 0) {
-                            Spacer(minLength: leadingInset)
-                            tabStrip
-                                .layoutPriority(1)
-                            Spacer(minLength: leadingInset)
-                        }
-                        .padding(.top, DesignTokens.Layout.windowControlTopInset)
-                        .padding(.trailing, DesignTokens.Spacing.spacing4)
+                        Spacer(minLength: 0)
                     }
-                    .frame(height: chromeContentHeight, alignment: .top)
+                    .padding(.top, windowControlTopInset)
+                    .padding(.bottom, DesignTokens.Spacing.spacing1)
+                    .frame(height: shellChromeSafeAreaTop, alignment: .bottomLeading)
+                    .padding(.trailing, DesignTokens.Spacing.spacing4)
+
+                    HStack(spacing: 0) {
+                        Spacer(minLength: leadingInset)
+                        tabStrip
+                            .layoutPriority(1)
+                        Spacer(minLength: leadingInset)
+                    }
+                    .frame(height: DesignTokens.Layout.shellChromeBarHeight, alignment: .center)
+                    .padding(.trailing, DesignTokens.Spacing.spacing4)
 
                     Rectangle()
                         .fill(DesignTokens.Color.borderHairline)
@@ -643,8 +879,18 @@ struct OWShellTitleBar: View {
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
             }
+            .zIndex(OWWindowChrome.usesCustomWindowControls ? 2 : 0)
         }
-        .frame(height: DesignTokens.Layout.shellChromeSafeAreaTop + DesignTokens.Layout.shellChromeBarHeight + DesignTokens.Layout.borderWidth)
+        .frame(height: shellChromeSafeAreaTop + DesignTokens.Layout.shellChromeBarHeight + DesignTokens.Layout.borderWidth)
+        .clipped()
+        .zIndex(10)
+        .background {
+            OWWindowChromeLayoutReader(
+                windowControlTopInset: $windowControlTopInset,
+                shellChromeSafeAreaTop: $shellChromeSafeAreaTop,
+                shellChromeContentLeadingInset: $shellChromeContentLeadingInset
+            )
+        }
         .background(OWTitleBarDraggableRegion())
     }
 
@@ -806,7 +1052,7 @@ struct OWResizableColumnSplit<Leading: View, Trailing: View>: View {
                 isResizable: isResizable
             )
 
-            HStack(spacing: DesignTokens.Layout.shellColumnGutter) {
+            HStack(spacing: 0) {
                 switch fixedColumn {
                 case .leading:
                     leading()
@@ -819,7 +1065,7 @@ struct OWResizableColumnSplit<Leading: View, Trailing: View>: View {
                         .layoutPriority(1)
                 case .trailing:
                     leading()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(minWidth: flexibleMinWidth, maxWidth: .infinity, maxHeight: .infinity)
                         .layoutPriority(1)
                     if isResizable {
                         splitDivider
@@ -829,6 +1075,7 @@ struct OWResizableColumnSplit<Leading: View, Trailing: View>: View {
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+            .clipped()
             .onAppear {
                 reconcileFixedWidth(availableWidth: geometry.size.width)
             }
@@ -866,6 +1113,7 @@ struct OWResizableColumnSplit<Leading: View, Trailing: View>: View {
         Rectangle()
             .fill(Color.clear)
             .frame(width: DesignTokens.Layout.splitDividerHitWidth)
+            .padding(.leading, DesignTokens.Layout.shellColumnGutter)
             .overlay(alignment: .center) {
                 Rectangle()
                     .fill(
@@ -874,6 +1122,7 @@ struct OWResizableColumnSplit<Leading: View, Trailing: View>: View {
                             : DesignTokens.Color.borderSubtle
                     )
                     .frame(width: DesignTokens.Layout.borderWidth)
+                    .padding(.leading, DesignTokens.Layout.shellColumnGutter)
             }
             .contentShape(Rectangle())
             .onHover { hovering in

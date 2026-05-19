@@ -2,6 +2,8 @@ import SwiftUI
 
 struct EditorView: View {
     @Environment(\.openWritePalette) private var palette
+    @Environment(\.workbenchCenterLayout) private var workbenchLayout
+    @Environment(\.workbenchAssistBottomBarInset) private var assistBottomBarInset
     @Environment(ThemeManager.self) private var themeManager
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var pastWrites: InMemoryPastWritesService
@@ -107,16 +109,8 @@ struct EditorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(DesignTokens.Color.background)
+        .background(palette.editorCanvas)
         .environment(\.blockFormatting, blockFormatting)
-        // Popover (not `.sheet`) so the editor + shell stay visible while reading the refine result.
-        // Sheets darken/blur the entire parent window on macOS — user feedback: "very strange
-        // washing over everything". Popover anchors to the editor body and dismisses on outside tap.
-        .popover(isPresented: $inlineAssist.showRefineResult, arrowEdge: .top) {
-            refineResultSheet
-                .frame(minWidth: 360, idealWidth: 460, maxWidth: 540, minHeight: 220, idealHeight: 320, maxHeight: 520)
-                .padding(DesignTokens.Spacing.spacing3)
-        }
         .onAppear {
             syncFromDocument(document)
             syncHeaderFromDocument(document)
@@ -132,6 +126,7 @@ struct EditorView: View {
             if preview {
                 showProperties = false
                 showTypePicker = false
+                blockFormatting.clearActiveEditor()
             }
         }
         .onChange(of: document?.updatedAt) { _, _ in
@@ -163,6 +158,24 @@ struct EditorView: View {
                 .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .safeAreaInset(edge: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            if inlineAssist.showRefineResult {
+                refineAssistColumn
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .animation(DesignTokens.Motion.animationStandard, value: inlineAssist.showRefineResult)
+    }
+
+    private var refineAssistColumn: some View {
+        OWRefineAssistPanel(
+            inlineAssist: inlineAssist,
+            sourceHits: inlineAssist.phase.sourceHits,
+            onApply: { applyRefinementToDocument() },
+            onOpenSource: { vaultStore.selectedDocumentID = $0 }
+        )
+        .padding(.top, DesignTokens.Spacing.spacing2)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private func pageBanner(_ document: VaultDocument) -> some View {
@@ -179,7 +192,7 @@ struct EditorView: View {
                 metadataRow(document)
             }
 
-            if showProperties {
+            if showProperties, !isEditorPreviewMode {
                 OWRoundedRect(style: .elevated, padding: DesignTokens.Spacing.spacing2) {
                     PropertyInspectorView(documentID: document.id)
                 }
@@ -225,7 +238,9 @@ struct EditorView: View {
                     )
                 }
                 .buttonStyle(.plain)
-            .openWriteFocusChrome()
+                .openWriteFocusChrome()
+                .disabled(isEditorPreviewMode)
+                .opacity(isEditorPreviewMode ? 0.45 : 1)
             }
         }
         .padding(.bottom, DesignTokens.Layout.editorMetadataToToolbarSpacing)
@@ -239,7 +254,7 @@ struct EditorView: View {
                 welcomeBodyHint
             }
         }
-        .openWriteEditorLeadingInset()
+        .openWriteEditorChromeRow()
         .padding(.bottom, DesignTokens.Spacing.spacing1)
     }
 
@@ -265,19 +280,46 @@ struct EditorView: View {
             .font(OWTypography.captionEmphasis)
             .foregroundStyle(DesignTokens.Color.accent)
         }
-        .openWriteEditorContentWidth()
+        .openWriteEditorChromeRow()
     }
 
     private var blockFormattingBar: some View {
-        OWBlockFormattingToolbar(
-            formatting: blockFormatting,
-            blockAttributes: focusedBlockAttributesBinding,
-            isPreviewMode: $isEditorPreviewMode
-        )
-        .openWriteEditorContentWidth()
-        .openWriteEditorLeadingInset()
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            OWBlockFormattingToolbar(
+                formatting: blockFormatting,
+                blockAttributes: focusedBlockAttributesBinding,
+                isPreviewMode: $isEditorPreviewMode
+            )
+
+            HStack(spacing: DesignTokens.Spacing.spacing2) {
+                EditorBlockInsertMenu { insertBlock($0) }
+                Spacer(minLength: 0)
+                refineChromeButton
+            }
+        }
+        .openWriteEditorChromeRow()
         .padding(.top, DesignTokens.Spacing.spacing1)
         .padding(.bottom, DesignTokens.Spacing.spacing2)
+    }
+
+    @ViewBuilder
+    private var refineChromeButton: some View {
+        Button {
+            requestInlineRefine(preset: .improve)
+        } label: {
+            if inlineAssist.isRefining {
+                OWBrandLogoSpinner(size: 18, periodSeconds: 1.8)
+            } else {
+                OWLabel(title: "Refine", icon: .sparkles)
+            }
+        }
+        .buttonStyle(OWToolbarActionButtonStyle(isEnabled: !inlineAssist.isRefining))
+        .disabled(inlineAssist.isRefining)
+        .help(
+            inlineAssist.canRefineSelection
+                ? "Improve selected text with local AI and vault context"
+                : "Refine — select text in a block first, or open the assistant for guidance"
+        )
     }
 
     private var focusedBlockAttributesBinding: Binding<[String: String]> {
@@ -295,79 +337,64 @@ struct EditorView: View {
         )
     }
 
-    private func editorActionBar(_ document: VaultDocument) -> some View {
-        HStack(spacing: DesignTokens.Spacing.spacing3) {
-            Spacer()
-
-            Button {
-                requestInlineRefine(preset: .improve)
-            } label: {
-                if inlineAssist.isRefining {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    OWLabel(title: "Refine", icon: .sparkles)
+    @ViewBuilder
+    private func editorScrollSurface(_ document: VaultDocument) -> some View {
+        ScrollViewReader { scrollProxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                editorBlocksStack(document)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .scrollClipDisabled(false)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                editorHeaderChrome(document)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .onChange(of: isEditorPreviewMode) { _, preview in
+                if preview {
+                    blockFormatting.clearActiveEditor()
+                }
+                withAnimation(.easeOut(duration: 0.15)) {
+                    scrollProxy.scrollTo("openwrite.editor.blocks.top", anchor: .top)
                 }
             }
-            .buttonStyle(OWToolbarActionButtonStyle(isEnabled: !inlineAssist.isRefining))
-            .disabled(inlineAssist.isRefining)
-            .help(
-                inlineAssist.canRefineSelection
-                    ? "Improve selected text with local AI and vault context"
-                    : "Refine — select text in the note first, or open for guidance"
-            )
         }
-        .frame(maxWidth: .infinity)
-        .openWriteEditorLeadingInset()
-        .padding(.vertical, DesignTokens.Spacing.spacing1)
-    }
-
-    private var editorScrollLayoutToken: Int {
-        var token = themeManager.selectedTheme.hashValue
-        if workbench.aiAssistExpanded { token |= 1 << 1 }
-        if !workbench.sidebarVisible { token |= 1 << 2 }
-        if workbench.navigationRailCollapsed { token |= 1 << 3 }
-        return token
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(palette.editorCanvas)
     }
 
     @ViewBuilder
-    private func editorScrollSurface(_ document: VaultDocument) -> some View {
-        // SwiftUI ScrollView avoids NSScrollView ↔ block-host measure feedback (Welcome CPU/RAM loop).
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 0) {
-                pageBanner(document)
+    private func editorHeaderChrome(_ document: VaultDocument) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            pageBanner(document)
 
-                VStack(alignment: .leading, spacing: 0) {
-                    if !isEditorPreviewMode {
-                        blockFormattingBar
-                            .padding(.top, DesignTokens.Spacing.spacing2)
+            if !isEditorPreviewMode {
+                blockFormattingBar
+                    .padding(.top, DesignTokens.Spacing.spacing2)
+            } else {
+                previewReturnBar
+                    .padding(.top, DesignTokens.Spacing.spacing2)
+                    .padding(.bottom, DesignTokens.Spacing.spacing1)
+            }
 
-                        editorActionBar(document)
-                            .padding(.top, DesignTokens.Spacing.spacing2)
-                    } else {
-                        HStack {
-                            Spacer()
-                            Button {
-                                isEditorPreviewMode = false
-                            } label: {
-                                Text("Edit")
-                                    .font(OWTypography.captionEmphasis)
-                                    .foregroundStyle(DesignTokens.Color.accent)
-                            }
-                            .buttonStyle(.plain)
-                            .openWriteFocusChrome()
-                            .help("Return to editing")
-                        }
-                        .openWriteEditorLeadingInset()
-                        .padding(.top, DesignTokens.Spacing.spacing2)
-                    }
+            Rectangle()
+                .fill(palette.borderSubtle)
+                .frame(height: DesignTokens.Layout.borderWidth)
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(palette.editorCanvas)
+    }
 
+    @ViewBuilder
+    private func editorBlocksStack(_ document: VaultDocument) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Group {
+                if isEditorPreviewMode {
+                    EditorPreviewBlockStack(blocks: editingBlocks)
+                } else {
                     OWBlockEditorView(
                         blocks: $editingBlocks,
-                        previewMode: isEditorPreviewMode,
-                        onActivateBlock: { _ in
-                            isEditorPreviewMode = false
-                        },
+                        columnWidth: resolvedBlockColumnWidth,
+                        onActivateBlock: nil,
                         onSelectionChange: { selectedText in
                             inlineAssist.scheduleSelectionCapture(
                                 documentID: document.id,
@@ -383,20 +410,55 @@ struct EditorView: View {
                             )
                         }
                     )
-                        .openWriteEditorLeadingInset()
-                        .padding(.top, DesignTokens.Layout.editorHeaderToBodySpacing)
-                        .onChange(of: editingBlocks) { _, newBlocks in
-                            scheduleCommitBlocks(document: document, blocks: newBlocks)
-                        }
                 }
-                .openWriteEditorContentWidth()
-                .padding(.bottom, DesignTokens.Layout.editorScrollBottomCushion)
             }
-            .frame(maxWidth: .infinity, alignment: .top)
+            .frame(width: resolvedBlockColumnWidth, alignment: .leading)
+            .openWriteEditorFullWidth(alignment: .leading)
+            .openWriteEditorLeadingInset()
+            .padding(.top, DesignTokens.Spacing.spacing2)
+            .padding(
+                .bottom,
+                DesignTokens.Layout.editorScrollBottomCushion + assistBottomBarInset
+            )
+            .onChange(of: editingBlocks) { _, newBlocks in
+                scheduleCommitBlocks(document: document, blocks: newBlocks)
+            }
+
+            Color.clear
+                .frame(height: 0)
+                .id("openwrite.editor.blocks.top")
         }
-        .id(editorScrollLayoutToken)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(palette.editorCanvas)
+    }
+
+    /// Block column width from workbench layout (`safeAreaInset` handles refine rail inset).
+    private var resolvedBlockColumnWidth: CGFloat {
+        max(workbenchLayout.editorBodyWidth, 320)
+    }
+
+    private var previewReturnBar: some View {
+        HStack(spacing: DesignTokens.Spacing.spacing2) {
+            Button {
+                isEditorPreviewMode = false
+            } label: {
+                HStack(spacing: DesignTokens.Spacing.spacing1) {
+                    Text("←")
+                        .font(OWTypography.captionEmphasis)
+                    Text("Back to editing")
+                        .font(OWTypography.captionEmphasis)
+                }
+                .foregroundStyle(DesignTokens.Color.accent)
+                .padding(.horizontal, DesignTokens.Spacing.spacing2)
+                .padding(.vertical, 6)
+                .background(
+                    DesignTokens.Color.accent.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                )
+            }
+            .buttonStyle(.plain)
+            .openWriteFocusChrome()
+            Spacer(minLength: 0)
+        }
+        .openWriteEditorChromeRow()
     }
 
     private func nonEmptyProperty(_ document: VaultDocument, key: PagePropertyKey) -> String? {
@@ -420,71 +482,6 @@ struct EditorView: View {
         headerCoverImagePath = document.coverImagePath
         headerIconOffsetX = document.pageIconOffsetX
         headerIconOffsetY = document.pageIconOffsetY
-    }
-
-    @ViewBuilder
-    private var refineResultSheet: some View {
-        NavigationStack {
-            Group {
-                switch inlineAssist.phase {
-                case .refining:
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("Refining selection…")
-                            .font(OWTypography.callout)
-                            .foregroundStyle(DesignTokens.Color.textSecondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .ready(let text, let sourceHits):
-                    OpenWriteThemedScrollView(canvasColor: palette.editorCanvas) {
-                        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
-                            if !sourceHits.isEmpty {
-                                RAGSourcePillsView(hits: sourceHits) { documentID in
-                                    vaultStore.selectedDocumentID = documentID
-                                }
-                            }
-                            Text(AIInput.stripChunkReferences(text))
-                                .font(OWTypography.body)
-                                .lineSpacing(OWTypography.bodyLineSpacing)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            if inlineAssist.canApplyRefinement {
-                                Button("Apply to selection") {
-                                    applyRefinementToDocument()
-                                }
-                                .buttonStyle(OWAccentCapsuleButtonStyle())
-                            }
-                        }
-                        .padding()
-                    }
-                case .failed(let message):
-                    OWEmptyState(
-                        title: "Refine failed",
-                        icon: .warning,
-                        description: Text(message)
-                    )
-                default:
-                    Text("No result")
-                        .font(OWTypography.callout)
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
-                }
-            }
-            .navigationTitle("Refine selection")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { inlineAssist.dismissRefine() }
-                        .buttonStyle(OWSecondaryRectButtonStyle())
-                }
-                if inlineAssist.canApplyRefinement {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Apply") { applyRefinementToDocument() }
-                            .buttonStyle(OWAccentCapsuleButtonStyle())
-                    }
-                }
-            }
-        }
-        .background(DesignTokens.Color.background)
     }
 
     private func requestInlineRefine(
@@ -518,7 +515,20 @@ struct EditorView: View {
     }
 
     private func requestInlineRefine(preset: InlineRefinePreset) {
-        guard document != nil else { return }
+        guard let document else { return }
+        if let capture = blockFormatting.refineSelectionSnapshot() {
+            inlineAssist.scheduleSelectionCapture(
+                documentID: document.id,
+                blockID: capture.blockID,
+                selectedText: capture.text
+            )
+            requestInlineRefine(
+                document: document,
+                preset: preset,
+                selectedText: capture.text
+            )
+            return
+        }
         inlineAssist.commitPendingCapture()
         Task {
             if let lmMessage = await ensureLMReadyForRefine() {
@@ -578,18 +588,49 @@ struct EditorView: View {
         }
     }
 
+    private func insertBlock(_ block: NoteBlock) {
+        if let after = blockFormatting.focusedBlockID,
+           let index = editingBlocks.firstIndex(where: { $0.id == after }) {
+            editingBlocks.insert(block, at: index + 1)
+        } else {
+            editingBlocks.append(block)
+        }
+        if let document {
+            commitBlocks(document: document, blocks: editingBlocks)
+        }
+    }
+
     private func applyRefinementToDocument() {
         guard let document,
               let snapshot = inlineAssist.latestSnapshot,
               case .ready(let refined, _) = inlineAssist.phase else { return }
 
-        let applied = InlineAssistController.applyRefinement(
-            refined,
-            snapshot: snapshot,
-            blocks: &editingBlocks,
-            fallbackBlockID: blockFormatting.focusedBlockID
-        )
-        guard applied else { return }
+        var didChange = false
+
+        if !inlineAssist.pendingActions.isEmpty {
+            let result = OWActionExecutor.apply(
+                inlineAssist.pendingActions,
+                to: editingBlocks,
+                insertAfter: blockFormatting.focusedBlockID ?? snapshot.blockID
+            )
+            editingBlocks = result.blocks
+            didChange = true
+            if result.graphRefreshRequested {
+                workbench.graphRefreshToken += 1
+            }
+        }
+
+        let prose = refined.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !prose.isEmpty {
+            didChange = InlineAssistController.applyRefinement(
+                prose,
+                snapshot: snapshot,
+                blocks: &editingBlocks,
+                fallbackBlockID: blockFormatting.focusedBlockID
+            ) || didChange
+        }
+
+        guard didChange else { return }
 
         commitBlocks(document: document, blocks: editingBlocks)
         inlineAssist.dismissRefine()

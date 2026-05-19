@@ -15,6 +15,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         installWindowChromeObservers()
         presentMainWindow()
+        // Launch paint: AppKit may not have laid out ThemeFrame yet when SwiftUI first appears.
+        DispatchQueue.main.async {
+            OWWindowChrome.applyToAllWindows()
+            DispatchQueue.main.async {
+                OWWindowChrome.applyToAllWindows()
+            }
+        }
     }
 
     deinit {
@@ -30,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSWindow.didBecomeKeyNotification,
             NSWindow.didBecomeMainNotification,
             NSWindow.didResizeNotification,
+            NSWindow.didEnterFullScreenNotification,
             NSApplication.didBecomeActiveNotification,
             .openWriteThemeDidChange,
         ]
@@ -80,9 +88,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let window = NSApp.mainWindow ?? NSApp.keyWindow ?? preferredMainWindow() {
             applyWindowSizingPolicy(to: window)
-            OWWindowChrome.apply(to: window)
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
+            // Defer chrome paint until AppKit has installed the content view hierarchy (matches OWWindowChromeConfigurator).
+            DispatchQueue.main.async {
+                guard window.isVisible else { return }
+                OWWindowChrome.apply(to: window)
+                DispatchQueue.main.async {
+                    OWWindowChrome.apply(to: window)
+                }
+            }
             return
         }
 

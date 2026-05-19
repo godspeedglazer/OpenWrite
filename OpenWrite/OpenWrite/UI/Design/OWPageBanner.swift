@@ -36,20 +36,24 @@ struct OWPageBanner<Metadata: View>: View {
                             .strokeBorder(palette.editorCanvas, lineWidth: 2)
                     }
                     .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-                    .padding(.leading, DesignTokens.Spacing.spacing3)
+                    .padding(.leading, DesignTokens.Layout.editorContentLeadingInset)
                     .offset(y: showsGradient ? iconOverlap : 0)
             }
+            .frame(
+                height: showsGradient ? stripHeight + iconOverlap : iconSize,
+                alignment: .bottomLeading
+            )
             .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
 
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
                 OWPageTitleBand(title: title)
 
                 metadata()
             }
-            .openWriteEditorContentWidth()
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, showsGradient ? iconOverlap + DesignTokens.Spacing.spacing2 : DesignTokens.Spacing.spacing2)
-            .padding(.horizontal, DesignTokens.Spacing.spacing3)
+            .padding(.horizontal, DesignTokens.Layout.editorContentLeadingInset)
             .padding(.bottom, DesignTokens.Spacing.spacing2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -98,6 +98,8 @@ enum AgentRegistry {
         answerInstructions: """
         Answer the user's question in clear prose first (1–3 short paragraphs or tight bullets).
         Use excerpts only as supporting evidence. Cite [chunk:UUID] inline when a claim comes from an excerpt.
+
+        \(OWActionScript.systemPromptAppendix())
         """
     )
 
@@ -170,7 +172,7 @@ enum AgentRegistry {
         maxReferenceExcerpts: 0,
         snippetMaxChars: nil,
         uiSummary: "Editor selection refine only (no vault search)",
-        answerInstructions: ""
+        answerInstructions: OWActionScript.systemPromptAppendix()
     )
 
     // MARK: - Reor tool definitions (metadata; execution in RAG / future vault actions)

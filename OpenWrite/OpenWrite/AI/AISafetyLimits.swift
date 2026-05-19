@@ -46,6 +46,8 @@ enum AISafetyLimits {
     static let webFetchMaxRedirects = 3
     static let maxWebURLsPerMessage = 2
     static let maxWebTextChars = 12_000
+    /// Per-image cap for vision chat payloads (base64 in LM Studio / OpenAI-compatible API).
+    static let maxVisionImageBytes = 4 * 1024 * 1024
 }
 
 enum AITaskTimeoutError: Error, Sendable {

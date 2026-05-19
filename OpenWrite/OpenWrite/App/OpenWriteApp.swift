@@ -52,6 +52,17 @@ struct OpenWriteApp: App {
                 .environmentObject(aiServices)
         }
         .commands {
+            CommandGroup(after: .windowArrangement) {
+                Button("Enter Full Screen") {
+                    NSApp.keyWindow?.toggleFullScreen(nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .control])
+
+                Button("Toggle Focus Mode") {
+                    NotificationCenter.default.post(name: .openWriteToggleFocusMode, object: nil)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+            }
             CommandGroup(replacing: .undoRedo) {
                 Button("Undo") {
                     NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)

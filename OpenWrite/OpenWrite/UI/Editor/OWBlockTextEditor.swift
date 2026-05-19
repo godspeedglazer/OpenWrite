@@ -218,7 +218,8 @@ struct OWBlockTextEditor: NSViewRepresentable {
                 from: parent.markdown,
                 family: family,
                 pointSize: size,
-                textColor: NSColor(parent.textColor)
+                textColor: NSColor(parent.textColor),
+                linkColor: NSColor(DesignTokens.Color.accent)
             )
             isProgrammaticUpdate = true
             let storage = NSMutableAttributedString(attributedString: parsed)
@@ -229,7 +230,9 @@ struct OWBlockTextEditor: NSViewRepresentable {
                     range: NSRange(location: 0, length: storage.length)
                 )
             }
+            textView.undoManager?.disableUndoRegistration()
             textView.textStorage?.setAttributedString(storage)
+            textView.undoManager?.enableUndoRegistration()
             if preserveSelection {
                 let length = (textView.string as NSString).length
                 if length > 0 {
@@ -377,10 +380,23 @@ final class BlockTextContainerView: NSView {
     }
 }
 
+extension Notification.Name {
+    /// Block editor paste host ingests clipboard images when a block field receives ⌘V.
+    static let openWriteIngestPastedImage = Notification.Name("openwrite.ingestPastedImage")
+}
+
 final class BlockFormattingTextView: NSTextView {
     weak var formattingCoordinator: OWBlockTextEditor.Coordinator?
 
     override var isOpaque: Bool { false }
+
+    override func paste(_ sender: Any?) {
+        if ImagePasteSupport.pasteboardHasIngestibleImage {
+            NotificationCenter.default.post(name: .openWriteIngestPastedImage, object: nil)
+            return
+        }
+        super.paste(sender)
+    }
 
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()

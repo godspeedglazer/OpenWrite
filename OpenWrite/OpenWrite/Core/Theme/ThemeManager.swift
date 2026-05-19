@@ -3,6 +3,8 @@ import SwiftUI
 extension Notification.Name {
     /// Posted after `ThemeManager.select` — AppKit scroll hosts and window chrome listen for this.
     static let openWriteThemeDidChange = Notification.Name("com.openwrite.themeDidChange")
+    /// Hides sidebar + assist for distraction-free writing (menu / shortcut only — not tied to fullscreen).
+    static let openWriteToggleFocusMode = Notification.Name("com.openwrite.toggleFocusMode")
 }
 
 // MARK: - Environment

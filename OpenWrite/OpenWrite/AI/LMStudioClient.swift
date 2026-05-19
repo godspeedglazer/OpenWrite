@@ -92,7 +92,8 @@ struct LMStudioClient: Sendable {
             ["role": "user", "content": userMessage]
         ]
         var full = ""
-        for try await delta in chatCompletionsStream(messages: messages, maxTokens: maxTokens) {
+        let payload: [[String: Any]] = messages.map { ["role": $0["role"]!, "content": $0["content"]!] }
+        for try await delta in chatCompletionsStream(messages: payload, maxTokens: maxTokens) {
             full += delta
         }
         let trimmed = full.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -101,7 +102,7 @@ struct LMStudioClient: Sendable {
     }
 
     func chatCompletionsStream(
-        messages: [[String: String]],
+        messages: [[String: Any]],
         maxTokens: Int = AISafetyLimits.maxCompletionTokens,
         temperature: Double = 0.2
     ) -> AsyncThrowingStream<String, Error> {
@@ -166,7 +167,7 @@ struct LMStudioClient: Sendable {
     }
 
     private func streamChat(
-        messages: [[String: String]],
+        messages: [[String: Any]],
         maxTokens: Int,
         temperature: Double,
         continuation: AsyncThrowingStream<String, Error>.Continuation
@@ -175,7 +176,7 @@ struct LMStudioClient: Sendable {
         guard !model.isEmpty else { throw LMStudioError.decodeFailed }
 
         let promptEstimate = messages.reduce(0) { partial, message in
-            partial + AIInput.estimatedTokenCount(for: message["content"] ?? "")
+            partial + ChatVisionPayload.estimatedContentTokens(message["content"] ?? "")
         }
         let budget = AISafetyLimits.maxEstimatedPromptTokens + maxTokens
         guard promptEstimate <= budget else { throw LMStudioError.payloadTooLarge }

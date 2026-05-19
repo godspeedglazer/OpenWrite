@@ -1,5 +1,73 @@
 import SwiftUI
 
+// MARK: - LM Studio connection pill (chat composer)
+
+/// Compact status pill driven by `OpenWriteAIServices.LMConnectionState` (probe result, not streaming guesses).
+struct OWLMConnectionStatusPill: View {
+    let state: OpenWriteAIServices.LMConnectionState
+
+    var body: some View {
+        HStack(spacing: DesignTokens.Spacing.spacing1) {
+            Circle()
+                .fill(style.dot)
+                .frame(width: 6, height: 6)
+            Text(state.statusPillLabel)
+                .font(OWTypography.caption2)
+                .foregroundStyle(style.foreground)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, DesignTokens.Spacing.spacing2)
+        .padding(.vertical, 2)
+        .background(style.background, in: Capsule(style: .continuous))
+        .overlay {
+            Capsule(style: .continuous)
+                .strokeBorder(style.border, lineWidth: DesignTokens.Layout.borderWidth)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(state.statusPillLabel)
+    }
+
+    private var style: PillStyle {
+        switch state.statusPillTone {
+        case .ready:
+            return PillStyle(
+                foreground: DesignTokens.Color.success,
+                background: DesignTokens.Color.success.opacity(0.14),
+                border: DesignTokens.Color.success.opacity(0.28),
+                dot: DesignTokens.Color.success
+            )
+        case .warning:
+            return PillStyle(
+                foreground: DesignTokens.Color.warning,
+                background: DesignTokens.Color.warning.opacity(0.14),
+                border: DesignTokens.Color.warning.opacity(0.30),
+                dot: DesignTokens.Color.warning
+            )
+        case .offline:
+            return PillStyle(
+                foreground: DesignTokens.Color.danger,
+                background: DesignTokens.Color.dangerMuted.opacity(0.55),
+                border: DesignTokens.Color.danger.opacity(0.35),
+                dot: DesignTokens.Color.danger
+            )
+        case .pending:
+            return PillStyle(
+                foreground: DesignTokens.Color.textSecondary,
+                background: DesignTokens.Color.surface.opacity(0.9),
+                border: DesignTokens.Color.borderHairline,
+                dot: DesignTokens.Color.textTertiary
+            )
+        }
+    }
+
+    private struct PillStyle {
+        let foreground: Color
+        let background: Color
+        let border: Color
+        let dot: Color
+    }
+}
+
 /// Vertical pipeline step for vault chat (Manuscripts-style, theme-aware).
 struct ChatPipelineStep: Identifiable, Hashable {
     enum Status: Hashable {
@@ -153,7 +221,7 @@ struct OWChatStatusStepper: View {
                 .minimumScaleFactor(0.82)
                 .truncationMode(.tail)
                 .multilineTextAlignment(.leading)
-            if step.status == .active, showsStreamingDots, step.id == "respond" {
+            if step.status == .active, showsStreamingDots {
                 StepperStreamingDots()
             }
         }

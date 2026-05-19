@@ -7,14 +7,6 @@ private struct AIAssistStripWidthKey: EnvironmentKey {
     static let defaultValue: CGFloat = DesignTokens.Layout.assistStripDefaultWidth
 }
 
-private struct AIAssistStripMeasuredWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 extension EnvironmentValues {
     var aiAssistStripWidth: CGFloat {
         get { self[AIAssistStripWidthKey.self] }
@@ -22,22 +14,51 @@ extension EnvironmentValues {
     }
 }
 
+/// Bottom inset to reserve when the collapsed assist affordance bar is visible (editor column).
+private struct WorkbenchAssistBottomBarInsetKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    var workbenchAssistBottomBarInset: CGFloat {
+        get { self[WorkbenchAssistBottomBarInsetKey.self] }
+        set { self[WorkbenchAssistBottomBarInsetKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Pads scrollable editor content so the collapsed assist bar does not cover the last blocks.
+    func workbenchAssistBottomBarInset(active: Bool) -> some View {
+        padding(.bottom, active ? DesignTokens.Layout.assistBottomBarHeight : 0)
+    }
+
+    /// Publishes bottom-bar height into the environment for nested editor surfaces.
+    func workbenchAssistBottomBarEnvironment(active: Bool) -> some View {
+        environment(
+            \.workbenchAssistBottomBarInset,
+            active ? DesignTokens.Layout.assistBottomBarHeight : 0
+        )
+    }
+}
+
 struct AIAssistStripView: View {
     @Environment(\.openWritePalette) private var palette
     @EnvironmentObject private var vaultStore: VaultStore
+    @EnvironmentObject private var aiServices: OpenWriteAIServices
+    @Environment(\.aiAssistStripWidth) private var assistColumnWidth
     @ObservedObject var workbench: WorkbenchState
     @ObservedObject var pastWrites: InMemoryPastWritesService
     let onCollapse: () -> Void
 
     private var navigation: AIAssistNavigationState { workbench.aiAssistNavigation }
-    @State private var measuredWidth: CGFloat = ShellChromePreferences.assistStripWidth
+    @Environment(\.workbenchCenterLayout) private var workbenchLayout
 
     private var stripIsCompact: Bool {
-        measuredWidth < DesignTokens.Layout.assistStripDefaultWidth
+        !workbenchLayout.assistUsesHorizontalComposer
     }
 
     private var stripIconsOnly: Bool {
-        measuredWidth < DesignTokens.Layout.assistStripIconsOnlyThreshold
+        workbenchLayout.assistColumnWidth < DesignTokens.Layout.assistStripIconsOnlyThreshold
     }
 
     var body: some View {
@@ -51,26 +72,10 @@ struct AIAssistStripView: View {
                 .background(palette.background)
         }
         .frame(
-            minWidth: DesignTokens.Layout.assistStripMinWidth,
-            maxWidth: DesignTokens.Layout.assistStripMaxWidth
+            maxWidth: assistColumnWidth > 0 ? assistColumnWidth : .infinity,
+            maxHeight: .infinity
         )
-        .safeAreaPadding(.horizontal, DesignTokens.Spacing.spacing1)
-        .background {
-            GeometryReader { geometry in
-                Color.clear
-                    .preference(key: AIAssistStripMeasuredWidthKey.self, value: geometry.size.width)
-            }
-        }
-        .onPreferenceChange(AIAssistStripMeasuredWidthKey.self) { width in
-            guard width > 0, abs(measuredWidth - width) > 0.5 else { return }
-            measuredWidth = width
-        }
-        .onAppear {
-            if measuredWidth <= 0 {
-                measuredWidth = ShellChromePreferences.assistStripWidth
-            }
-        }
-        .environment(\.aiAssistStripWidth, measuredWidth)
+        .clipped()
         .background(palette.surface)
         .aiAssistKeyboardBack(navigation)
     }
@@ -120,6 +125,27 @@ struct AIAssistStripView: View {
                 } trailing: {
                     assistToolbarTrailing
                 }
+            } else if navigation.isAtRoot,
+                      navigation.chatPanelScreen == .conversation,
+                      workbench.inspectorTab == .chat {
+                OWAIPanelHeader(
+                    title: "Ask vault",
+                    canGoBack: navigation.stripCanGoBack,
+                    backAccessibilityLabel: navigation.stripBackAccessibilityLabel,
+                    onBack: { navigation.stripBack() },
+                    showsSeparator: false,
+                    center: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Ask vault")
+                                .font(OWTypography.calloutEmphasis)
+                                .foregroundStyle(DesignTokens.Color.textPrimary)
+                            AgentPickerView(selectedAgentID: $aiServices.selectedAgentID)
+                        }
+                    },
+                    trailing: {
+                        assistToolbarTrailing
+                    }
+                )
             } else {
                 OWAIPanelHeader(
                     title: navigation.stripToolbarTitle,
@@ -138,9 +164,6 @@ struct AIAssistStripView: View {
     @ViewBuilder
     private var assistToolbarTrailing: some View {
         HStack(spacing: DesignTokens.Spacing.spacing1) {
-            if navigation.isAtRoot, !navigation.stripCanGoBack {
-                OWUnicodeIconView(icon: .sparkles, size: 14, color: DesignTokens.Color.accent)
-            }
             if navigation.canGoForward {
                 Button {
                     navigation.goForward()
@@ -205,13 +228,21 @@ struct AIAssistBottomBar: View {
             }
         }
         .padding(.horizontal, DesignTokens.Spacing.spacing3)
-        .frame(height: DesignTokens.Layout.assistBottomBarHeight)
-        .background(DesignTokens.Color.surfaceElevated.opacity(0.92))
+        .frame(
+            maxWidth: .infinity,
+            minHeight: DesignTokens.Layout.assistBottomBarHeight,
+            maxHeight: DesignTokens.Layout.assistBottomBarHeight,
+            alignment: .center
+        )
+        .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(1)
+        .background(DesignTokens.Color.surfaceElevated)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(DesignTokens.Color.borderSubtle)
                 .frame(height: DesignTokens.Layout.borderWidth)
         }
+        .accessibilityIdentifier("openwrite.assist.bottomBar")
     }
 
     private var contextHint: String {

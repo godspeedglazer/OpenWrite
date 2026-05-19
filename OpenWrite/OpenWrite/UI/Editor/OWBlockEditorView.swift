@@ -3,10 +3,11 @@ import SwiftUI
 
 // MARK: - OWBlockEditorView
 
-/// Stacked WYSIWYG block editor — each NDL block is a filled card with inline editing.
+/// Stacked WYSIWYG block editor — each NDL block is a filled card with inline editing (edit mode only).
 struct OWBlockEditorView: View {
     @Binding var blocks: [NoteBlock]
-    var previewMode: Bool = false
+    /// Width from workbench layout (`editorBodyWidth`); AppKit layout uses this exclusively.
+    var columnWidth: CGFloat = 720
     var onActivateBlock: ((UUID) -> Void)? = nil
     var onSelectionChange: ((String?) -> Void)? = nil
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)? = nil
@@ -14,15 +15,18 @@ struct OWBlockEditorView: View {
     @State private var laidOutHeight: CGFloat = 480
 
     var body: some View {
+        let layoutWidth = max(columnWidth, 320)
         BlockEditorPasteHost(
             blocks: $blocks,
             laidOutHeight: $laidOutHeight,
-            previewMode: previewMode,
+            columnWidth: layoutWidth,
             onActivateBlock: onActivateBlock,
             onSelectionChange: onSelectionChange,
             onRefinePreset: onRefinePreset
         )
-        .frame(maxWidth: .infinity, minHeight: max(laidOutHeight, 120), alignment: .topLeading)
+        .frame(width: layoutWidth, alignment: .topLeading)
+        .frame(minHeight: max(laidOutHeight, 120), alignment: .topLeading)
+        .clipped()
     }
 }
 
@@ -31,7 +35,7 @@ struct OWBlockEditorView: View {
 /// Stable SwiftUI root for `NSHostingView` — keeps `NSTextView` instances alive across keystrokes.
 private struct BlockEditorHostedContent: View {
     @Binding var blocks: [NoteBlock]
-    var previewMode: Bool
+    var columnWidth: CGFloat
     var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
@@ -42,12 +46,11 @@ private struct BlockEditorHostedContent: View {
                 blockRow(for: $block)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(width: max(columnWidth, 320), alignment: .leading)
     }
 
     @ViewBuilder
     private func blockRow(for block: Binding<NoteBlock>) -> some View {
-        let editableText = previewMode ? nil : block.text
         let activate: () -> Void = {
             onActivateBlock?(block.wrappedValue.id)
         }
@@ -55,58 +58,52 @@ private struct BlockEditorHostedContent: View {
         case .todo:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
-                text: editableText,
+                text: block.text,
                 blockAttributes: attributesBinding(block),
                 checked: todoCheckedBinding(block),
                 onSelectionChange: onSelectionChange,
                 onRefinePreset: onRefinePreset,
-                previewMode: previewMode,
                 onActivate: activate
             )
         case .callout:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
-                text: editableText,
+                text: block.text,
                 blockAttributes: attributesBinding(block),
                 calloutType: attributeBinding(block, key: "callout"),
                 onSelectionChange: onSelectionChange,
                 onRefinePreset: onRefinePreset,
-                previewMode: previewMode,
                 onActivate: activate
             )
         case .code:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
-                text: editableText,
+                text: block.text,
                 blockAttributes: attributesBinding(block),
                 language: attributeBinding(block, key: "language"),
                 onSelectionChange: onSelectionChange,
                 onRefinePreset: onRefinePreset,
-                previewMode: previewMode,
                 onActivate: activate
             )
         case .heading1, .heading2, .heading3, .paragraph, .bullet, .quote, .wikilink:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
-                text: editableText,
+                text: block.text,
                 blockAttributes: attributesBinding(block),
                 onSelectionChange: onSelectionChange,
                 onRefinePreset: onRefinePreset,
-                previewMode: previewMode,
                 onActivate: activate
             )
         case .image:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
-                text: editableText,
+                text: block.text,
                 blockAttributes: attributesBinding(block),
-                previewMode: previewMode,
                 onActivate: activate
             )
         default:
             OWPreviewBlockRow(
                 block: block.wrappedValue,
-                previewMode: previewMode,
                 onActivate: activate
             )
         }
@@ -147,7 +144,7 @@ private struct BlockEditorHostedContent: View {
 private struct BlockEditorPasteHost: NSViewRepresentable {
     @Binding var blocks: [NoteBlock]
     @Binding var laidOutHeight: CGFloat
-    var previewMode: Bool
+    var columnWidth: CGFloat
     var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
@@ -157,9 +154,10 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> BlockEditorPasteCaptureView {
+        let layoutWidth = max(columnWidth, 320)
         let hosted = BlockEditorHostedContent(
             blocks: context.coordinator.blocks,
-            previewMode: previewMode,
+            columnWidth: layoutWidth,
             onActivateBlock: onActivateBlock,
             onSelectionChange: onSelectionChange,
             onRefinePreset: onRefinePreset
@@ -167,7 +165,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         let hosting = NSHostingView(rootView: hosted)
         hosting.openWriteSuppressFocusRing()
         hosting.sizingOptions = [.intrinsicContentSize]
-        hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        applyEditorCanvasLayer(to: hosting)
         context.coordinator.hostingView = hosting
         context.coordinator.seedHostedBlockIDs(blocks)
         let host = BlockEditorPasteCaptureView(hostedView: hosting)
@@ -181,14 +179,18 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             guard let host, let coordinator else { return }
             coordinator.scheduleRefreshDocumentSizeIfContentGrew(on: host)
         }
-        let initialWidth = Coordinator.roundedLayoutWidth(640)
+        context.coordinator.installImagePasteObserver { [weak coordinator = context.coordinator] in
+            coordinator?.ingestPastedImage()
+        }
+        context.coordinator.authoritativeColumnWidth = max(columnWidth, 320)
+        let initialWidth = context.coordinator.resolvedLayoutWidth()
         let initialRevision = context.coordinator.blocksContentRevision(blocks)
         context.coordinator.lastStructureRevision = context.coordinator.blocksStructureRevision(blocks)
         context.coordinator.lastContentRevision = initialRevision
         context.coordinator.lastAppliedWidth = initialWidth
         host.applyDocumentLayout(width: initialWidth, contentRevision: initialRevision)
         context.coordinator.publishDocumentHeight(
-            host.measureDocumentSize(width: initialWidth, contentRevision: initialRevision).height
+            max(host.measureDocumentSize(width: initialWidth, contentRevision: initialRevision).height, 120)
         )
         DispatchQueue.main.async {
             context.coordinator.scheduleRefreshDocumentSizeIfContentGrew(on: host)
@@ -205,40 +207,51 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         }
         context.coordinator.onSelectionChange = onSelectionChange
         context.coordinator.onRefinePreset = onRefinePreset
-        let previewModeChanged = context.coordinator.lastPreviewMode != previewMode
-        context.coordinator.lastPreviewMode = previewMode
-        if let hosting = context.coordinator.hostingView {
-            hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        let proposedWidth = max(columnWidth, 320)
+        context.coordinator.authoritativeColumnWidth = proposedWidth
+        let columnWidthChanged = abs((context.coordinator.lastProposedWidth ?? 0) - proposedWidth) > 0.5
+        context.coordinator.lastProposedWidth = proposedWidth
+        if columnWidthChanged {
+            host.invalidateMeasurementCache(resetContentRevision: false)
+            context.coordinator.lastPublishedHeight = 0
         }
         let themeRevision = ThemeManager.shared.revision
         let themeChanged = context.coordinator.lastThemeRevision != themeRevision
         if themeChanged {
             context.coordinator.lastThemeRevision = themeRevision
         }
-        if themeChanged, let hosting = context.coordinator.hostingView {
-            let canvas = ThemeManager.shared.palette.editorCanvas
-            hosting.layer?.backgroundColor = NSColor(canvas).cgColor
+        if let hosting = context.coordinator.hostingView {
+            applyEditorCanvasLayer(to: hosting)
         }
-        if (context.coordinator.needsHostedRootRefresh(for: blocks) || previewModeChanged || themeChanged),
+        if context.coordinator.needsHostedRootRefresh(for: blocks) || themeChanged,
            let hosting = context.coordinator.hostingView {
+            let layoutWidth = context.coordinator.resolvedLayoutWidth()
             hosting.rootView = BlockEditorHostedContent(
                 blocks: context.coordinator.blocks,
-                previewMode: previewMode,
+                columnWidth: layoutWidth,
                 onActivateBlock: onActivateBlock,
                 onSelectionChange: { context.coordinator.onSelectionChange?($0) },
                 onRefinePreset: { context.coordinator.onRefinePreset?($0, $1) }
             )
-            if previewModeChanged || themeChanged {
-                host.invalidateMeasurementCache()
-            }
+            host.invalidateMeasurementCache()
+            let structureRevision = context.coordinator.blocksStructureRevision(blocks)
+            let contentRevision = context.coordinator.blocksContentRevision(blocks)
+            context.coordinator.lastStructureRevision = structureRevision
+            context.coordinator.lastContentRevision = contentRevision
+            context.coordinator.lastAppliedWidth = layoutWidth
+            context.coordinator.scheduleLayout(
+                on: host,
+                width: layoutWidth,
+                contentRevision: contentRevision
+            )
+            return
         }
 
-        let layoutWidth = context.coordinator.roundedLayoutWidth(
-            max(host.bounds.width, context.coordinator.lastProposedWidth ?? 0)
-        )
+        let layoutWidth = context.coordinator.resolvedLayoutWidth()
         let structureRevision = context.coordinator.blocksStructureRevision(blocks)
         let contentRevision = context.coordinator.blocksContentRevision(blocks)
         let widthChanged = abs((context.coordinator.lastAppliedWidth ?? 0) - layoutWidth) > 0.5
+            || columnWidthChanged
         let structureChanged = structureRevision != context.coordinator.lastStructureRevision
         let contentChanged = contentRevision != context.coordinator.lastContentRevision
         guard widthChanged || structureChanged || contentChanged else { return }
@@ -258,22 +271,27 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
 
         // Keystrokes: NSTextViews grow in place; push height to SwiftUI (ScrollView ignores AppKit intrinsic).
         context.coordinator.lastContentRevision = contentRevision
-        let measureWidth = context.coordinator.roundedLayoutWidth(
-            max(host.bounds.width, context.coordinator.lastProposedWidth ?? 0)
-        )
+        let measureWidth = context.coordinator.resolvedLayoutWidth()
         let measured = host.measureDocumentSize(width: measureWidth, contentRevision: contentRevision)
         context.coordinator.publishDocumentHeight(measured.height)
-        context.coordinator.scheduleRefreshDocumentSizeIfContentGrew(on: host)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BlockEditorPasteCaptureView, context: Context) -> CGSize? {
-        let width = Coordinator.roundedLayoutWidth(max(proposal.width ?? 640, 320))
-        context.coordinator.lastProposedWidth = width
+        let proposedWidth = max(columnWidth, 320)
+        context.coordinator.authoritativeColumnWidth = proposedWidth
+        context.coordinator.lastProposedWidth = proposedWidth
+        let width = context.coordinator.resolvedLayoutWidth()
         let contentRevision = context.coordinator.blocksContentRevision(blocks)
+        if contentRevision == context.coordinator.lastMeasuredContentRevision,
+           context.coordinator.lastPublishedHeight >= 120 {
+            return CGSize(width: width, height: context.coordinator.lastPublishedHeight)
+        }
         // Read-only measure — apply runs only from `updateNSView` to avoid AttributeGraph layout loops.
         let size = nsView.measureDocumentSize(width: width, contentRevision: contentRevision)
-        context.coordinator.publishDocumentHeight(size.height)
-        return size
+        let height = max(size.height, 120)
+        context.coordinator.lastMeasuredContentRevision = contentRevision
+        context.coordinator.publishDocumentHeight(height)
+        return CGSize(width: width, height: height)
     }
 
     final class Coordinator {
@@ -282,35 +300,64 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         var onSelectionChange: ((String?) -> Void)?
         var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
         weak var hostingView: NSHostingView<BlockEditorHostedContent>?
+        /// Workbench `editorBodyWidth` — sole layout authority (never narrow `host.bounds`).
+        var authoritativeColumnWidth: CGFloat = 720
         var lastProposedWidth: CGFloat?
         var lastAppliedWidth: CGFloat?
         var lastStructureRevision: UInt64 = 0
         var lastContentRevision: UInt64 = 0
-        var lastPreviewMode = false
         var lastThemeRevision: UInt = 0
         private var lastHostedBlockIDs: [UUID] = []
         private var layoutGeneration = 0
         private var layoutFlushScheduled = false
         private var contentGrowthRefreshScheduled = false
-        private var lastPublishedHeight: CGFloat = 0
+        private var heightPublishWorkItem: DispatchWorkItem?
+        var lastPublishedHeight: CGFloat = 0
+        var lastMeasuredContentRevision: UInt64 = 0
         private var pendingLayoutWidth: CGFloat?
         private var pendingContentRevision: UInt64 = 0
+        private var imagePasteObserver: NSObjectProtocol?
 
         init(blocks: Binding<[NoteBlock]>, laidOutHeight: Binding<CGFloat>) {
             self.blocks = blocks
             self.laidOutHeight = laidOutHeight
         }
 
+        deinit {
+            heightPublishWorkItem?.cancel()
+            if let imagePasteObserver {
+                NotificationCenter.default.removeObserver(imagePasteObserver)
+            }
+        }
+
+        func installImagePasteObserver(handler: @escaping () -> Void) {
+            guard imagePasteObserver == nil else { return }
+            imagePasteObserver = NotificationCenter.default.addObserver(
+                forName: .openWriteIngestPastedImage,
+                object: nil,
+                queue: .main
+            ) { _ in
+                handler()
+            }
+        }
+
         func publishDocumentHeight(_ height: CGFloat) {
             let safe = max(Self.roundedLayoutHeight(height), 120)
             lastPublishedHeight = safe
             guard abs(laidOutHeight.wrappedValue - safe) > 0.5 else { return }
-            laidOutHeight.wrappedValue = safe
+            heightPublishWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                guard abs(self.laidOutHeight.wrappedValue - safe) > 0.5 else { return }
+                self.laidOutHeight.wrappedValue = safe
+            }
+            heightPublishWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02, execute: work)
         }
 
         /// After static Welcome content settles, re-apply layout if measure grew (mirrors chat scroll host).
         func scheduleRefreshDocumentSizeIfContentGrew(on host: BlockEditorPasteCaptureView) {
-            let width = roundedLayoutWidth(max(host.bounds.width, lastProposedWidth ?? 0))
+            let width = resolvedLayoutWidth()
             let revision = blocksContentRevision(blocks.wrappedValue)
             let probe = host.measureDocumentSize(width: width, contentRevision: revision).height
             guard probe > lastPublishedHeight + 0.5 else { return }
@@ -319,13 +366,12 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             DispatchQueue.main.async { [weak self, weak host] in
                 guard let self, let host else { return }
                 self.contentGrowthRefreshScheduled = false
-                let width = self.roundedLayoutWidth(max(host.bounds.width, self.lastProposedWidth ?? 0))
+                let width = self.resolvedLayoutWidth()
                 let revision = self.blocksContentRevision(self.blocks.wrappedValue)
                 self.scheduleLayout(on: host, width: width, contentRevision: revision)
             }
         }
 
-        /// Pixel-stable width — subpixel oscillation in `host.bounds` was re-triggering apply every frame.
         static func roundedLayoutWidth(_ width: CGFloat) -> CGFloat {
             max(floor(max(width, 320) + 0.5), 320)
         }
@@ -334,8 +380,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             max(floor(max(height, 1) + 0.5), 1)
         }
 
-        func roundedLayoutWidth(_ width: CGFloat) -> CGFloat {
-            Self.roundedLayoutWidth(width)
+        /// Workbench column width only — never widen or narrow from `host.bounds`.
+        func resolvedLayoutWidth() -> CGFloat {
+            Self.roundedLayoutWidth(max(authoritativeColumnWidth, 320))
         }
 
         func seedHostedBlockIDs(_ blocks: [NoteBlock]) {
@@ -363,7 +410,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         }
 
         func ingestPastedImage() {
-            guard ImagePasteSupport.imageFromPasteboard() != nil else { return }
+            guard ImagePasteSupport.pasteboardHasIngestibleImage else { return }
             ingestImageWithPlaceholder {
                 await ImagePasteSupport.finalizePastedImage()
             }
@@ -393,7 +440,6 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             }
         }
 
-        /// Text/checkbox changes that affect vertical size without block add/remove.
         func blocksContentRevision(_ blocks: [NoteBlock]) -> UInt64 {
             var hasher = Hasher()
             for block in blocks {
@@ -403,8 +449,6 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             return UInt64(bitPattern: Int64(hasher.finalize()))
         }
 
-        /// Layout-affecting block changes only — excludes `text` and `isChecked` so typing and todo toggles
-        /// update SwiftUI in place without rebuilding the hosted root.
         func blocksStructureRevision(_ blocks: [NoteBlock]) -> UInt64 {
             var hasher = Hasher()
             hasher.combine(blocks.count)
@@ -419,7 +463,6 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             return UInt64(bitPattern: Int64(hasher.finalize()))
         }
 
-        /// Coalesces to at most one deferred apply per run-loop turn (generation token drops stale work).
         func scheduleLayout(on host: BlockEditorPasteCaptureView, width: CGFloat, contentRevision: UInt64) {
             pendingLayoutWidth = width
             pendingContentRevision = contentRevision
@@ -439,4 +482,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             }
         }
     }
+}
+
+private func applyEditorCanvasLayer(to hosting: NSHostingView<BlockEditorHostedContent>) {
+    let canvas = ThemeManager.shared.palette.editorCanvas
+    hosting.layer?.backgroundColor = NSColor(canvas).cgColor
 }

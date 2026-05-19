@@ -4,6 +4,8 @@ struct RAGContext: Sendable {
     var query: String
     var hits: [RetrievalHit]
     var attachmentHits: [RetrievalHit] = []
+    /// Image files attached in chat — encoded as `image_url` parts for vision models (e.g. Gemma 4).
+    var visionImageAttachments: [ChatAttachment] = []
     /// Server-fetched page text (safe web lookup); injected into system context, not indexed.
     var webPages: [WebPageSnapshot] = []
 
@@ -102,24 +104,38 @@ struct LiveRAGService: RAGService {
         attachments: [ChatAttachment] = [],
         webPages: [WebPageSnapshot] = []
     ) async throws -> RAGContext {
+        let visionImages = attachments.filter { $0.kind == .image }
         guard let sanitized = AIInput.sanitizeQuery(query) else {
             return RAGContext(
                 query: query,
                 hits: [],
                 attachmentHits: ChatAttachmentStore.retrievalHits(from: attachments),
+                visionImageAttachments: visionImages,
                 webPages: webPages
             )
         }
         let attachmentHits = ChatAttachmentStore.retrievalHits(from: attachments)
         let limit = agent.toolFlags.useVaultRetrieval ? agent.effectiveChunkLimit : 0
         guard limit > 0 else {
-            return RAGContext(query: sanitized, hits: [], attachmentHits: attachmentHits, webPages: webPages)
+            return RAGContext(
+                query: sanitized,
+                hits: [],
+                attachmentHits: attachmentHits,
+                visionImageAttachments: visionImages,
+                webPages: webPages
+            )
         }
         let hits = try await retrieval.search(
             query: sanitized,
             limit: limit
         )
-        return RAGContext(query: sanitized, hits: hits, attachmentHits: attachmentHits, webPages: webPages)
+        return RAGContext(
+            query: sanitized,
+            hits: hits,
+            attachmentHits: attachmentHits,
+            visionImageAttachments: visionImages,
+            webPages: webPages
+        )
     }
 
     func streamAnswer(
@@ -131,11 +147,15 @@ struct LiveRAGService: RAGService {
             let task = Task {
                 do {
                     let (systemContent, citationIDs) = Self.systemAndCitations(context: context, agent: agent)
-                    var messages: [[String: String]] = [
+                    var messages: [[String: Any]] = [
                         ["role": "system", "content": systemContent]
                     ]
                     messages.append(contentsOf: Self.historyPayload(history))
-                    messages.append(["role": "user", "content": Self.userMessageContent(query: context.query)])
+                    let userContent = ChatVisionPayload.userMessageContent(
+                        text: Self.userMessageContent(query: context.query),
+                        imageAttachments: context.visionImageAttachments
+                    )
+                    messages.append(["role": "user", "content": userContent])
 
                     // `.connecting` until HTTP stream delivers bytes — UI must not mark "Connected" before this.
                     continuation.yield(RAGStreamEvent(kind: .activity(.connecting)))
@@ -246,6 +266,15 @@ struct LiveRAGService: RAGService {
             parts.append("")
             parts.append(webExcerptBlock(pages: context.webPages))
         }
+        if !context.visionImageAttachments.isEmpty {
+            parts.append("")
+            parts.append(
+                """
+                The user's message includes \(context.visionImageAttachments.count) image(s) \
+                attached for visual analysis. Describe what you see when it helps answer the question.
+                """
+            )
+        }
         return (parts.joined(separator: "\n"), ids)
     }
 
@@ -354,6 +383,7 @@ struct PlaceholderRAGService: RAGService {
             query: query,
             hits: hits,
             attachmentHits: ChatAttachmentStore.retrievalHits(from: attachments),
+            visionImageAttachments: attachments.filter { $0.kind == .image },
             webPages: webPages
         )
     }

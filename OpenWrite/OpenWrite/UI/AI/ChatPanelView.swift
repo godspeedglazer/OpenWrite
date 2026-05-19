@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 private struct ChatPanelStreamError: LocalizedError {
     let message: String
@@ -353,6 +352,7 @@ final class ChatPanelModel: ObservableObject {
                     clearPipelineTimingState(for: assistantIndex)
                 }
                 services.markChatStreamConnected()
+                await services.confirmConnectionAfterStream()
             } catch is CancellationError {
                 return
             } catch {
@@ -399,7 +399,23 @@ final class ChatPanelModel: ObservableObject {
 
     func importImageFromPasteboard() {
         attachmentError = nil
-        guard let image = ImagePasteSupport.imageFromPasteboard() else { return }
+        if let fileURL = ImagePasteSupport.imageFileURLFromPasteboard() {
+            let accessed = fileURL.startAccessingSecurityScopedResource()
+            defer {
+                if accessed { fileURL.stopAccessingSecurityScopedResource() }
+            }
+            do {
+                let attachment = try ChatAttachmentStore.importFile(from: fileURL)
+                pendingAttachments.append(attachment)
+            } catch {
+                attachmentError = error.localizedDescription
+            }
+            return
+        }
+        guard let image = ImagePasteSupport.imageFromPasteboard() else {
+            attachmentError = "No image on the clipboard. Copy an image or use Attach file."
+            return
+        }
         do {
             let attachment = try ChatAttachmentStore.importPastedImage(image)
             pendingAttachments.append(attachment)
@@ -705,6 +721,7 @@ final class ChatPanelModel: ObservableObject {
             )
         )
         services.markChatStreamConnected()
+        await services.confirmConnectionAfterStream()
         await completePipelineStep(at: index, id: "connect")
         activatePipelineStep(at: index, id: "respond")
     }
@@ -798,8 +815,7 @@ struct AIActivityIndicator: View {
         if showsProgress || state.statusMessage != nil || isReceivingTokens {
             HStack(alignment: .top, spacing: 10) {
                 if showsProgress {
-                    ProgressView()
-                        .controlSize(.small)
+                    OWBrandLogoSpinner(size: 20, periodSeconds: 1.9)
                         .scaleEffect(pulse ? 1.05 : 0.95)
                 } else if case .error = state {
                     OWUnicodeIconView(icon: .warningFill, size: 16, color: DesignTokens.Color.warning)
@@ -888,20 +904,26 @@ private struct StreamingDots: View {
 
 struct ChatPanelView: View {
     @Environment(\.openWritePalette) private var palette
+    @Environment(\.workbenchCenterLayout) private var workbenchLayout
     @Environment(ThemeManager.self) private var themeManager
     @EnvironmentObject private var aiServices: OpenWriteAIServices
-    @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var workbench: WorkbenchState
-    @Environment(\.aiAssistStripWidth) private var assistStripWidth
     @StateObject private var model = ChatPanelModel()
-    @State private var showFileImporter = false
     /// True when the transcript bottom sentinel is visible — auto-scroll only while pinned.
     @State private var chatPinnedToBottom = true
+    /// Measured height of the bottom composer chrome (drives transcript scroll padding).
+    @State private var measuredComposerHeight: CGFloat = 0
 
     private var navigation: AIAssistNavigationState { workbench.aiAssistNavigation }
 
-    private var stripIsCompact: Bool {
-        assistStripWidth < DesignTokens.Layout.assistStripDefaultWidth
+    /// Assist strip owns top chrome at root; avoid duplicate headers and orphan icon rows.
+    private var showsEmbeddedAssistStripChrome: Bool {
+        navigation.isAtRoot
+    }
+
+    /// Composer sits in `safeAreaInset`; only a small slack gap is needed above it.
+    private var transcriptBottomPadding: CGFloat {
+        DesignTokens.Spacing.spacing3
     }
 
     var body: some View {
@@ -938,7 +960,9 @@ struct ChatPanelView: View {
 
     private var agentPickerPanel: some View {
         VStack(spacing: 0) {
-            OWAIPanelHeader(title: "Chat", compact: true)
+            if !showsEmbeddedAssistStripChrome {
+                OWAIPanelHeader(title: "Chat", compact: true)
+            }
             OpenWriteThemedScrollView(canvasColor: palette.background) {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
                 Text("Choose an agent")
@@ -1003,15 +1027,28 @@ struct ChatPanelView: View {
 
     private var conversationPanel: some View {
         VStack(spacing: 0) {
-            conversationHeader
-            messageList
+            if !showsEmbeddedAssistStripChrome {
+                conversationHeader
+            }
+            ChatTranscriptView(
+                messages: model.messages,
+                scrollToken: model.messages.chatScrollToken,
+                bottomPadding: transcriptBottomPadding,
+                background: palette.background,
+                isPinnedToBottom: $chatPinnedToBottom
+            )
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .clipped()
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            composer
+            ChatComposerView(model: model, measuredHeight: $measuredComposerHeight)
         }
         .background(palette.background)
         .task {
             await aiServices.checkConnection()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await aiServices.checkConnection() }
         }
     }
 
@@ -1047,655 +1084,7 @@ struct ChatPanelView: View {
             && navigation.current == .chatThread
     }
 
-    private var messageList: some View {
-        ChatTranscriptScrollView(
-            scrollToken: chatScrollToken,
-            background: palette.background,
-            isPinnedToBottom: $chatPinnedToBottom
-        ) {
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
-                if model.messages.isEmpty {
-                    VStack(spacing: DesignTokens.Spacing.spacing2) {
-                        OWUnicodeIconView(icon: .sparkles, size: 22)
-                            .foregroundStyle(DesignTokens.Color.textTertiary)
-                        Text("Ask about your notes")
-                            .font(OWTypography.calloutEmphasis)
-                        Text("Answers cite your notes when search is on.")
-                            .font(OWTypography.caption)
-                            .foregroundStyle(DesignTokens.Color.textTertiary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, DesignTokens.Spacing.spacing6)
-                }
-                ForEach(model.messages) { message in
-                    messageRow(message)
-                        .id(message.id)
-                }
-            }
-            .padding(DesignTokens.Spacing.assistStripMessageListPadding)
-            // Reserve space so the last transcript row isn't covered by the bottom safeAreaInset composer.
-            .padding(.bottom, DesignTokens.Layout.composerBoardHeight + DesignTokens.Spacing.spacing6)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    /// Drives stick-to-bottom only on structural chat changes — not every streamed token.
-    private var chatScrollToken: Int {
-        var hasher = Hasher()
-        hasher.combine(model.messages.count)
-        hasher.combine(pipelineStepsTail)
-        if let last = model.messages.last {
-            hasher.combine(last.id)
-            hasher.combine(last.isStreaming)
-            hasher.combine(last.isError)
-            hasher.combine(last.sourceHits.count)
-        }
-        return hasher.finalize()
-    }
-
-    private var pipelineStepsTail: Int {
-        guard let steps = model.messages.last?.pipelineSteps, !steps.isEmpty else { return 0 }
-        var hasher = Hasher()
-        for step in steps {
-            hasher.combine(step.id)
-            hasher.combine(step.title)
-            hasher.combine(step.status)
-        }
-        return hasher.finalize()
-    }
-
-    @ViewBuilder
-    private func messageRow(_ message: ChatMessage) -> some View {
-        switch message.role {
-        case .user:
-            userMessageRow(message)
-        case .assistant:
-            assistantMessageRow(message)
-        case .system:
-            systemMessageRow(message)
-        }
-    }
-
-    private func userMessageRow(_ message: ChatMessage) -> some View {
-        VStack(alignment: .trailing, spacing: DesignTokens.Spacing.spacing1) {
-            Text("You")
-                .font(OWTypography.captionEmphasis)
-                .foregroundStyle(DesignTokens.Color.textTertiary)
-
-            userBubble(message)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-    }
-
-    @ViewBuilder
-    private func userBubble(_ message: ChatMessage) -> some View {
-        let hasBody = !message.text.isEmpty || !message.attachmentNames.isEmpty
-        if hasBody {
-            VStack(alignment: .trailing, spacing: DesignTokens.Spacing.spacing2) {
-                if !message.attachmentNames.isEmpty {
-                    attachmentNameRow(message.attachmentNames)
-                }
-                if !message.text.isEmpty {
-                    Text(displayText(for: message))
-                        .font(OWTypography.body)
-                        .lineSpacing(OWTypography.bodyLineSpacing)
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.horizontal, DesignTokens.Spacing.spacing3)
-            .padding(.vertical, DesignTokens.Spacing.spacing2)
-            .background(
-                DesignTokens.Color.accentMuted,
-                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-            )
-        }
-    }
-
-    private func assistantMessageRow(_ message: ChatMessage) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
-            if !message.pipelineSteps.isEmpty {
-                OWChatStatusStepper(
-                    steps: message.pipelineSteps,
-                    showsStreamingDots: message.isStreaming
-                        && message.pipelineSteps.contains { $0.id == "respond" && $0.status == .active }
-                )
-            }
-
-            if showsAssistantBubble(message) {
-                Text("Assistant")
-                    .font(OWTypography.captionEmphasis)
-                    .foregroundStyle(DesignTokens.Color.textTertiary)
-
-                assistantMessageBody(message)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func showsAssistantBubble(_ message: ChatMessage) -> Bool {
-        if message.isError { return true }
-        if !message.sourceHits.isEmpty { return true }
-        if vaultSearchHadNoSources(message) { return true }
-        if !displayText(for: message).isEmpty { return true }
-        return !message.isStreaming
-    }
-
-    private func vaultSearchHadNoSources(_ message: ChatMessage) -> Bool {
-        message.pipelineSteps.contains { step in
-            step.id == "sources" && step.title.localizedCaseInsensitiveContains("no matching")
-        }
-    }
-
-    private func systemMessageRow(_ message: ChatMessage) -> some View {
-        Text(displayText(for: message))
-            .font(OWTypography.caption)
-            .foregroundStyle(DesignTokens.Color.textSecondary)
-            .italic()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, DesignTokens.Spacing.spacing1)
-            .padding(.horizontal, DesignTokens.Spacing.spacing2)
-            .background(DesignTokens.Color.warning.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small))
-    }
-
-    private func attachmentNameRow(_ names: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(names, id: \.self) { name in
-                Text(name)
-                    .font(OWTypography.caption)
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                    .lineLimit(1)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func assistantMessageBody(_ message: ChatMessage) -> some View {
-        assistantBubble(message: message) {
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-                if !message.sourceHits.isEmpty {
-                    RAGSourcePillsView(hits: message.sourceHits, onOpenDocument: { documentID in
-                        vaultStore.selectedDocumentID = documentID
-                    }, compact: true)
-                } else if vaultSearchHadNoSources(message) {
-                    Text("No vault sources")
-                        .font(OWTypography.caption)
-                        .foregroundStyle(DesignTokens.Color.textTertiary)
-                }
-
-                if message.isError {
-                    failureBubbleContent(displayText(for: message))
-                } else {
-                    let visible = displayText(for: message)
-                    if !visible.isEmpty {
-                        Text(visible)
-                            .font(OWTypography.body)
-                            .lineSpacing(OWTypography.bodyLineSpacing)
-                            .textSelection(.enabled)
-                            .foregroundStyle(DesignTokens.Color.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-    }
-
-    private func assistantBubble<Content: View>(
-        message: ChatMessage,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        content()
-            .padding(.horizontal, DesignTokens.Spacing.spacing3)
-            .padding(.vertical, DesignTokens.Spacing.spacing2)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                DesignTokens.Color.surfaceElevated,
-                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-            )
-            .overlay {
-                if message.isError {
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-                        .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
-                }
-            }
-    }
-
-    private func failureBubbleContent(_ text: String) -> some View {
-        let parts = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
-        let title = parts.first.map(String.init) ?? "Response failed"
-        let detail = parts.count > 1 ? String(parts[1]) : ""
-
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
-                OWUnicodeIconView(icon: .warningFill, size: 16, color: DesignTokens.Color.warning)
-                Text(title)
-                    .font(OWTypography.calloutEmphasis)
-                    .foregroundStyle(DesignTokens.Color.textPrimary)
-            }
-            if !detail.isEmpty {
-                Text(detail)
-                    .font(OWTypography.caption)
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private func displayText(for message: ChatMessage) -> String {
-        let raw = message.text
-        guard message.role == .assistant else { return raw }
-        return AIInput.stripChunkReferences(raw)
-    }
-
-    private var composer: some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
-            composerModelCaption
-
-            if let attachmentError = model.attachmentError {
-                Text(attachmentError)
-                    .font(OWTypography.caption)
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !model.pendingAttachments.isEmpty {
-                pendingAttachmentRow
-            }
-
-            composerInputRow
-        }
-        .help("Paste images with ⌘V or attach files with the document button.")
-        .padding(DesignTokens.Spacing.assistStripComposerPadding)
-        .padding(.bottom, DesignTokens.Layout.assistStripComposerBottomInset)
-        .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing1)
-        .background(palette.background)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(palette.borderSubtle)
-                .frame(height: DesignTokens.Layout.borderWidth)
-        }
-    }
-
-    private var composerModelCaption: some View {
-        Text(composerModelCaptionText)
-            .font(OWTypography.caption2)
-            .foregroundStyle(DesignTokens.Color.textTertiary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(maxWidth: .infinity, minHeight: 12, maxHeight: 14, alignment: .leading)
-            .help(composerModelCaptionHelp)
-    }
-
-    /// Configured chat model id from Settings (`lmConfig.chatModelDisplay`), not a hardcoded default.
-    private var composerModelCaptionText: String {
-        "\(aiServices.lmConfig.chatModelDisplay) · \(aiServices.modelConnectionLabel)"
-    }
-
-    private var composerModelCaptionHelp: String {
-        let model = aiServices.lmConfig.chatModelDisplay
-        return """
-        Chat model: \(model). Set in Settings → AI or auto-filled from the first model returned by \
-        LM Studio GET /v1/models when the chat model field is empty.
-        """
-    }
-
-    private var composerInputRow: some View {
-        ChatComposerPasteHost(onPasteImage: { model.importImageFromPasteboard() }) {
-            Group {
-                if stripIsCompact {
-                    VStack(alignment: .leading, spacing: DesignTokens.Layout.composerBoardSpacing) {
-                        OWThemedComposerField(
-                            placeholder: "Ask…",
-                            text: $model.draft,
-                            lineLimit: 1 ... 6,
-                            minHeight: DesignTokens.Layout.composerActionSize
-                        ) {
-                            if !model.isBusy {
-                                model.send(services: aiServices, agent: aiServices.selectedAgent)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .disabled(model.isBusy)
-                        .onPasteCommand(of: [.image]) { _ in
-                            model.importImageFromPasteboard()
-                        }
-
-                        composerActionBoard
-                    }
-                } else {
-                    HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
-                        OWThemedComposerField(
-                            placeholder: "Ask about your notes…",
-                            text: $model.draft,
-                            lineLimit: 1 ... 6,
-                            minHeight: DesignTokens.Layout.composerBoardHeight
-                        ) {
-                            if !model.isBusy {
-                                model.send(services: aiServices, agent: aiServices.selectedAgent)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .disabled(model.isBusy)
-                        .onPasteCommand(of: [.image]) { _ in
-                            model.importImageFromPasteboard()
-                        }
-
-                        composerActionBoard
-                    }
-                }
-            }
-        }
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    /// 2×2 control board: Notes / Web on top; Attach + Send (or Stop) on bottom.
-    private var composerActionBoard: some View {
-        let gap = DesignTokens.Layout.composerBoardSpacing
-        let iconSize = DesignTokens.Layout.composerBoardIconSize
-
-        return VStack(spacing: gap) {
-            HStack(spacing: gap) {
-                OWThemedToggleButton(
-                    label: "Search vault notes",
-                    isOn: $model.searchVaultEnabled,
-                    icon: .search,
-                    showsLabel: false
-                )
-                .help("Search vault notes")
-
-                OWThemedToggleButton(
-                    label: "Fetch web pages",
-                    isOn: $model.webLookupEnabled,
-                    icon: .wiki,
-                    showsLabel: false
-                )
-                .help("Fetch web pages")
-            }
-
-            HStack(spacing: gap) {
-                Button {
-                    showFileImporter = true
-                } label: {
-                    OWUnicodeIconView(
-                        icon: .document,
-                        size: iconSize,
-                        color: DesignTokens.Color.textSecondary
-                    )
-                }
-                .buttonStyle(OWComposerIconButtonStyle())
-                .help("Attach file")
-                .disabled(model.isBusy)
-                .fileImporter(
-                    isPresented: $showFileImporter,
-                    allowedContentTypes: ChatAttachmentStore.allowedContentTypes,
-                    allowsMultipleSelection: true
-                ) { result in
-                    switch result {
-                    case .success(let urls):
-                        model.importAttachments(from: urls)
-                    case .failure(let error):
-                        model.attachmentError = error.localizedDescription
-                    }
-                }
-
-                if model.isBusy {
-                    Button {
-                        model.cancelSend(services: aiServices)
-                    } label: {
-                        OWUnicodeIconView(icon: .stop, size: iconSize, color: DesignTokens.Color.warning)
-                    }
-                    .buttonStyle(OWComposerStopButtonStyle())
-                    .help("Stop generation")
-                } else {
-                    Button {
-                        model.send(services: aiServices, agent: aiServices.selectedAgent)
-                    } label: {
-                        OWUnicodeIconView(
-                            icon: .send,
-                            size: iconSize,
-                            color: DesignTokens.Color.selectionPill
-                        )
-                    }
-                    .buttonStyle(OWComposerSendButtonStyle(isEnabled: canSendMessage))
-                    .disabled(!canSendMessage)
-                    .help("Send message")
-                    .keyboardShortcut(.return, modifiers: [.command])
-                }
-            }
-        }
-        .fixedSize(horizontal: true, vertical: true)
-    }
-
-    private var canSendMessage: Bool {
-        AIInput.sanitizeQuery(model.draft) != nil || !model.pendingAttachments.isEmpty
-    }
-
-    private var pendingAttachmentRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DesignTokens.Spacing.spacing1) {
-                ForEach(model.pendingAttachments) { attachment in
-                    HStack(spacing: 6) {
-                        if attachment.kind == .image {
-                            AttachmentPreviewThumbnail(url: attachment.storedURL, size: 28)
-                        } else {
-                            OWUnicodeIconView(icon: .document, size: 12, color: DesignTokens.Color.textSecondary)
-                        }
-                        Text(attachment.displayName)
-                            .font(OWTypography.caption)
-                            .lineLimit(1)
-                        Button {
-                            model.removePendingAttachment(id: attachment.id)
-                        } label: {
-                            Text("×")
-                                .font(OWTypography.captionEmphasis)
-                        }
-                        .buttonStyle(.plain)
-                        .openWriteFocusChrome()
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(DesignTokens.Color.surface.opacity(0.9), in: Capsule())
-                }
-            }
-            .padding(.bottom, DesignTokens.Spacing.spacing1)
-        }
-    }
-
     private func agentHelp(_ agent: AgentConfig) -> String {
         agent.uiHelpText
-    }
-}
-
-// MARK: - Chat composer paste (Cmd+V images)
-
-private struct ChatComposerPasteHost<Content: View>: NSViewRepresentable {
-    let onPasteImage: () -> Void
-    @ViewBuilder var content: () -> Content
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeNSView(context: Context) -> ChatComposerPasteCaptureView {
-        let hosting = NSHostingView(rootView: content())
-        let wrapper = ChatComposerPasteCaptureView(hostedView: hosting)
-        wrapper.onPasteImage = onPasteImage
-        context.coordinator.wrapper = wrapper
-        context.coordinator.hosting = hosting
-        return wrapper
-    }
-
-    func updateNSView(_ wrapper: ChatComposerPasteCaptureView, context: Context) {
-        wrapper.onPasteImage = onPasteImage
-        context.coordinator.hosting?.rootView = content()
-    }
-
-    final class Coordinator {
-        weak var wrapper: ChatComposerPasteCaptureView?
-        var hosting: NSHostingView<Content>?
-    }
-}
-
-private final class ChatComposerPasteCaptureView: NSView {
-    let hostedView: NSView
-    var onPasteImage: (() -> Void)?
-
-    init(hostedView: NSView) {
-        self.hostedView = hostedView
-        super.init(frame: .zero)
-        openWriteSuppressFocusRing()
-        hostedView.openWriteSuppressFocusRing()
-        addSubview(hostedView)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override var acceptsFirstResponder: Bool { true }
-
-    override func layout() {
-        super.layout()
-        hostedView.frame = bounds
-    }
-
-    @objc func paste(_ sender: Any?) {
-        if ImagePasteSupport.imageFromPasteboard() != nil {
-            onPasteImage?()
-            return
-        }
-        NSApp.sendAction(#selector(NSTextView.paste(_:)), to: nil, from: sender)
-    }
-}
-
-private struct AttachmentPreviewThumbnail: View {
-    let url: URL
-    var size: CGFloat = 16
-
-    var body: some View {
-        if let image = NSImage(contentsOf: url) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-        } else {
-            OWUnicodeIconView(icon: .document, size: 12, color: DesignTokens.Color.textSecondary)
-        }
-    }
-}
-
-// MARK: - Chat transcript scroll (SwiftUI)
-
-private enum ChatTranscriptScrollAnchor {
-    static let bottom = "openwrite.chat.transcript.bottom"
-    static let top = "openwrite.chat.transcript.top"
-}
-
-private struct ChatTranscriptContentHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct ChatTranscriptTopOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct ChatTranscriptScrollView<Content: View>: View {
-    let scrollToken: Int
-    let background: Color
-    @Binding var isPinnedToBottom: Bool
-    @ViewBuilder var content: () -> Content
-    @State private var contentHeight: CGFloat = 0
-    @State private var viewportHeight: CGFloat = 0
-    @State private var topOffset: CGFloat = 0
-
-    var body: some View {
-        GeometryReader { viewport in
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Color.clear
-                            .frame(height: 1)
-                            .id(ChatTranscriptScrollAnchor.top)
-                            .background(
-                                GeometryReader { geometry in
-                                    Color.clear.preference(
-                                        key: ChatTranscriptTopOffsetKey.self,
-                                        value: geometry.frame(in: .named("openwrite.chat.scroll")).minY
-                                    )
-                                }
-                            )
-
-                        content()
-                        Color.clear
-                            .frame(height: 1)
-                            .id(ChatTranscriptScrollAnchor.bottom)
-                    }
-                    .background(
-                        GeometryReader { geometry in
-                            Color.clear.preference(
-                                key: ChatTranscriptContentHeightKey.self,
-                                value: geometry.size.height
-                            )
-                        }
-                    )
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                .coordinateSpace(name: "openwrite.chat.scroll")
-                .background(background)
-                .onAppear {
-                    viewportHeight = viewport.size.height
-                    scrollToBottom(using: proxy, animated: false)
-                }
-                .onChange(of: viewport.size.height) { _, newValue in
-                    viewportHeight = newValue
-                    recalculatePinnedState()
-                }
-                .onPreferenceChange(ChatTranscriptContentHeightKey.self) { value in
-                    contentHeight = value
-                    recalculatePinnedState()
-                }
-                .onPreferenceChange(ChatTranscriptTopOffsetKey.self) { value in
-                    topOffset = value
-                    recalculatePinnedState()
-                }
-                .onChange(of: scrollToken) { _, _ in
-                    guard isPinnedToBottom else { return }
-                    scrollToBottom(using: proxy, animated: true)
-                }
-            }
-        }
-    }
-
-    private func recalculatePinnedState() {
-        let scrollRange = max(contentHeight - viewportHeight, 0)
-        if scrollRange <= 1 {
-            isPinnedToBottom = true
-            return
-        }
-        let currentOffset = max(-topOffset, 0)
-        let distanceToBottom = max(scrollRange - currentOffset, 0)
-        isPinnedToBottom = distanceToBottom <= 48
-    }
-
-    private func scrollToBottom(using proxy: ScrollViewProxy, animated: Bool) {
-        let scroll = {
-            proxy.scrollTo(ChatTranscriptScrollAnchor.bottom, anchor: .bottom)
-        }
-        if animated {
-            withAnimation(.easeOut(duration: 0.2), scroll)
-        } else {
-            DispatchQueue.main.async(execute: scroll)
-        }
     }
 }

@@ -2,8 +2,11 @@ import AppKit
 import Foundation
 
 /// Inline markdown subset for block `text` — persists in NDL as plain line content.
-/// Supports `**bold**`, `*italic*`, `~~strike~~`, `<u>underline</u>`.
+/// Supports `**bold**`, `*italic*`, `~~strike~~`, `<u>underline</u>`, `[[wikilink]]`.
 enum InlineMarkdown {
+    static let wikilinkOpen = "[["
+    static let wikilinkClose = "]]"
+    static let wikilinkAttribute = NSAttributedString.Key("openwrite.wikilink")
     static let underlineOpen = "<u>"
     static let underlineClose = "</u>"
     /// Faux italic for bundled serif faces that ship without an italic cut.
@@ -34,9 +37,11 @@ enum InlineMarkdown {
         from markdown: String,
         family: FontFamily?,
         pointSize: CGFloat?,
-        textColor: NSColor
+        textColor: NSColor,
+        linkColor: NSColor? = nil
     ) -> NSAttributedString {
         let base = baseNSFont(family: family, pointSize: pointSize)
+        let accent = linkColor ?? textColor
         let result = NSMutableAttributedString()
         var index = markdown.startIndex
 
@@ -47,13 +52,13 @@ enum InlineMarkdown {
                     result.append(plainSegment(plain, base: base, color: textColor))
                 }
                 let inner = String(markdown[match.contentStart..<match.contentEnd])
-                result.append(styledSegment(inner, style: match.style, base: base, color: textColor))
+                result.append(styledSegment(inner, style: match.style, base: base, color: textColor, linkColor: accent))
                 index = match.closeEnd
                 continue
             }
 
             let nextSpecial = markdown[index...].firstIndex { ch in
-                ch == "*" || ch == "~" || ch == "<"
+                ch == "*" || ch == "~" || ch == "<" || ch == "["
             } ?? markdown.endIndex
             let plain = String(markdown[index..<nextSpecial])
             result.append(plainSegment(plain, base: base, color: textColor))
@@ -82,6 +87,9 @@ enum InlineMarkdown {
             }
             if isBold(attrs, baseFont: fragmentBase) {
                 wrapped = "**\(wrapped)**"
+            }
+            if attrs[wikilinkAttribute] != nil {
+                wrapped = "\(wikilinkOpen)\(wrapped)\(wikilinkClose)"
             }
             output += wrapped
         }
@@ -195,7 +203,7 @@ enum InlineMarkdown {
     // MARK: - Private
 
     private enum InlineStyle {
-        case bold, italic, strike, underline
+        case bold, italic, strike, underline, wikilink
     }
 
     private struct MarkerMatch {
@@ -208,6 +216,20 @@ enum InlineMarkdown {
 
     private static func matchPrefix(at index: String.Index, in markdown: String) -> MarkerMatch? {
         let tail = markdown[index...]
+        if tail.hasPrefix(wikilinkOpen),
+           let close = findWikilinkClose(in: markdown, from: markdown.index(index, offsetBy: wikilinkOpen.count)) {
+            let contentStart = markdown.index(index, offsetBy: wikilinkOpen.count)
+            let inner = markdown[contentStart..<close]
+            guard !inner.isEmpty, !inner.contains("\n") else { return nil }
+            let closeEnd = markdown.index(close, offsetBy: wikilinkClose.count)
+            return MarkerMatch(
+                openStart: index,
+                contentStart: contentStart,
+                contentEnd: close,
+                closeEnd: closeEnd,
+                style: .wikilink
+            )
+        }
         if tail.hasPrefix("**"), let close = findUnescaped("**", in: markdown, from: markdown.index(index, offsetBy: 2)) {
             return MarkerMatch(
                 openStart: index,
@@ -248,6 +270,10 @@ enum InlineMarkdown {
         return nil
     }
 
+    private static func findWikilinkClose(in markdown: String, from start: String.Index) -> String.Index? {
+        markdown[start...].range(of: wikilinkClose)?.lowerBound
+    }
+
     private static func findUnescaped(_ marker: String, in markdown: String, from start: String.Index) -> String.Index? {
         var search = start
         while search < markdown.endIndex, let range = markdown[search...].range(of: marker) {
@@ -263,7 +289,13 @@ enum InlineMarkdown {
         NSAttributedString(string: text, attributes: baseAttributes(base: base, color: color))
     }
 
-    private static func styledSegment(_ text: String, style: InlineStyle, base: NSFont, color: NSColor) -> NSAttributedString {
+    private static func styledSegment(
+        _ text: String,
+        style: InlineStyle,
+        base: NSFont,
+        color: NSColor,
+        linkColor: NSColor
+    ) -> NSAttributedString {
         var attrs = baseAttributes(base: base, color: color)
         switch style {
         case .bold:
@@ -278,6 +310,9 @@ enum InlineMarkdown {
             attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
         case .underline:
             attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+        case .wikilink:
+            attrs[.foregroundColor] = linkColor
+            attrs[wikilinkAttribute] = true
         }
         return NSAttributedString(string: text, attributes: attrs)
     }

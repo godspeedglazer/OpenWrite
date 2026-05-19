@@ -14,6 +14,15 @@ final class BlockFormattingState: ObservableObject {
         focusedBlockID != nil && activeTextView != nil && hasEditableText
     }
 
+    /// Call when leaving preview or tearing down the block host so stale `NSTextView` refs are not used.
+    func clearActiveEditor() {
+        activeTextView = nil
+        focusedBlockID = nil
+        hasEditableText = false
+        formatState = InlineMarkdown.FormatState()
+        onMarkdownChange = nil
+    }
+
     func register(
         textView: NSTextView,
         blockID: UUID,
@@ -36,6 +45,21 @@ final class BlockFormattingState: ObservableObject {
     func syncMarkdownFromActiveView() {
         guard let activeTextView, let storage = activeTextView.textStorage else { return }
         onMarkdownChange?(InlineMarkdown.markdown(from: storage))
+    }
+
+    /// Selection for Refine — prefers highlighted text, otherwise the focused block body.
+    func refineSelectionSnapshot() -> (blockID: UUID, text: String)? {
+        guard let textView = activeTextView, let blockID = focusedBlockID else { return nil }
+        let range = textView.selectedRange()
+        let ns = textView.string as NSString
+        if range.length > 0, NSMaxRange(range) <= ns.length {
+            let selected = ns.substring(with: range).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !selected.isEmpty else { return nil }
+            return (blockID, selected)
+        }
+        let whole = textView.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !whole.isEmpty else { return nil }
+        return (blockID, whole)
     }
 
     func toggleBold() { run { InlineMarkdown.toggleBold(in: $0, baseFont: baseFont(for: $0)) } }
@@ -71,10 +95,19 @@ final class BlockFormattingState: ObservableObject {
         let markdown = InlineMarkdown.markdown(from: storage)
         let family = InlineMarkdown.FontFamily(attribute: attributes["fontFamily"])
         let size = attributes["fontSize"].flatMap { Int($0) }.flatMap { $0 > 0 ? CGFloat($0) : nil }
-        let color = (storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor) ?? .labelColor
+        let color = (storage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)
+            ?? NSColor(ThemeManager.shared.palette.textPrimary)
+        activeTextView.undoManager?.disableUndoRegistration()
         storage.setAttributedString(
-            InlineMarkdown.attributedString(from: markdown, family: family, pointSize: size, textColor: color)
+            InlineMarkdown.attributedString(
+                from: markdown,
+                family: family,
+                pointSize: size,
+                textColor: color,
+                linkColor: NSColor(DesignTokens.Color.accent)
+            )
         )
+        activeTextView.undoManager?.enableUndoRegistration()
         let length = (activeTextView.string as NSString).length
         if length > 0 {
             let safeLocation = min(selection.location, max(length - 1, 0))
@@ -171,7 +204,7 @@ struct OWBlockFormattingToolbar: View {
         .padding(.horizontal, DesignTokens.Spacing.spacing2)
         .padding(.vertical, DesignTokens.Spacing.spacing1)
         .background(
-            DesignTokens.Color.surface.opacity(0.9),
+            DesignTokens.Color.editorCanvas,
             in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
         )
         .overlay {
@@ -179,7 +212,8 @@ struct OWBlockFormattingToolbar: View {
                 .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: DesignTokens.Layout.borderWidth)
         }
         .focusable(false)
-        .opacity(formatting.focusedBlockID == nil ? 0.88 : 1)
+        .opacity(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var fontFamilyBinding: Binding<InlineMarkdown.FontFamily> {

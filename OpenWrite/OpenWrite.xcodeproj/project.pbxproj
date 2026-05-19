@@ -47,6 +47,15 @@
 		AA0001010000000000000024 /* InMemoryVectorStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000024 /* InMemoryVectorStore.swift */; };
 		AA0001010000000000000025 /* OpenWriteAIServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000025 /* OpenWriteAIServices.swift */; };
 		AA0001010000000000000026 /* ChatPanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000026 /* ChatPanelView.swift */; };
+		AA0001010000000000000102 /* ChatComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000102 /* ChatComposerView.swift */; };
+		AA0001010000000000000106 /* ChatComposerPasteBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000106 /* ChatComposerPasteBridge.swift */; };
+		AA0001010000000000000107 /* OWRefineAssistPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000107 /* OWRefineAssistPanel.swift */; };
+		AA0001010000000000000108 /* OWBrandLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000108 /* OWBrandLogoView.swift */; };
+		AA0001010000000000000109 /* OWActionScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000109 /* OWActionScript.swift */; };
+		AA000101000000000000010A /* EditorBlockInsertMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000010A /* EditorBlockInsertMenu.swift */; };
+		AA000101000000000000010B /* ChatVisionPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000010B /* ChatVisionPayload.swift */; };
+		AA000101000000000000010C /* OWPageIconCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000101000000000000010C /* OWPageIconCatalog.swift */; };
+		AA0001010000000000000103 /* ChatTranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000103 /* ChatTranscriptView.swift */; };
 		AA00010100000000000000F0 /* RAGSourcePillsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000F0 /* RAGSourcePillsView.swift */; };
 		AA00010100000000000000F1 /* RetrievalHit+Sources.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000F1 /* RetrievalHit+Sources.swift */; };
 		AA00010100000000000000F9 /* ChatAttachmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000F9 /* ChatAttachmentStore.swift */; };
@@ -85,6 +94,9 @@
 		AA00010100000000000000B1 /* OWIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B1 /* OWIcon.swift */; };
 		AA00010100000000000000D3 /* OWUnicodeIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000D3 /* OWUnicodeIcon.swift */; };
 		AA0001010000000000000040 /* AnytypeShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000040 /* AnytypeShellView.swift */; };
+		AA0001010000000000000101 /* WorkbenchLayoutCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000101 /* WorkbenchLayoutCoordinator.swift */; };
+		AA0001010000000000000104 /* BlockEditorPasteCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000104 /* BlockEditorPasteCaptureView.swift */; };
+		AA0001010000000000000105 /* EditorPreviewBlockStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0001010000000000000105 /* EditorPreviewBlockStack.swift */; };
 		AA00010100000000000000FC /* OWWindowChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000FC /* OWWindowChrome.swift */; };
 		AA00010100000000000000FD /* ShellChromePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000FD /* ShellChromePreferences.swift */; };
 		AA00010100000000000000B3 /* OWNavigationRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00010100000000000000B3 /* OWNavigationRail.swift */; };
@@ -166,6 +178,15 @@
 		BB0001010000000000000024 /* InMemoryVectorStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryVectorStore.swift; sourceTree = "<group>"; };
 		BB0001010000000000000025 /* OpenWriteAIServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWriteAIServices.swift; sourceTree = "<group>"; };
 		BB0001010000000000000026 /* ChatPanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPanelView.swift; sourceTree = "<group>"; };
+		BB0001010000000000000102 /* ChatComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatComposerView.swift; sourceTree = "<group>"; };
+		BB0001010000000000000106 /* ChatComposerPasteBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatComposerPasteBridge.swift; sourceTree = "<group>"; };
+		BB0001010000000000000107 /* OWRefineAssistPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWRefineAssistPanel.swift; sourceTree = "<group>"; };
+		BB0001010000000000000108 /* OWBrandLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWBrandLogoView.swift; sourceTree = "<group>"; };
+		BB0001010000000000000109 /* OWActionScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWActionScript.swift; sourceTree = "<group>"; };
+		BB000101000000000000010A /* EditorBlockInsertMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorBlockInsertMenu.swift; sourceTree = "<group>"; };
+		BB000101000000000000010B /* ChatVisionPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatVisionPayload.swift; sourceTree = "<group>"; };
+		BB000101000000000000010C /* OWPageIconCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWPageIconCatalog.swift; sourceTree = "<group>"; };
+		BB0001010000000000000103 /* ChatTranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTranscriptView.swift; sourceTree = "<group>"; };
 		BB00010100000000000000F0 /* RAGSourcePillsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RAGSourcePillsView.swift; sourceTree = "<group>"; };
 		BB00010100000000000000F1 /* RetrievalHit+Sources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RetrievalHit+Sources.swift"; sourceTree = "<group>"; };
 		BB00010100000000000000F9 /* ChatAttachmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatAttachmentStore.swift; sourceTree = "<group>"; };
@@ -202,6 +223,9 @@
 		BB000101000000000000003A /* AgentRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRegistry.swift; sourceTree = "<group>"; };
 		BB000101000000000000003E /* OWMetadataChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWMetadataChip.swift; sourceTree = "<group>"; };
 		BB0001010000000000000040 /* AnytypeShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnytypeShellView.swift; sourceTree = "<group>"; };
+		BB0001010000000000000101 /* WorkbenchLayoutCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkbenchLayoutCoordinator.swift; sourceTree = "<group>"; };
+		BB0001010000000000000104 /* BlockEditorPasteCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockEditorPasteCaptureView.swift; sourceTree = "<group>"; };
+		BB0001010000000000000105 /* EditorPreviewBlockStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorPreviewBlockStack.swift; sourceTree = "<group>"; };
 		BB00010100000000000000FC /* OWWindowChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWWindowChrome.swift; sourceTree = "<group>"; };
 		BB00010100000000000000FD /* ShellChromePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellChromePreferences.swift; sourceTree = "<group>"; };
 		BB00010100000000000000B3 /* OWNavigationRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OWNavigationRail.swift; sourceTree = "<group>"; };
@@ -356,6 +380,8 @@
 				BB0001010000000000000009 /* LMStudioClient.swift */,
 				BB0001010000000000000023 /* EmbeddingService.swift */,
 				BB0001010000000000000013 /* RAGService.swift */,
+				BB0001010000000000000109 /* OWActionScript.swift */,
+				BB000101000000000000010B /* ChatVisionPayload.swift */,
 				BB0001010000000000000100 /* WebFetchService.swift */,
 				BB0001010000000000000025 /* OpenWriteAIServices.swift */,
 				BB0001010000000000000028 /* AgentConfig.swift */,
@@ -391,6 +417,9 @@
 			isa = PBXGroup;
 			children = (
 				BB0001010000000000000026 /* ChatPanelView.swift */,
+				BB0001010000000000000102 /* ChatComposerView.swift */,
+				BB0001010000000000000106 /* ChatComposerPasteBridge.swift */,
+				BB0001010000000000000103 /* ChatTranscriptView.swift */,
 				BB00010100000000000000FB /* OWChatStatusStepper.swift */,
 				BB00010100000000000000F0 /* RAGSourcePillsView.swift */,
 				BB0001010000000000000027 /* RelatedNotesView.swift */,
@@ -530,10 +559,14 @@
 		EE000101000000000000002E /* Editor */ = {
 			isa = PBXGroup;
 			children = (
-				BB000101000000000000002C /* InlineAssistController.swift */,
-				BB00010100000000000000F7 /* OWBlockTextEditor.swift */,
+				BB0001010000000000000104 /* BlockEditorPasteCaptureView.swift */,
 				BB00010100000000000000F8 /* BlockFormattingState.swift */,
+				BB0001010000000000000107 /* OWRefineAssistPanel.swift */,
+				BB0001010000000000000105 /* EditorPreviewBlockStack.swift */,
+				BB000101000000000000002C /* InlineAssistController.swift */,
 				BB0001010000000000000048 /* OWBlockEditorView.swift */,
+				BB000101000000000000010A /* EditorBlockInsertMenu.swift */,
+				BB00010100000000000000F7 /* OWBlockTextEditor.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -553,6 +586,8 @@
 				BB000101000000000000003E /* OWMetadataChip.swift */,
 				BB00010100000000000000B1 /* OWIcon.swift */,
 				BB00010100000000000000D3 /* OWUnicodeIcon.swift */,
+				BB0001010000000000000108 /* OWBrandLogoView.swift */,
+				BB000101000000000000010C /* OWPageIconCatalog.swift */,
 				BB00010100000000000000D6 /* OWThemedControls.swift */,
 				BB00010100000000000000F5 /* OpenWriteThemedScrollView.swift */,
 				BB00010100000000000000DE /* OWPageBanner.swift */,
@@ -565,6 +600,7 @@
 			children = (
 				BB00010100000000000000D0 /* LaunchIntroView.swift */,
 				BB0001010000000000000040 /* AnytypeShellView.swift */,
+				BB0001010000000000000101 /* WorkbenchLayoutCoordinator.swift */,
 				BB00010100000000000000FC /* OWWindowChrome.swift */,
 				BB00010100000000000000FD /* ShellChromePreferences.swift */,
 				BB00010100000000000000B3 /* OWNavigationRail.swift */,
@@ -709,6 +745,8 @@
 				AA0001010000000000000011 /* QuickCaptureController.swift in Sources */,
 				AA0001010000000000000012 /* NDLParser.swift in Sources */,
 				AA0001010000000000000013 /* RAGService.swift in Sources */,
+				AA0001010000000000000109 /* OWActionScript.swift in Sources */,
+				AA000101000000000000010B /* ChatVisionPayload.swift in Sources */,
 				AA0001010000000000000014 /* MarkdownImporter.swift in Sources */,
 				AA0001010000000000000015 /* PageType.swift in Sources */,
 				AA0001010000000000000016 /* PageProperties.swift in Sources */,
@@ -729,6 +767,9 @@
 				AA0001010000000000000024 /* InMemoryVectorStore.swift in Sources */,
 				AA0001010000000000000025 /* OpenWriteAIServices.swift in Sources */,
 				AA0001010000000000000026 /* ChatPanelView.swift in Sources */,
+				AA0001010000000000000102 /* ChatComposerView.swift in Sources */,
+				AA0001010000000000000106 /* ChatComposerPasteBridge.swift in Sources */,
+				AA0001010000000000000103 /* ChatTranscriptView.swift in Sources */,
 				AA00010100000000000000FB /* OWChatStatusStepper.swift in Sources */,
 				AA00010100000000000000F5 /* OpenWriteThemedScrollView.swift in Sources */,
 				AA00010100000000000000F0 /* RAGSourcePillsView.swift in Sources */,
@@ -750,6 +791,10 @@
 				AA00010100000000000000F7 /* OWBlockTextEditor.swift in Sources */,
 				AA00010100000000000000F8 /* BlockFormattingState.swift in Sources */,
 				AA0001010000000000000048 /* OWBlockEditorView.swift in Sources */,
+				AA000101000000000000010A /* EditorBlockInsertMenu.swift in Sources */,
+				AA0001010000000000000104 /* BlockEditorPasteCaptureView.swift in Sources */,
+				AA0001010000000000000107 /* OWRefineAssistPanel.swift in Sources */,
+				AA0001010000000000000105 /* EditorPreviewBlockStack.swift in Sources */,
 				AA0001010000000000000030 /* StructureTemplate.swift in Sources */,
 				AA0001010000000000000031 /* StructureTemplatePicker.swift in Sources */,
 				AA0001010000000000000034 /* OWSidebarRow.swift in Sources */,
@@ -765,6 +810,7 @@
 				AA000101000000000000003E /* OWMetadataChip.swift in Sources */,
 				AA00010100000000000000D0 /* LaunchIntroView.swift in Sources */,
 				AA0001010000000000000040 /* AnytypeShellView.swift in Sources */,
+				AA0001010000000000000101 /* WorkbenchLayoutCoordinator.swift in Sources */,
 				AA00010100000000000000FC /* OWWindowChrome.swift in Sources */,
 				AA00010100000000000000FD /* ShellChromePreferences.swift in Sources */,
 				AA00010100000000000000B3 /* OWNavigationRail.swift in Sources */,
@@ -777,6 +823,8 @@
 				AA0001010000000000000046 /* GraphLayoutStore.swift in Sources */,
 				AA00010100000000000000B1 /* OWIcon.swift in Sources */,
 				AA00010100000000000000D3 /* OWUnicodeIcon.swift in Sources */,
+				AA0001010000000000000108 /* OWBrandLogoView.swift in Sources */,
+				AA000101000000000000010C /* OWPageIconCatalog.swift in Sources */,
 				AA000101000000000000004C /* IngestionPipeline.swift in Sources */,
 				AA000101000000000000004D /* IngestionHealth.swift in Sources */,
 				AA000101000000000000004E /* VaultFSEventsStub.swift in Sources */,

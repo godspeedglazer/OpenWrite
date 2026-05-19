@@ -79,7 +79,7 @@ struct OWRoundedRect<Content: View>: View {
     private var borderColor: Color {
         switch style {
         case .editorPanel:
-            return palette.borderHairline
+            return palette.borderSubtle
         default:
             return palette.borderSubtle
         }

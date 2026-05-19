@@ -148,7 +148,6 @@ struct OWSettingsSheet<Content: View>: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(DesignTokens.Color.background)
-        .openWriteSheetPresentationChrome()
     }
 
     @ViewBuilder
@@ -307,8 +306,13 @@ struct OWThemedComposerField: View {
     var lineLimit: ClosedRange<Int> = 1 ... 6
     var minHeight: CGFloat = DesignTokens.Layout.composerActionSize
     var onSubmit: (() -> Void)?
+    var isFocused: FocusState<Bool>.Binding?
 
-    @FocusState private var isFocused: Bool
+    @FocusState private var internalFocus: Bool
+
+    private var focusBinding: FocusState<Bool>.Binding {
+        isFocused ?? $internalFocus
+    }
 
     var body: some View {
         TextField(placeholder, text: $text, axis: .vertical)
@@ -316,7 +320,7 @@ struct OWThemedComposerField: View {
             .font(OWTypography.body)
             .foregroundStyle(DesignTokens.Color.textPrimary)
             .lineLimit(lineLimit)
-            .focused($isFocused)
+            .focused(focusBinding)
             .openWriteFocusChrome(.suppressSystemRing)
             .frame(
                 minHeight: minHeight,
@@ -333,8 +337,8 @@ struct OWThemedComposerField: View {
             .overlay {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)
                     .strokeBorder(
-                        isFocused ? DesignTokens.Color.accent.opacity(0.45) : DesignTokens.Color.borderSubtle,
-                        lineWidth: isFocused ? DesignTokens.Layout.focusRingWidth : DesignTokens.Layout.borderWidth
+                        focusBinding.wrappedValue ? DesignTokens.Color.accent.opacity(0.45) : DesignTokens.Color.borderSubtle,
+                        lineWidth: focusBinding.wrappedValue ? DesignTokens.Layout.focusRingWidth : DesignTokens.Layout.borderWidth
                     )
             }
             .onSubmit { onSubmit?() }
@@ -414,6 +418,8 @@ struct OWThemedDropdown<Option: Hashable>: View {
         .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
             dropdownList
                 .padding(DesignTokens.Spacing.spacing2)
+                .frame(minWidth: max(minWidth, 160))
+                .frame(minHeight: dropdownMinHeight)
                 .background(DesignTokens.Color.surfaceElevated)
                 .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
                 .overlay {
@@ -421,22 +427,22 @@ struct OWThemedDropdown<Option: Hashable>: View {
                         .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
                 }
                 .presentationBackground(DesignTokens.Color.surfaceElevated)
+                .presentationCompactAdaptation(.popover)
                 .onDisappear { isOpen = false }
         }
     }
 
+    private var dropdownMinHeight: CGFloat {
+        min(CGFloat(options.count) * 38 + 12, 280)
+    }
+
     private var dropdownList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
-                ForEach(options, id: \.self) { option in
-                    dropdownRow(option)
-                }
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+            ForEach(options, id: \.self) { option in
+                dropdownRow(option)
             }
-            .frame(minWidth: max(minWidth, 160), alignment: .leading)
         }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(maxHeight: 280)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func dropdownRow(_ option: Option) -> some View {

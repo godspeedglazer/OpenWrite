@@ -16,7 +16,11 @@ final class WorkbenchState: ObservableObject {
     @Published var archivedChatThreadIDToOpen: UUID?
     /// Optional filter when an object-type row is chosen in the sidebar (scoped per vault).
     @Published var vaultTypeFilter: PageType?
+    @Published private(set) var editorFocusMode = false
+    /// Bump to force graph canvas relayout after structural note changes.
+    @Published var graphRefreshToken: Int = 0
     private var vaultTypeFilters: [UUID: PageType?] = [:]
+    private var chromeSnapshotBeforeFocus: (sidebar: Bool, assist: Bool)?
 
     init(selectedSection: SidebarSection = .notes) {
         self.selectedSection = selectedSection
@@ -69,6 +73,31 @@ final class WorkbenchState: ObservableObject {
         ShellChromePreferences.sidebarVisible = sidebarVisible
         ShellChromePreferences.assistStripExpanded = aiAssistExpanded
         ShellChromePreferences.navigationRailCollapsed = navigationRailCollapsed
+    }
+
+    /// Hides sidebar + assist for distraction-free writing (restores prior chrome on exit).
+    func toggleEditorFocusMode() {
+        if editorFocusMode {
+            editorFocusMode = false
+            if let snapshot = chromeSnapshotBeforeFocus {
+                sidebarVisible = snapshot.sidebar
+                aiAssistExpanded = snapshot.assist
+            }
+            chromeSnapshotBeforeFocus = nil
+        } else {
+            chromeSnapshotBeforeFocus = (sidebarVisible, aiAssistExpanded)
+            editorFocusMode = true
+            sidebarVisible = false
+            aiAssistExpanded = false
+        }
+        persistChromePreferences()
+    }
+
+    /// Restores the rail when preferences say hidden but focus mode is off (legacy fullscreen auto-hide).
+    func recoverSidebarIfOrphaned() {
+        guard !sidebarVisible, !editorFocusMode else { return }
+        sidebarVisible = true
+        persistChromePreferences()
     }
 
     /// Legacy alias for toolbar toggles migrating to `aiAssistExpanded`.

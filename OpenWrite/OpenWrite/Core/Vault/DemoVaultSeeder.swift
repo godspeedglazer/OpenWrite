@@ -2,7 +2,7 @@ import Foundation
 
 /// Idempotent demo corpus — interconnected [[wikilinks]] for graph and object-type showcases.
 enum DemoVaultSeeder {
-    static let seedVersion = "2026-05-17-v1"
+    static let seedVersion = "2026-05-18-graph-v2"
     static let hubDocumentID = UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000001")!
 
     static func documents() -> [VaultDocument] {
@@ -57,6 +57,18 @@ enum DemoVaultSeeder {
         NoteBlock.todoBlock(text: text, checked: checked)
     }
 
+    private static func atlasClusterBlocks(node: Int, peers: [Int], blurb: String) -> [NoteBlock] {
+        var blocks: [NoteBlock] = [
+            para(blurb),
+            link("OpenWrite Demo Space"),
+            link("Graph Tour")
+        ]
+        for peer in peers {
+            blocks.append(link("Graph Atlas \(String(format: "%02d", peer))"))
+        }
+        return blocks
+    }
+
     private static let pageSpecs: [PageSpec] = [
         PageSpec(
             id: hubDocumentID,
@@ -84,7 +96,11 @@ enum DemoVaultSeeder {
                 h2("Hub pages"),
                 link("Sprint Board"),
                 link("Literature Notes"),
-                link("Feature Matrix")
+                link("Feature Matrix"),
+                h2("Graph atlas"),
+                link("Graph Atlas 01"),
+                link("Graph Atlas 06"),
+                link("Graph Atlas 12")
             ]
         ),
         PageSpec(
@@ -446,6 +462,102 @@ enum DemoVaultSeeder {
                 link("Feature Matrix"),
                 link("OpenWrite Demo Space")
             ]
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000020")!,
+            title: "Graph Atlas 01",
+            pageType: .note,
+            icon: "①",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 1, peers: [2, 3, 6], blurb: "Atlas ring node — drag nodes in Graph to test layout.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000021")!,
+            title: "Graph Atlas 02",
+            pageType: .note,
+            icon: "②",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 2, peers: [1, 3, 7], blurb: "Second atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000022")!,
+            title: "Graph Atlas 03",
+            pageType: .note,
+            icon: "③",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 3, peers: [2, 4, 8], blurb: "Third atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000023")!,
+            title: "Graph Atlas 04",
+            pageType: .note,
+            icon: "④",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 4, peers: [3, 5, 9], blurb: "Fourth atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000024")!,
+            title: "Graph Atlas 05",
+            pageType: .note,
+            icon: "⑤",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 5, peers: [4, 6, 10], blurb: "Fifth atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000025")!,
+            title: "Graph Atlas 06",
+            pageType: .note,
+            icon: "⑥",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 6, peers: [5, 7, 11], blurb: "Sixth atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000026")!,
+            title: "Graph Atlas 07",
+            pageType: .note,
+            icon: "⑦",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 7, peers: [6, 8, 12], blurb: "Seventh atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000027")!,
+            title: "Graph Atlas 08",
+            pageType: .note,
+            icon: "⑧",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 8, peers: [7, 9, 1], blurb: "Eighth atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000028")!,
+            title: "Graph Atlas 09",
+            pageType: .note,
+            icon: "⑨",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 9, peers: [8, 10, 2], blurb: "Ninth atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000029")!,
+            title: "Graph Atlas 10",
+            pageType: .note,
+            icon: "⑩",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 10, peers: [9, 11, 3], blurb: "Tenth atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-00000000002A")!,
+            title: "Graph Atlas 11",
+            pageType: .note,
+            icon: "⑪",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 11, peers: [10, 12, 4], blurb: "Eleventh atlas node.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-00000000002B")!,
+            title: "Graph Atlas 12",
+            pageType: .note,
+            icon: "⑫",
+            cover: nil,
+            blocks: atlasClusterBlocks(node: 12, peers: [11, 1, 5], blurb: "Twelfth atlas node — completes the ring.")
         ),
         PageSpec(
             id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-00000000001C")!,

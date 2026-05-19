@@ -4,6 +4,7 @@ import SwiftUI
 /// Anytype-inspired global graph — wikilink canvas with drag, curved edges, persisted layout.
 struct GraphView: View {
     @Environment(\.openWritePalette) private var palette
+    @EnvironmentObject private var vaultStore: VaultStore
 
     let vaultID: UUID
     let documents: [VaultDocument]
@@ -69,6 +70,7 @@ struct GraphView: View {
             .background(OWDisablesWindowDrag())
             .modifier(GraphWindowDragPolicyModifier())
             .onAppear {
+                _ = vaultStore.ensureGraphDemoCorpus()
                 canvasSize = size
                 layoutCanvasSize = resolvedLayoutCanvasSize(size)
                 loadPersistedLayout()
@@ -531,7 +533,7 @@ struct GraphView: View {
     }
 
     private func emptyVaultState(in size: CGSize) -> some View {
-        centeredGraphHero(
+        graphEmptyState(
             size: size,
             title: "No notes in vault",
             subtitle: "Create a page to see it on the graph.",
@@ -540,12 +542,39 @@ struct GraphView: View {
     }
 
     private func emptyGraphOverlay(in size: CGSize) -> some View {
-        centeredGraphHero(
+        graphEmptyState(
             size: size,
             title: "No links yet",
-            subtitle: "Connect notes with [[wikilinks]] in the editor. Unresolved titles appear once a matching page exists.",
-            icon: .link
+            subtitle: "Connect notes with [[wikilinks]], or open the Links Demo vault for a large sample graph.",
+            icon: .link,
+            showsDemoVaultAction: true
         )
+    }
+
+    private func graphEmptyState(
+        size: CGSize,
+        title: String,
+        subtitle: String,
+        icon: OWIcon,
+        showsDemoVaultAction: Bool = false
+    ) -> some View {
+        VStack(spacing: DesignTokens.Spacing.spacing3) {
+            centeredGraphHero(size: size, title: title, subtitle: subtitle, icon: icon)
+            if showsDemoVaultAction, vaultStore.isDemoVaultInstalled,
+               vaultStore.activeVaultID != OpenWriteVault.demoID {
+                Button("Open Links Demo graph") {
+                    vaultStore.switchVault(to: OpenWriteVault.demoID)
+                    vaultStore.selectedDocumentID = DemoVaultSeeder.hubDocumentID
+                }
+                .buttonStyle(OWAccentCapsuleButtonStyle())
+            } else if showsDemoVaultAction {
+                Button("Install Links Demo") {
+                    _ = vaultStore.installDemoVault(selectHub: true)
+                }
+                .buttonStyle(OWAccentCapsuleButtonStyle())
+            }
+        }
+        .frame(width: size.width, height: size.height)
     }
 
     private func centeredGraphHero(

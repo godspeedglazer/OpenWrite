@@ -283,6 +283,7 @@ final class VaultStore: ObservableObject {
             VaultLaunchPreferences.didSeedDemoOnFirstLaunch = true
             _ = installDemoVault(selectHub: false)
         }
+        upgradeDemoVaultIfNeeded()
         reconcileSelections()
         if selectedDocumentID == nil {
             if documents.contains(where: { $0.id == VaultDocument.welcomeDocumentID && $0.belongsToVault(activeVaultID) }) {
@@ -291,6 +292,32 @@ final class VaultStore: ObservableObject {
                 selectedDocumentID = first.id
             }
         }
+    }
+
+    /// Ensures the Links Demo vault exists and includes the latest graph stress-test pages.
+    @discardableResult
+    func ensureGraphDemoCorpus() -> Bool {
+        let added = installDemoVault(selectHub: false)
+        return added || upgradeDemoVaultIfNeeded()
+    }
+
+    /// Adds new demo pages when `DemoVaultSeeder.seedVersion` bumps (e.g. graph atlas cluster).
+    @discardableResult
+    func upgradeDemoVaultIfNeeded() -> Bool {
+        guard isDemoVaultInstalled else { return false }
+        guard let hubIndex = documents.firstIndex(where: { $0.id == DemoVaultSeeder.hubDocumentID }) else {
+            return false
+        }
+        let installed = documents[hubIndex].metadata[OpenWriteVault.MetadataKey.demoSeedVersion]
+        guard installed != DemoVaultSeeder.seedVersion else { return false }
+
+        let existingIDs = Set(documents.map(\.id))
+        let toAdd = DemoVaultSeeder.documents().filter { !existingIDs.contains($0.id) }
+        if !toAdd.isEmpty {
+            documents.append(contentsOf: toAdd)
+        }
+        documents[hubIndex].metadata[OpenWriteVault.MetadataKey.demoSeedVersion] = DemoVaultSeeder.seedVersion
+        return !toAdd.isEmpty
     }
 
     /// Idempotent demo install. Returns `true` when new pages were added.

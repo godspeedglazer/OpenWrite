@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 import UniformTypeIdentifiers
 /// On-disk image attachments for pasted and embedded blocks.
 /// Default fallback: `~/Library/Application Support/openwrite/attachments/{assetId}.png`
@@ -152,19 +153,73 @@ enum VaultAttachmentStore {
 enum ImagePasteSupport {
     static let pendingAttributeKey = "pending"
 
+    private static let imageFileExtensions: Set<String> = [
+        "png", "jpg", "jpeg", "gif", "heic", "tiff", "tif", "bmp", "webp"
+    ]
+
+    /// True when the general pasteboard has a raster image or an image file URL.
+    static var pasteboardHasIngestibleImage: Bool {
+        imageFromPasteboard() != nil || imageFileURLFromPasteboard() != nil
+    }
+
+    static func imageFileURLFromPasteboard() -> URL? {
+        let pasteboard = NSPasteboard.general
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL] {
+            for url in urls where isImageFileURL(url) {
+                return url
+            }
+        }
+        if let string = pasteboard.string(forType: .fileURL),
+           let url = URL(string: string),
+           isImageFileURL(url) {
+            return url
+        }
+        return nil
+    }
+
     static func imageFromPasteboard() -> NSImage? {
+        if let url = imageFileURLFromPasteboard(), let image = NSImage(contentsOf: url) {
+            return image
+        }
+
         let pasteboard = NSPasteboard.general
         if let images = pasteboard.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage],
            let first = images.first {
             return first
         }
-        if let data = pasteboard.data(forType: .tiff), let image = NSImage(data: data) {
-            return image
-        }
-        if let data = pasteboard.data(forType: .png), let image = NSImage(data: data) {
-            return image
+
+        for type in pasteboardImageTypes {
+            guard let data = pasteboard.data(forType: type), !data.isEmpty else { continue }
+            if let image = decodeRasterData(data) {
+                return image
+            }
         }
         return nil
+    }
+
+    private static var pasteboardImageTypes: [NSPasteboard.PasteboardType] {
+        [
+            .png,
+            .tiff,
+            NSPasteboard.PasteboardType(UTType.jpeg.identifier),
+            NSPasteboard.PasteboardType(UTType.heic.identifier),
+            NSPasteboard.PasteboardType(UTType.gif.identifier)
+        ]
+    }
+
+    private static func decodeRasterData(_ data: Data) -> NSImage? {
+        if let image = NSImage(data: data) {
+            return image
+        }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            return nil
+        }
+        return NSImage(
+            cgImage: cgImage,
+            size: NSSize(width: cgImage.width, height: cgImage.height)
+        )
     }
 
     static func placeholderBlock(alt: String = "Pasting image…") -> NoteBlock {
@@ -179,6 +234,9 @@ enum ImagePasteSupport {
         alt: String = "Image",
         vaultRoot: URL? = VaultLocationPreferences.resolvedVaultRootURL()
     ) -> NoteBlock? {
+        if let url = imageFileURLFromPasteboard() {
+            return ingestImageFile(at: url, alt: alt, vaultRoot: vaultRoot)
+        }
         guard let image = imageFromPasteboard() else { return nil }
         do {
             let saved = try VaultAttachmentStore.saveImage(from: image, vaultRoot: vaultRoot)
@@ -273,7 +331,13 @@ enum ImagePasteSupport {
 
     private static func isImageFileURL(_ url: URL) -> Bool {
         let ext = url.pathExtension.lowercased()
-        return ["png", "jpg", "jpeg", "gif", "heic", "tiff", "tif", "bmp", "webp"].contains(ext)
+        if imageFileExtensions.contains(ext) { return true }
+        if let values = try? url.resourceValues(forKeys: [.contentTypeKey]),
+           let type = values.contentType,
+           type.conforms(to: .image) {
+            return true
+        }
+        return false
     }
 
     static func copyImageToPasteboard(for block: NoteBlock, vaultRoot: URL? = VaultLocationPreferences.resolvedVaultRootURL()) -> Bool {

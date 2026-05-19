@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Version gate
+// MARK: - Version gate (optional analytics; splash runs every cold launch)
 
 enum LaunchIntroStorage {
     static let lastSeenVersionKey = "com.openwrite.launchIntro.lastSeenVersion"
@@ -16,11 +16,11 @@ enum LaunchIntroStorage {
 
 // MARK: - Root wrapper
 
-/// Full-window launch overlay, then crossfade into the main shell (once per app version).
+/// Brief Anytype-style splash on every launch, then crossfade into the main shell.
 struct LaunchRootView<Main: View>: View {
     @AppStorage(LaunchIntroStorage.lastSeenVersionKey) private var lastSeenIntroVersion = ""
-    @State private var showIntroOverlay = false
-    @State private var mainShellOpacity: Double = 1
+    @State private var showIntroOverlay = true
+    @State private var mainShellOpacity: Double = 0
 
     @ViewBuilder private let main: () -> Main
 
@@ -34,67 +34,92 @@ struct LaunchRootView<Main: View>: View {
                 .opacity(mainShellOpacity)
 
             if showIntroOverlay {
-                LaunchIntroView(
-                    onCrossfade: {
-                        withAnimation(.easeInOut(duration: LaunchIntroTiming.crossfade)) {
-                            mainShellOpacity = 1
-                        }
-                    },
-                    onFinished: finishIntro
-                )
-                .transition(.opacity)
-                .zIndex(1)
+                LaunchIntroView(onFinished: finishIntro)
+                    .transition(.opacity)
+                    .zIndex(1)
             }
         }
         .onAppear(perform: configureLaunchPresentation)
     }
 
     private func configureLaunchPresentation() {
-        guard LaunchIntroStorage.shouldShowIntro(lastSeenVersion: lastSeenIntroVersion) else {
-            mainShellOpacity = 1
-            showIntroOverlay = false
-            return
-        }
         mainShellOpacity = 0
         showIntroOverlay = true
     }
 
     private func finishIntro() {
-        lastSeenIntroVersion = LaunchIntroStorage.currentAppVersion
+        if LaunchIntroStorage.shouldShowIntro(lastSeenVersion: lastSeenIntroVersion) {
+            lastSeenIntroVersion = LaunchIntroStorage.currentAppVersion
+        }
         showIntroOverlay = false
-        mainShellOpacity = 1
+        withAnimation(.easeOut(duration: LaunchIntroTiming.shellReveal)) {
+            mainShellOpacity = 1
+        }
     }
 }
 
 // MARK: - Intro overlay
 
 private enum LaunchIntroTiming {
-    static let wordmarkFadeIn: TimeInterval = 0.12
-    static let holdBeforeCrossfade: TimeInterval = 0.10
-    static let crossfade: TimeInterval = 0.18
+    /// Total perceived splash ≈ 0.8s (fade-in + hold + fade-out) before `onFinished`.
+    static let wordmarkFadeIn: TimeInterval = 0.20
+    static let hold: TimeInterval = 0.30
+    static let overlayFadeOut: TimeInterval = 0.30
+    static let shellReveal: TimeInterval = 0.24
 }
 
 struct LaunchIntroView: View {
     @Environment(ThemeManager.self) private var themeManager
 
-    let onCrossfade: () -> Void
     let onFinished: () -> Void
 
     @State private var wordmarkOpacity: Double = 0
+    @State private var versionOpacity: Double = 0
     @State private var overlayOpacity: Double = 1
     @State private var introTask: Task<Void, Never>?
 
+    private var palette: ThemePalette { themeManager.palette }
+
+    private var appVersion: String {
+        LaunchIntroStorage.currentAppVersion
+    }
+
     var body: some View {
-        let _ = themeManager.selectedTheme
+        let _ = themeManager.revision
         ZStack {
-            themeManager.palette.background
+            palette.background
                 .ignoresSafeArea()
 
-            Text("OpenWrite")
-                .font(OWTypography.documentTitle)
-                .tracking(-0.4)
-                .foregroundStyle(themeManager.palette.textPrimary)
-                .opacity(wordmarkOpacity)
+            VStack(spacing: DesignTokens.Spacing.spacing3) {
+                OWBrandLogoSpinner(size: 72, periodSeconds: 2.6)
+                    .opacity(wordmarkOpacity)
+
+                Text("OpenWrite")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .tracking(-0.6)
+                    .textCase(.lowercase)
+                    .foregroundStyle(palette.textPrimary)
+                    .opacity(wordmarkOpacity)
+
+                Text(themeManager.selectedTheme.displayName)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(palette.textPrimary)
+                    .opacity(versionOpacity)
+
+                Text(themeManager.selectedTheme.shortDescription)
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .foregroundStyle(palette.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .frame(maxWidth: 300)
+                    .opacity(versionOpacity)
+
+                Text("v\(appVersion)")
+                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(palette.textTertiary)
+                    .opacity(versionOpacity)
+            }
         }
         .opacity(overlayOpacity)
         .allowsHitTesting(overlayOpacity > 0.01)
@@ -110,21 +135,25 @@ struct LaunchIntroView: View {
         introTask = Task { @MainActor in
             withAnimation(.easeOut(duration: LaunchIntroTiming.wordmarkFadeIn)) {
                 wordmarkOpacity = 1
+                versionOpacity = 1
             }
 
-            let crossfadeStart = LaunchIntroTiming.wordmarkFadeIn + LaunchIntroTiming.holdBeforeCrossfade
-            let crossfadeNanos = UInt64(crossfadeStart * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: crossfadeNanos)
-            guard !Task.isCancelled else { return }
+            let holdStart = LaunchIntroTiming.wordmarkFadeIn + LaunchIntroTiming.hold
+            try? await Task.sleep(nanoseconds: UInt64(holdStart * 1_000_000_000))
+            guard !Task.isCancelled else {
+                onFinished()
+                return
+            }
 
-            onCrossfade()
-            withAnimation(.easeInOut(duration: LaunchIntroTiming.crossfade)) {
+            withAnimation(.easeInOut(duration: LaunchIntroTiming.overlayFadeOut)) {
                 overlayOpacity = 0
             }
 
-            let fadeNanos = UInt64(LaunchIntroTiming.crossfade * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: fadeNanos)
-            guard !Task.isCancelled else { return }
+            try? await Task.sleep(nanoseconds: UInt64(LaunchIntroTiming.overlayFadeOut * 1_000_000_000))
+            guard !Task.isCancelled else {
+                onFinished()
+                return
+            }
 
             onFinished()
         }
@@ -132,8 +161,7 @@ struct LaunchIntroView: View {
 }
 
 #Preview("Intro overlay") {
-    LaunchIntroView(onCrossfade: {}, onFinished: {})
+    LaunchIntroView(onFinished: {})
         .environment(ThemeManager.shared)
-        .openWritePalette(ThemeManager.shared.palette)
         .frame(width: 900, height: 600)
 }

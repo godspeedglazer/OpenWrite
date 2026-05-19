@@ -59,9 +59,15 @@ final class InlineAssistController: ObservableObject {
     @Published private(set) var phase: InlineAssistPhase = .idle
     @Published private(set) var latestSnapshot: InlineSelectionSnapshot?
     @Published var showRefineResult = false
+    @Published private(set) var refinePipelineSteps: [ChatPipelineStep] = []
+    @Published private(set) var pendingActions: [OWAction] = []
 
     private var debounceTask: Task<Void, Never>?
     private var refineTask: Task<Void, Never>?
+    private var refineIntroTask: Task<Void, Never>?
+
+    private static let refineStepOrder = ["selection", "vault", "model", "review"]
+    private static let refineIntroStepDelayNs: UInt64 = 240_000_000
 
     private var pendingDocumentID: UUID?
     private var pendingBlockID: UUID?
@@ -194,13 +200,90 @@ final class InlineAssistController: ObservableObject {
 
     var canApplyRefinement: Bool {
         guard latestSnapshot != nil else { return false }
-        if case .ready = phase { return true }
+        if case .ready(let prose, _) = phase {
+            return !prose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingActions.isEmpty
+        }
         return false
+    }
+
+    var readyProse: String? {
+        if case .ready(let text, _) = phase { return text }
+        return nil
     }
 
     var isRefining: Bool {
         if case .refining = phase { return true }
         return false
+    }
+
+    var refineStatusCaption: String {
+        switch phase {
+        case .refining:
+            return refineActiveStepTitle
+        case .ready:
+            return "Review the suggestion, then apply or dismiss."
+        case .failed:
+            return "Something went wrong — check LM Studio in Settings."
+        default:
+            return "Improve the highlighted passage with vault context."
+        }
+    }
+
+    var refineActiveStepTitle: String {
+        refinePipelineSteps.first(where: { $0.status == .active })?.title
+            ?? refinePipelineSteps.last(where: { $0.status == .completed })?.title
+            ?? "Working…"
+    }
+
+    private func seedRefinePipelinePending() {
+        refinePipelineSteps = [
+            ChatPipelineStep(id: "selection", title: "Reading selection", status: .pending),
+            ChatPipelineStep(id: "vault", title: "Vault context", status: .pending),
+            ChatPipelineStep(id: "model", title: "Local model", status: .pending),
+            ChatPipelineStep(id: "review", title: "Review & apply", status: .pending)
+        ]
+    }
+
+    private func setRefineStep(_ id: String, status: ChatPipelineStep.Status, title: String? = nil) {
+        guard let index = refinePipelineSteps.firstIndex(where: { $0.id == id }) else { return }
+        withAnimation(.easeInOut(duration: 0.32)) {
+            refinePipelineSteps[index].status = status
+            if let title { refinePipelineSteps[index].title = title }
+        }
+    }
+
+    private func setRefineSteps(upTo activeID: String, completedBefore: Bool = true) {
+        guard let activeIndex = Self.refineStepOrder.firstIndex(of: activeID) else { return }
+        withAnimation(.easeInOut(duration: 0.32)) {
+            for (index, stepID) in Self.refineStepOrder.enumerated() {
+                guard let stepIndex = refinePipelineSteps.firstIndex(where: { $0.id == stepID }) else { continue }
+                if index < activeIndex, completedBefore {
+                    refinePipelineSteps[stepIndex].status = .completed
+                } else if stepID == activeID {
+                    refinePipelineSteps[stepIndex].status = .active
+                } else if index > activeIndex {
+                    refinePipelineSteps[stepIndex].status = .pending
+                }
+            }
+        }
+    }
+
+    /// Staggered rail animation when the panel opens (before network work finishes).
+    private func playRefineIntroAnimation() async {
+        seedRefinePipelinePending()
+        for stepID in Self.refineStepOrder {
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                setRefineSteps(upTo: stepID)
+            }
+            if stepID != Self.refineStepOrder.last {
+                try? await Task.sleep(nanoseconds: Self.refineIntroStepDelayNs)
+            }
+        }
+        await MainActor.run {
+            setRefineStep("selection", status: .completed, title: "Selection captured")
+            setRefineStep("vault", status: .active, title: "Searching vault")
+        }
     }
 
     func refineSelection(
@@ -210,8 +293,10 @@ final class InlineAssistController: ObservableObject {
     ) {
         guard let snapshot = latestSnapshot else { return }
         refineTask?.cancel()
+        refineIntroTask?.cancel()
         phase = .refining
         showRefineResult = true
+        seedRefinePipelinePending()
 
         let query = Self.refineQuery(
             for: snapshot.selectedText,
@@ -220,8 +305,14 @@ final class InlineAssistController: ObservableObject {
         )
         let agent = BuiltInAgents.refineProse
 
+        refineIntroTask = Task {
+            await playRefineIntroAnimation()
+        }
+
         refineTask = Task {
             do {
+                _ = await refineIntroTask?.value
+                guard !Task.isCancelled else { return }
                 let answer = try await Self.runRefine(
                     rag: rag,
                     query: query,
@@ -229,12 +320,20 @@ final class InlineAssistController: ObservableObject {
                 )
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    let display = AIInput.stripChunkReferences(answer.text)
-                    phase = .ready(display, sourceHits: answer.hits)
+                    setRefineStep("vault", status: .completed, title: "Vault context")
+                    setRefineStep("model", status: .completed, title: "Local model")
+                    setRefineStep("review", status: .active, title: "Review & apply")
+                    let stripped = AIInput.stripChunkReferences(answer.text)
+                    let parsed = OWActionScript.parse(in: stripped)
+                    pendingActions = parsed.actions
+                    let prose = parsed.proseWithoutScripts.isEmpty ? stripped : parsed.proseWithoutScripts
+                    phase = .ready(prose, sourceHits: answer.hits)
                 }
             } catch {
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
+                    setRefineStep("model", status: .failed, title: "Refine failed")
+                    setRefineStep("review", status: .failed, title: "Unavailable")
                     phase = .failed(error.localizedDescription)
                 }
             }
@@ -243,7 +342,9 @@ final class InlineAssistController: ObservableObject {
 
     func dismissRefine() {
         refineTask?.cancel()
+        refineIntroTask?.cancel()
         showRefineResult = false
+        pendingActions = []
         if case .ready = phase {
             phase = .idle
         } else if case .failed = phase {
@@ -254,8 +355,19 @@ final class InlineAssistController: ObservableObject {
     /// Opens the refine sheet with a user-visible message (no selection, LM Studio offline hint, etc.).
     func presentRefineMessage(_ message: String) {
         refineTask?.cancel()
-        phase = .failed(message)
+        refineIntroTask?.cancel()
+        refineIntroTask = Task {
+            await playRefineIntroAnimation()
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                setRefineStep("model", status: .failed, title: "Unavailable")
+                setRefineStep("review", status: .failed, title: "Cannot continue")
+                phase = .failed(message)
+            }
+        }
+        phase = .refining
         showRefineResult = true
+        seedRefinePipelinePending()
     }
 
     private static func refineQuery(
@@ -271,6 +383,8 @@ final class InlineAssistController: ObservableObject {
         --- SELECTION ---
         \(selection)
         --- END SELECTION ---
+
+        \(OWActionScript.systemPromptAppendix())
         """
         if let excerpt = noteExcerpt?.trimmingCharacters(in: .whitespacesAndNewlines), !excerpt.isEmpty {
             body += """
@@ -406,7 +520,8 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
 
         @discardableResult
         func insertPastedImageLine() -> Bool {
-            guard let block = ImagePasteSupport.ingestPastedImage(),
+            guard ImagePasteSupport.pasteboardHasIngestibleImage,
+                  let block = ImagePasteSupport.ingestPastedImage(),
                   let textView else { return false }
             insertLine(NDLSerializer.serializeBlock(block), in: textView)
             return true
@@ -439,163 +554,5 @@ final class PasteAwareTextView: NSTextView {
             return
         }
         super.paste(sender)
-    }
-}
-
-/// Wraps a SwiftUI host and intercepts image paste for the block editor.
-/// `NSView` (not `NSControl`) so hit-testing reaches SwiftUI checklist buttons and fields.
-final class BlockEditorPasteCaptureView: NSView {
-    var onPasteImage: (() -> Void)?
-    var onAttachedToWindow: (() -> Void)?
-    let hostedView: NSView
-
-    private var cachedMeasureWidth: CGFloat = 0
-    private var cachedMeasureHeight: CGFloat = 1
-    /// Bumped by the paste host coordinator when block text/checkbox changes; measure cache is keyed on this.
-    private(set) var cachedContentRevision: UInt64 = 0
-    private var lastAppliedLayoutWidth: CGFloat = 0
-    private var isApplyingLayout = false
-
-    init(hostedView: NSView) {
-        self.hostedView = hostedView
-        super.init(frame: .zero)
-        openWriteSuppressFocusRing()
-        hostedView.openWriteSuppressFocusRing()
-        addSubview(hostedView)
-        registerForDraggedTypes([.fileURL, .tiff, .png])
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    /// Do not steal first responder from block fields / todo checkboxes (was causing scroll jumps).
-    override var acceptsFirstResponder: Bool { false }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        guard window != nil else { return }
-        onAttachedToWindow?()
-    }
-
-    var onDropImageFile: ((URL) -> Void)?
-
-    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        ImagePasteSupport.canAcceptDrag(sender) ? .copy : []
-    }
-
-    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        ImagePasteSupport.canAcceptDrag(sender)
-    }
-
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        if let url = ImagePasteSupport.imageFileURL(from: sender) {
-            onDropImageFile?(url)
-            return true
-        }
-        if ImagePasteSupport.canAcceptDrag(sender), ImagePasteSupport.imageFromPasteboard() != nil {
-            onPasteImage?()
-            return true
-        }
-        return false
-    }
-
-    /// Clears width-keyed measure state only. Never zero `cachedMeasureHeight` — that collapses
-    /// `intrinsicContentSize` to ~1pt, SwiftUI shrinks the host, measure returns full height, apply
-    /// expands, and `invalidateIntrinsicContentSize` repeats (Welcome fork-bomb / 23GB RAM).
-    func invalidateMeasurementCache(resetContentRevision: Bool = true) {
-        cachedMeasureWidth = 0
-        lastAppliedLayoutWidth = 0
-        if resetContentRevision {
-            cachedContentRevision = 0
-        }
-    }
-
-    /// Read-only measure — width probe + `fittingSize` only; never forces subtree layout (AttributeGraph-safe).
-    func measureDocumentSize(width: CGFloat, contentRevision: UInt64) -> CGSize {
-        let safeWidth = max(width, 320)
-        if abs(cachedMeasureWidth - safeWidth) < 0.5,
-           cachedMeasureHeight > 1,
-           cachedContentRevision == contentRevision {
-            return CGSize(width: safeWidth, height: cachedMeasureHeight)
-        }
-        let priorFrame = hostedView.frame
-        if abs(priorFrame.width - safeWidth) > 0.5 {
-            hostedView.frame.size.width = safeWidth
-        }
-        let fitting = hostedView.fittingSize.height
-        let intrinsic = hostedView.intrinsicContentSize.height
-        hostedView.frame = priorFrame
-        let contentHeight = max(floor(max(fitting, intrinsic) + 0.5), 1)
-        cachedMeasureWidth = safeWidth
-        cachedMeasureHeight = contentHeight
-        cachedContentRevision = contentRevision
-        return CGSize(width: safeWidth, height: contentHeight)
-    }
-
-    /// Applies width + height on the next run loop turn only — `layoutSubtreeIfNeeded` is safe here,
-    /// not in `measureDocumentSize` / SwiftUI `sizeThatFits` (AttributeGraph precondition / SIGABRT).
-    func applyDocumentLayout(width: CGFloat, contentRevision: UInt64) {
-        guard !isApplyingLayout else { return }
-        let safeWidth = max(width, 320)
-        if abs(lastAppliedLayoutWidth - safeWidth) < 0.5,
-           abs(frame.width - safeWidth) < 0.5,
-           abs(hostedView.frame.width - safeWidth) < 0.5,
-           cachedMeasureHeight > 0,
-           abs(frame.height - cachedMeasureHeight) < 0.5,
-           abs(hostedView.frame.height - cachedMeasureHeight) < 0.5 {
-            return
-        }
-
-        isApplyingLayout = true
-        defer { isApplyingLayout = false }
-
-        if abs(hostedView.frame.width - safeWidth) > 0.5 {
-            hostedView.frame.size.width = safeWidth
-        }
-        hostedView.layoutSubtreeIfNeeded()
-        let fitting = hostedView.fittingSize.height
-        let intrinsic = hostedView.intrinsicContentSize.height
-        let contentHeight = max(floor(max(fitting, intrinsic) + 0.5), 1)
-        let target = CGSize(width: safeWidth, height: contentHeight)
-        cachedMeasureWidth = safeWidth
-        cachedMeasureHeight = contentHeight
-        cachedContentRevision = contentRevision
-
-        let frameUnchanged =
-            abs(frame.width - target.width) < 0.5
-            && abs(frame.height - target.height) < 0.5
-            && abs(hostedView.frame.width - target.width) < 0.5
-            && abs(hostedView.frame.height - target.height) < 0.5
-        if frameUnchanged {
-            lastAppliedLayoutWidth = safeWidth
-            return
-        }
-
-        hostedView.frame = CGRect(origin: .zero, size: target)
-        frame.size = NSSize(width: target.width, height: target.height)
-        lastAppliedLayoutWidth = safeWidth
-        invalidateIntrinsicContentSize()
-    }
-
-    override var intrinsicContentSize: NSSize {
-        let height = max(cachedMeasureHeight, 1)
-        if cachedMeasureHeight > 1 {
-            let width = cachedMeasureWidth > 0 ? cachedMeasureWidth : NSView.noIntrinsicMetric
-            return NSSize(width: width, height: height)
-        }
-        if cachedMeasureWidth > 0 {
-            return NSSize(width: cachedMeasureWidth, height: height)
-        }
-        return NSSize(width: NSView.noIntrinsicMetric, height: 1)
-    }
-
-    @objc func paste(_ sender: Any?) {
-        if ImagePasteSupport.imageFromPasteboard() != nil {
-            onPasteImage?()
-            return
-        }
-        NSApp.sendAction(#selector(NSTextView.paste(_:)), to: nil, from: sender)
     }
 }

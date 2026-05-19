@@ -50,8 +50,8 @@ struct ContentView: View {
             .environmentObject(vaultStore)
             .environmentObject(aiServices)
             .openWriteThemeAppearance()
-            .frame(minWidth: 480, minHeight: 520)
-            .openWriteSheetPresentationChrome()
+            .frame(minWidth: 480, idealHeight: 640, maxHeight: 720)
+            .presentationBackground(DesignTokens.Color.background)
         }
         .background(DesignTokens.Color.shellChrome)
         .task {
@@ -62,12 +62,12 @@ struct ContentView: View {
             }
             // Resolve the loaded chat model from /v1/models before the user opens the chat panel,
             // so the composer caption never shows a stale id like "gemma-4-e4b · not checked".
-            Task.detached { @MainActor in
-                await aiServices.checkConnection()
-            }
+            await aiServices.checkConnection()
+            aiServices.startConnectionMonitoring()
             await aiServices.prepareVaultIndex(documents: vaultStore.documentsInActiveVault)
         }
         .onDisappear {
+            aiServices.stopConnectionMonitoring()
             markdownVaultWatcher.stop()
         }
         .onChange(of: vaultStore.documents) { _, _ in
@@ -84,6 +84,10 @@ struct ContentView: View {
             workbench.applyVaultContext(vaultStore.activeVaultID)
             workbench.showEditor()
             rebuildBacklinkIndex()
+            workbench.recoverSidebarIfOrphaned()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openWriteToggleFocusMode)) { _ in
+            workbench.toggleEditorFocusMode()
         }
     }
 

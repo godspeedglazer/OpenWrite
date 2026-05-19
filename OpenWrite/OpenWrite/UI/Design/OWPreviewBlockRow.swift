@@ -21,6 +21,7 @@ struct OWPreviewBlockRow: View {
     @Environment(\.blockFormatting) private var blockFormatting
     @EnvironmentObject private var vaultStore: VaultStore
     @EnvironmentObject private var workbench: WorkbenchState
+    @State private var rowHasTextSelection = false
 
     private var isEditing: Bool { text != nil }
 
@@ -52,33 +53,36 @@ struct OWPreviewBlockRow: View {
                 imageRow
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard previewMode else { return }
-            onActivate?()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: blockFormatting.focusedBlockID) { _, focusedID in
+            if focusedID != block.id {
+                rowHasTextSelection = false
+            }
         }
     }
 
     private var headingRow: some View {
-        inlineText(
-            font: headingFont,
-            lineSpacing: headingLineSpacing,
-            foreground: DesignTokens.Color.textPrimary
-        )
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .owBlockCardPadding()
-            .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        editableTextRow {
+            inlineText(
+                font: headingFont,
+                lineSpacing: headingLineSpacing,
+                foreground: DesignTokens.Color.textPrimary
+            )
+        }
+        .owBlockCardPadding()
+        .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
     private var paragraphRow: some View {
-        inlineText(
-            font: DesignTokens.Typography.body,
-            lineSpacing: DesignTokens.Typography.bodyLineSpacing,
-            foreground: DesignTokens.Color.textPrimary
-        )
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .owBlockCardPadding()
-            .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        editableTextRow {
+            inlineText(
+                font: DesignTokens.Typography.body,
+                lineSpacing: DesignTokens.Typography.bodyLineSpacing,
+                foreground: DesignTokens.Color.textPrimary
+            )
+        }
+        .owBlockCardPadding()
+        .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
     private var bulletRow: some View {
@@ -86,27 +90,30 @@ struct OWPreviewBlockRow: View {
             Text("•")
                 .font(DesignTokens.Typography.bodyEmphasis)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
-            inlineText(
-                font: DesignTokens.Typography.body,
-                lineSpacing: DesignTokens.Typography.bodyLineSpacing,
-                foreground: DesignTokens.Color.textPrimary
-            )
-                .frame(maxWidth: .infinity, alignment: .leading)
+            editableTextRow {
+                inlineText(
+                    font: DesignTokens.Typography.body,
+                    lineSpacing: DesignTokens.Typography.bodyLineSpacing,
+                    foreground: DesignTokens.Color.textPrimary
+                )
+            }
         }
         .owBlockListCardPadding()
         .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
     }
 
     private var todoRow: some View {
-        HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
+        HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
             todoCheckbox
-            inlineText(
-                font: DesignTokens.Typography.body,
-                lineSpacing: DesignTokens.Typography.bodyLineSpacing,
-                foreground: isTodoChecked ? DesignTokens.Color.textSecondary : DesignTokens.Color.textPrimary,
-                strikethrough: isTodoChecked
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 2)
+            editableTextRow {
+                inlineText(
+                    font: DesignTokens.Typography.body,
+                    lineSpacing: DesignTokens.Typography.bodyLineSpacing,
+                    foreground: isTodoChecked ? DesignTokens.Color.textSecondary : DesignTokens.Color.textPrimary,
+                    strikethrough: isTodoChecked
+                )
+            }
         }
         .owBlockListCardPadding()
         .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
@@ -150,12 +157,13 @@ struct OWPreviewBlockRow: View {
         HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing1) {
             calloutLeading
                 .frame(width: DesignTokens.Layout.calloutLeadingGutter, alignment: .leading)
-            inlineText(
-                font: DesignTokens.Typography.body,
-                lineSpacing: DesignTokens.Typography.bodyLineSpacing,
-                foreground: DesignTokens.Color.textPrimary
-            )
-                .frame(maxWidth: .infinity, alignment: .leading)
+            editableTextRow {
+                inlineText(
+                    font: DesignTokens.Typography.body,
+                    lineSpacing: DesignTokens.Typography.bodyLineSpacing,
+                    foreground: DesignTokens.Color.textPrimary
+                )
+            }
         }
         .owBlockCardPadding()
         .background(calloutFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
@@ -192,9 +200,10 @@ struct OWPreviewBlockRow: View {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
                 .fill(DesignTokens.Color.accent.opacity(0.55))
                 .frame(width: DesignTokens.Layout.quoteBarWidth)
-            inlineText(font: DesignTokens.Typography.callout, foreground: DesignTokens.Color.textSecondary)
-                .italic(!isEditing)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            editableTextRow {
+                inlineText(font: DesignTokens.Typography.callout, foreground: DesignTokens.Color.textSecondary)
+                    .italic(!isEditing)
+            }
         }
         .owBlockCardPadding()
         .background(blockFill.opacity(0.85), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
@@ -252,11 +261,21 @@ struct OWPreviewBlockRow: View {
     private var linkRow: some View {
         Group {
             if isEditing, let text {
-                linkRowContent {
-                    TextField("Link title", text: text)
-                        .textFieldStyle(.plain)
-                        .font(DesignTokens.Typography.bodyEmphasis)
-                        .foregroundStyle(DesignTokens.Color.wikilink)
+                HStack(spacing: DesignTokens.Spacing.spacing2) {
+                    linkRowContent {
+                        TextField("Link title", text: text)
+                            .textFieldStyle(.plain)
+                            .font(DesignTokens.Typography.bodyEmphasis)
+                            .foregroundStyle(DesignTokens.Color.wikilink)
+                    }
+                    Button {
+                        openWikilinkTarget(named: block.text)
+                    } label: {
+                        OWUnicodeIconView(icon: .forward, size: 14, color: DesignTokens.Color.wikilink)
+                    }
+                    .buttonStyle(.plain)
+                    .openWriteFocusChrome()
+                    .help("Open linked page")
                 }
             } else {
                 Button {
@@ -308,8 +327,7 @@ struct OWPreviewBlockRow: View {
         Group {
             if isImagePending {
                 HStack(spacing: DesignTokens.Spacing.spacing2) {
-                    ProgressView()
-                        .controlSize(.small)
+                    OWBrandLogoSpinner(size: 24, periodSeconds: 2.0)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Adding image…")
                             .font(DesignTokens.Typography.captionEmphasis)
@@ -358,6 +376,13 @@ struct OWPreviewBlockRow: View {
         .background(DesignTokens.Color.surfaceElevated, in: Capsule())
     }
 
+    private func editableTextRow<Content: View>(
+        @ViewBuilder text: () -> Content
+    ) -> some View {
+        text()
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     @ViewBuilder
     private func inlineText(
         font: Font,
@@ -378,7 +403,10 @@ struct OWPreviewBlockRow: View {
                 themeRevision: themeManager.selectedTheme.rawValue,
                 formatting: blockFormatting,
                 strikethrough: strikethrough,
-                onSelectionChange: onSelectionChange,
+                onSelectionChange: { selected in
+                    rowHasTextSelection = selected != nil
+                    onSelectionChange?(selected)
+                },
                 onRefinePreset: onRefinePreset
             )
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -468,6 +496,13 @@ struct OWPreviewBlockRow: View {
         default: return OWTypography.Scale.body
         }
     }
+}
+
+// MARK: - Block row layout
+
+private enum BlockRowLayout {
+    /// Trailing gutter reserved in the row HStack so refine never paints over text.
+    static let refineAffordanceWidth: CGFloat = 68
 }
 
 // MARK: - Block card padding

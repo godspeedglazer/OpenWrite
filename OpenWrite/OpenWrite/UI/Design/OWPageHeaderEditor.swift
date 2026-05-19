@@ -30,6 +30,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
     @State private var descriptionText = ""
     @State private var showEmojiPicker = false
     @State private var showPageOptions = false
+    @State private var isCoverStripCollapsed = false
     @State private var dragBaseOffset = CGSize.zero
 
     private var document: VaultDocument? {
@@ -52,10 +53,12 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                 }
 
                 metadata()
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, bannerContentTopInset)
-            .padding(.horizontal, DesignTokens.Layout.editorContentLeadingInset)
+            .padding(.leading, DesignTokens.Layout.editorContentLeadingInset)
+            .padding(.trailing, DesignTokens.Layout.editorChromePadding)
             .padding(.bottom, DesignTokens.Spacing.spacing2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -64,9 +67,15 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                 .padding(.top, DesignTokens.Spacing.spacing2)
                 .padding(.trailing, DesignTokens.Layout.editorChromePadding)
         }
-        .onAppear { syncDescriptionFromDocument() }
-        .onChange(of: documentID) { _, _ in syncDescriptionFromDocument() }
-        .popover(isPresented: $showCoverPicker, arrowEdge: .bottom) {
+        .onAppear {
+            syncDescriptionFromDocument()
+            syncCoverStripCollapsedFromDocument()
+        }
+        .onChange(of: documentID) { _, _ in
+            syncDescriptionFromDocument()
+            syncCoverStripCollapsedFromDocument()
+        }
+        .sheet(isPresented: $showCoverPicker) {
             OWCoverStylePickerSheet(
                 documentID: documentID,
                 selection: $coverStyle,
@@ -74,7 +83,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             ) {
                 commitHeaderFields()
             }
-            .frame(width: 420, height: 440)
+            .frame(minWidth: 440, minHeight: 480)
         }
     }
 
@@ -82,28 +91,45 @@ struct OWPageHeaderEditor<Metadata: View>: View {
 
     private var bannerSection: some View {
         ZStack(alignment: .bottomLeading) {
-            Button {
-                showCoverPicker = true
-            } label: {
-                OWPageBannerGradient(
-                    coverStyle: coverStyle,
-                    coverImagePath: coverImagePath,
-                    documentID: documentID,
-                    pageType: document?.pageType,
-                    stripHeight: OWPageBannerMetrics.stripHeight
-                )
+            if !isCoverStripCollapsed {
+                Button {
+                    showCoverPicker = true
+                } label: {
+                    OWPageBannerGradient(
+                        coverStyle: coverStyle,
+                        coverImagePath: coverImagePath,
+                        documentID: documentID,
+                        pageType: document?.pageType,
+                        stripHeight: OWPageBannerMetrics.stripHeight
+                    )
+                }
+                .buttonStyle(.plain)
+                .openWriteFocusChrome()
+                .help("Change cover")
             }
-            .buttonStyle(.plain)
-            .openWriteFocusChrome()
-            .help("Change cover")
 
-            pageIconChip
-                .padding(.leading, DesignTokens.Layout.editorContentLeadingInset + pageIconOffsetX)
-                .offset(y: OWPageBannerMetrics.iconOverlap + pageIconOffsetY)
-                .gesture(iconDragGesture)
+            Group {
+                if isCoverStripCollapsed {
+                    pageIconChip
+                } else {
+                    pageIconChip
+                        .gesture(iconDragGesture)
+                }
+            }
+            .padding(.leading, DesignTokens.Layout.editorContentLeadingInset + pageIconOffsetX)
+            .offset(y: isCoverStripCollapsed ? 0 : OWPageBannerMetrics.iconOverlap + pageIconOffsetY)
         }
-        .frame(height: OWPageBannerMetrics.stripHeight + OWPageBannerMetrics.iconOverlap)
+        .frame(height: bannerSectionHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+        .animation(.easeOut(duration: 0.2), value: isCoverStripCollapsed)
+    }
+
+    private var bannerSectionHeight: CGFloat {
+        if isCoverStripCollapsed {
+            return OWPageBannerMetrics.iconSize
+        }
+        return OWPageBannerMetrics.stripHeight + OWPageBannerMetrics.iconOverlap
     }
 
     private var pageIconChip: some View {
@@ -114,9 +140,7 @@ struct OWPageHeaderEditor<Metadata: View>: View {
         return Button {
             showEmojiPicker = true
         } label: {
-            Text(displayIcon)
-                .font(.system(size: 28))
-                .frame(width: OWPageBannerMetrics.iconSize, height: OWPageBannerMetrics.iconSize)
+            OWPageIconView(icon: displayIcon, size: OWPageBannerMetrics.iconSize)
                 .background(
                     RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
                         .fill(palette.editorCanvas)
@@ -169,7 +193,13 @@ struct OWPageHeaderEditor<Metadata: View>: View {
     }
 
     private var bannerContentTopInset: CGFloat {
-        OWPageBannerMetrics.iconOverlap + DesignTokens.Spacing.spacing2
+        if isCoverStripCollapsed {
+            return DesignTokens.Spacing.spacing2
+        }
+        // Clear the page icon chip that hangs below the cover strip.
+        return OWPageBannerMetrics.iconOverlap
+            + (OWPageBannerMetrics.iconSize - OWPageBannerMetrics.iconOverlap) / 2
+            + DesignTokens.Spacing.spacing3
     }
 
     // MARK: - Title & page options
@@ -205,12 +235,15 @@ struct OWPageHeaderEditor<Metadata: View>: View {
         .buttonStyle(.plain)
         .openWriteFocusChrome()
         .fixedSize()
-        .help("Page options")
+        .help("Collapse cover, description, icon")
         .popover(isPresented: $showPageOptions, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
-                pageOptionsRow("Change cover…") {
+                pageOptionsRow(isCoverStripCollapsed ? "Show cover strip" : "Hide cover strip") {
                     showPageOptions = false
-                    showCoverPicker = true
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        isCoverStripCollapsed.toggle()
+                    }
+                    commitCoverStripCollapsed()
                 }
                 pageOptionsRow(showDescriptionField ? "Hide description" : "Add description") {
                     showPageOptions = false
@@ -239,13 +272,16 @@ struct OWPageHeaderEditor<Metadata: View>: View {
                 }
             }
             .padding(DesignTokens.Spacing.spacing2)
-            .frame(minWidth: 200)
-            .presentationBackground(DesignTokens.Color.surfaceElevated)
+            .frame(minWidth: 220)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(DesignTokens.Color.surfaceElevated)
             .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
                     .strokeBorder(DesignTokens.Color.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
             }
+            .presentationBackground(DesignTokens.Color.surfaceElevated)
+            .presentationCompactAdaptation(.popover)
         }
     }
 
@@ -277,7 +313,6 @@ struct OWPageHeaderEditor<Metadata: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .onSubmit { commitTitle() }
-            .onChange(of: title) { _, _ in commitTitle() }
     }
 
     private var descriptionField: some View {
@@ -297,6 +332,16 @@ struct OWPageHeaderEditor<Metadata: View>: View {
         guard let document else { return }
         descriptionText = document.properties.string(for: .summary)
         showDescriptionField = !descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func syncCoverStripCollapsedFromDocument() {
+        isCoverStripCollapsed = document?.isCoverStripCollapsed ?? false
+    }
+
+    private func commitCoverStripCollapsed() {
+        guard var doc = document else { return }
+        doc.setCoverStripCollapsed(isCoverStripCollapsed)
+        vaultStore.updateDocument(doc)
     }
 
     private func commitTitle() {
@@ -383,11 +428,15 @@ struct OWPageBannerGradient: View {
         .clipped()
         .overlay(alignment: .bottom) {
             LinearGradient(
-                colors: [palette.editorCanvas.opacity(0), palette.editorCanvas],
+                colors: [
+                    palette.editorCanvas.opacity(0),
+                    palette.editorCanvas.opacity(0.45),
+                    palette.editorCanvas.opacity(0.92)
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 36)
+            .frame(height: 52)
         }
     }
 
@@ -441,8 +490,25 @@ struct OWCoverStylePickerSheet: View {
     }
 
     var body: some View {
-        OWSettingsSheet(title: "Cover", onDone: { dismiss() }) {
-            OpenWriteThemedScrollView {
+        VStack(spacing: 0) {
+            HStack(spacing: DesignTokens.Spacing.spacing3) {
+                Text("Cover")
+                    .font(DesignTokens.Typography.heading3)
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                Spacer(minLength: 0)
+                Button("Done") { dismiss() }
+                    .buttonStyle(OWAccentCapsuleButtonStyle())
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, DesignTokens.Spacing.spacing4)
+            .padding(.vertical, DesignTokens.Spacing.spacing3)
+            .background(DesignTokens.Color.shellChrome)
+
+            Rectangle()
+                .fill(DesignTokens.Color.separator)
+                .frame(height: DesignTokens.Layout.borderWidth)
+
+            ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing4) {
                     customImageSection
 
@@ -456,9 +522,11 @@ struct OWCoverStylePickerSheet: View {
                     coverSection(title: "Solids", styles: CoverStyle.solidPresets)
                 }
                 .padding(DesignTokens.Spacing.spacing4)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .frame(minWidth: 380, minHeight: 360)
+        .frame(minWidth: 440, minHeight: 480)
+        .background(DesignTokens.Color.background)
     }
 
     private var customImageSection: some View {
@@ -659,7 +727,7 @@ struct OWPageIconPicker: View {
 
             searchField
 
-            OpenWriteThemedScrollView {
+            ScrollView(.vertical, showsIndicators: true) {
                 switch tab {
                 case .symbols:
                     symbolsContent
