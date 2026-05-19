@@ -85,6 +85,8 @@ private struct ChatTranscriptMessageRow: View {
     let message: ChatMessage
     let onOpenDocument: (UUID) -> Void
 
+    @EnvironmentObject private var workbench: WorkbenchState
+
     var body: some View {
         switch message.role {
         case .user:
@@ -153,7 +155,7 @@ private struct ChatTranscriptMessageRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if !message.isStreaming, !parsedActions.isEmpty {
-                    assistantActionHint(count: parsedActions.count)
+                    assistantActionsRow(count: parsedActions.count, actions: parsedActions)
                 }
             }
         }
@@ -274,13 +276,25 @@ private struct ChatTranscriptMessageRow: View {
         return OWActionScript.parse(in: message.text).actions
     }
 
-    private func assistantActionHint(count: Int) -> some View {
-        Text(
-            "Detected \(count) OpenWrite action\(count == 1 ? "" : "s") in this reply. Select text in the editor and use Refine → Apply, or paste the ```ow block into a note."
-        )
-        .font(OWTypography.caption)
-        .foregroundStyle(DesignTokens.Color.textSecondary)
-        .fixedSize(horizontal: false, vertical: true)
+    private func assistantActionsRow(count: Int, actions: [OWAction]) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            Text(
+                "Detected \(count) OpenWrite action\(count == 1 ? "" : "s") in this reply."
+            )
+            .font(OWTypography.caption)
+            .foregroundStyle(DesignTokens.Color.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                workbench.showEditor()
+                workbench.requestApplyChatOWActions(actions)
+            } label: {
+                Text("Apply to open note")
+                    .font(OWTypography.captionEmphasis)
+            }
+            .buttonStyle(OWAccentCapsuleButtonStyle())
+            .help("Inserts blocks and checklist items from the assistant script into the note you have open in the editor.")
+        }
         .padding(.top, DesignTokens.Spacing.spacing1)
     }
 }

@@ -59,6 +59,7 @@ struct ChatComposerView: View {
         .clipped()
         .background(palette.background)
         .onPasteCommand(of: [.png, .tiff, .jpeg, .heic, .image]) { _ in
+            guard ImagePasteSupport.shouldIngestImageFromPasteboard else { return }
             model.importImageFromPasteboard()
         }
         .background {
@@ -68,6 +69,7 @@ struct ChatComposerView: View {
             )
         }
         .onPasteCommand(of: [.png, .tiff, .image]) { _ in
+            guard ImagePasteSupport.shouldIngestImageFromPasteboard else { return }
             model.importImageFromPasteboard()
         }
         .background {
@@ -154,6 +156,7 @@ struct ChatComposerView: View {
         .layoutPriority(1)
         .disabled(model.isBusy)
         .onPasteCommand(of: [.png, .tiff, .image]) { _ in
+            guard ImagePasteSupport.shouldIngestImageFromPasteboard else { return }
             model.importImageFromPasteboard()
         }
     }

@@ -284,6 +284,7 @@ final class VaultStore: ObservableObject {
             _ = installDemoVault(selectHub: false)
         }
         upgradeDemoVaultIfNeeded()
+        migrateWelcomePageIconIfNeeded()
         reconcileSelections()
         if selectedDocumentID == nil {
             if documents.contains(where: { $0.id == VaultDocument.welcomeDocumentID && $0.belongsToVault(activeVaultID) }) {
@@ -299,6 +300,18 @@ final class VaultStore: ObservableObject {
     func ensureGraphDemoCorpus() -> Bool {
         let added = installDemoVault(selectHub: false)
         return added || upgradeDemoVaultIfNeeded()
+    }
+
+    /// Moves legacy welcome ◎ icon to the OpenWrite brand token in memory.
+    private func migrateWelcomePageIconIfNeeded() {
+        guard let index = documents.firstIndex(where: { $0.id == VaultDocument.welcomeDocumentID }) else {
+            return
+        }
+        let icon = documents[index].pageIcon.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard icon == "◎" || icon.isEmpty else { return }
+        var doc = documents[index]
+        doc.pageIcon = "openwrite-logo"
+        updateDocument(doc)
     }
 
     /// Adds new demo pages when `DemoVaultSeeder.seedVersion` bumps (e.g. graph atlas cluster).

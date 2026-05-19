@@ -48,6 +48,9 @@ enum AISafetyLimits {
     static let maxWebTextChars = 12_000
     /// Per-image cap for vision chat payloads (base64 in LM Studio / OpenAI-compatible API).
     static let maxVisionImageBytes = 4 * 1024 * 1024
+    static let maxVisionImagesPerMessage = 4
+    /// How many prior user turns may still include image payloads in chat history.
+    static let maxVisionHistoryUserTurns = 2
 }
 
 enum AITaskTimeoutError: Error, Sendable {

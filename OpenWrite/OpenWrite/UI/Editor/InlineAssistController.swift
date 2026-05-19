@@ -520,7 +520,7 @@ struct SelectablePlainTextEditor: NSViewRepresentable {
 
         @discardableResult
         func insertPastedImageLine() -> Bool {
-            guard ImagePasteSupport.pasteboardHasIngestibleImage,
+            guard ImagePasteSupport.shouldIngestImageFromPasteboard,
                   let block = ImagePasteSupport.ingestPastedImage(),
                   let textView else { return false }
             insertLine(NDLSerializer.serializeBlock(block), in: textView)

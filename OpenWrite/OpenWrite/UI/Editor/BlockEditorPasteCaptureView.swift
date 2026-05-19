@@ -163,8 +163,11 @@ final class BlockEditorPasteCaptureView: NSView {
     }
 
     @objc func paste(_ sender: Any?) {
-        if ImagePasteSupport.pasteboardHasIngestibleImage {
+        if ImagePasteSupport.shouldIngestImageFromPasteboard {
             onPasteImage?()
+            return
+        }
+        if NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: sender) {
             return
         }
         NSApp.sendAction(#selector(NSTextView.paste(_:)), to: nil, from: sender)

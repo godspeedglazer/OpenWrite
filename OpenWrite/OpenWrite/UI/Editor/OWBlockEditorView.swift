@@ -410,7 +410,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         }
 
         func ingestPastedImage() {
-            guard ImagePasteSupport.pasteboardHasIngestibleImage else { return }
+            guard ImagePasteSupport.shouldIngestImageFromPasteboard else { return }
             ingestImageWithPlaceholder {
                 await ImagePasteSupport.finalizePastedImage()
             }

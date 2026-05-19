@@ -19,6 +19,11 @@ REM*/
 buffer/
 Obsidian*/
 OpenWrite Project Folder/
+# Duplicate logo drops (canonical assets live in OpenWrite/OpenWrite/Assets.xcassets/)
+/openwritelogo.png
+/openwrite.png
+OpenWrite/Assets.xcassets/
+.cursor/swarm/
 
 # --- Secrets & environment ---
 .env
@@ -83,3 +88,4 @@ Cargo.lock
 # --- Logs & caches ---
 *.log
 .cache/
+scripts/clone-reference-repos.sh

@@ -19,6 +19,15 @@ final class WorkbenchState: ObservableObject {
     @Published private(set) var editorFocusMode = false
     /// Bump to force graph canvas relayout after structural note changes.
     @Published var graphRefreshToken: Int = 0
+    /// Set from chat when the user taps Apply on parsed `ow` actions; consumed by `EditorView`.
+    @Published var chatOWActionsApplyToken: UUID?
+    @Published var chatOWActionsToApply: [OWAction] = []
+
+    func requestApplyChatOWActions(_ actions: [OWAction]) {
+        guard !actions.isEmpty else { return }
+        chatOWActionsToApply = actions
+        chatOWActionsApplyToken = UUID()
+    }
     private var vaultTypeFilters: [UUID: PageType?] = [:]
     private var chromeSnapshotBeforeFocus: (sidebar: Bool, assist: Bool)?
 

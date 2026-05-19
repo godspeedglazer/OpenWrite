@@ -23,6 +23,8 @@ struct RAGConversationTurn: Sendable {
 
     let role: Role
     let text: String
+    /// Images the user attached on this turn (re-sent in history for vision models).
+    var visionImageAttachments: [ChatAttachment] = []
 }
 
 struct RAGStreamEvent: Sendable {
@@ -233,14 +235,32 @@ struct LiveRAGService: RAGService {
         return String(detail.prefix(240))
     }
 
-    private static func historyPayload(_ history: [RAGConversationTurn]) -> [[String: String]] {
-        history.compactMap { turn in
+    private static func historyPayload(_ history: [RAGConversationTurn]) -> [[String: Any]] {
+        let recentVisionTurnIndexes = Set(
+            history.enumerated().compactMap { index, turn -> Int? in
+                turn.role == .user && !turn.visionImageAttachments.isEmpty ? index : nil
+            }.suffix(AISafetyLimits.maxVisionHistoryUserTurns)
+        )
+
+        return history.enumerated().compactMap { index, turn in
             let trimmed = turn.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return nil }
             let capped = trimmed.count <= AISafetyLimits.maxChatMessageCharacters
                 ? trimmed
                 : String(trimmed.prefix(AISafetyLimits.maxChatMessageCharacters))
-            return ["role": turn.role.rawValue, "content": capped]
+
+            let content: Any
+            if turn.role == .user,
+               recentVisionTurnIndexes.contains(index),
+               !turn.visionImageAttachments.isEmpty {
+                content = ChatVisionPayload.userMessageContent(
+                    text: capped,
+                    imageAttachments: turn.visionImageAttachments
+                )
+            } else {
+                content = capped
+            }
+            return ["role": turn.role.rawValue, "content": content]
         }
     }
 

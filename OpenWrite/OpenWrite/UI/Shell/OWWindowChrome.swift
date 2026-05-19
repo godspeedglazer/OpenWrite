@@ -737,7 +737,11 @@ struct OWShellWindowControls: View {
             }
             shellWindowButton(role: .zoom) {
                 guard let window = NSApp.keyWindow else { return }
-                window.toggleFullScreen(nil)
+                if window.styleMask.contains(.fullScreen) {
+                    window.toggleFullScreen(nil)
+                } else {
+                    window.zoom(nil)
+                }
             }
         }
         .accessibilityElement(children: .contain)
@@ -801,7 +805,7 @@ struct OWShellWindowControls: View {
         switch role {
         case .close: return "Close window"
         case .minimize: return "Minimize window"
-        case .zoom: return "Enter full screen"
+        case .zoom: return "Zoom window"
         }
     }
 }

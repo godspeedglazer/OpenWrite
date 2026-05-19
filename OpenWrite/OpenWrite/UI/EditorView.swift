@@ -144,6 +144,24 @@ struct EditorView: View {
                 flushPendingBlocksCommit(document: doc)
             }
         }
+        .onChange(of: workbench.chatOWActionsApplyToken) { _, token in
+            guard token != nil, !workbench.chatOWActionsToApply.isEmpty else { return }
+            applyChatOWActions(workbench.chatOWActionsToApply)
+        }
+    }
+
+    private func applyChatOWActions(_ actions: [OWAction]) {
+        guard let document else { return }
+        let result = OWActionExecutor.apply(
+            actions,
+            to: editingBlocks,
+            insertAfter: blockFormatting.focusedBlockID
+        )
+        editingBlocks = result.blocks
+        if result.graphRefreshRequested {
+            workbench.graphRefreshToken += 1
+        }
+        commitBlocks(document: document, blocks: editingBlocks)
     }
 
     @ViewBuilder

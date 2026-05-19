@@ -7,7 +7,9 @@ enum ChatVisionPayload {
         text: String,
         imageAttachments: [ChatAttachment]
     ) -> Any {
-        let images = imageAttachments.filter { $0.kind == .image }
+        let images = imageAttachments
+            .filter { $0.kind == .image }
+            .prefix(AISafetyLimits.maxVisionImagesPerMessage)
         guard !images.isEmpty else {
             return text
         }

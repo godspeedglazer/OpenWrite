@@ -391,7 +391,7 @@ final class BlockFormattingTextView: NSTextView {
     override var isOpaque: Bool { false }
 
     override func paste(_ sender: Any?) {
-        if ImagePasteSupport.pasteboardHasIngestibleImage {
+        if ImagePasteSupport.shouldIngestImageFromPasteboard {
             NotificationCenter.default.post(name: .openWriteIngestPastedImage, object: nil)
             return
         }

@@ -162,6 +162,22 @@ enum ImagePasteSupport {
         imageFromPasteboard() != nil || imageFileURLFromPasteboard() != nil
     }
 
+    /// Plain text on the pasteboard — text fields should paste this instead of ingesting an image.
+    static var pasteboardPrefersPlainText: Bool {
+        let pasteboard = NSPasteboard.general
+        if let string = pasteboard.string(forType: .string)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !string.isEmpty {
+            return true
+        }
+        return pasteboard.canReadObject(forClasses: [NSString.self], options: nil)
+    }
+
+    /// Image ingest for block editor / chat when the user is not pasting prose.
+    static var shouldIngestImageFromPasteboard: Bool {
+        pasteboardHasIngestibleImage && !pasteboardPrefersPlainText
+    }
+
     static func imageFileURLFromPasteboard() -> URL? {
         let pasteboard = NSPasteboard.general
         let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]

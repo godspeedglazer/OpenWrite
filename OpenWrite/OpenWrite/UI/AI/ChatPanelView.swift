@@ -18,6 +18,8 @@ struct ChatMessage: Identifiable, Hashable {
     var text: String
     var sourceHits: [RetrievalHit]
     var attachmentNames: [String]
+    /// Image files sent with this user turn (for vision history on follow-up questions).
+    var visionAttachments: [ChatAttachment] = []
     var isStreaming: Bool
     var isError: Bool = false
     /// Vertical stepper state between the user turn and this assistant reply.
@@ -102,6 +104,7 @@ final class ChatPanelModel: ObservableObject {
                 text: query,
                 sourceHits: [],
                 attachmentNames: attachmentNames,
+                visionAttachments: attachments.filter { $0.kind == .image },
                 isStreaming: false
             )
         )
@@ -535,8 +538,17 @@ final class ChatPanelModel: ObservableObject {
         for message in messages.prefix(assistantIndex) {
             switch message.role {
             case .user:
-                guard let text = AIInput.sanitizeQuery(message.text) else { continue }
-                turns.append(RAGConversationTurn(role: .user, text: text))
+                let images = message.visionAttachments.filter { $0.kind == .image }
+                let text = AIInput.sanitizeQuery(message.text)
+                    ?? (images.isEmpty ? nil : "Review the attached files and answer my question.")
+                guard let text else { continue }
+                turns.append(
+                    RAGConversationTurn(
+                        role: .user,
+                        text: text,
+                        visionImageAttachments: images
+                    )
+                )
             case .assistant:
                 let text = AIInput.stripChunkReferences(message.text)
                     .trimmingCharacters(in: .whitespacesAndNewlines)

@@ -45,11 +45,11 @@ struct ChatComposerPasteBridge: NSViewRepresentable {
                 guard let self, self.isActive,
                       event.modifierFlags.contains(.command),
                       event.charactersIgnoringModifiers?.lowercased() == "v",
-                      ImagePasteSupport.pasteboardHasIngestibleImage else {
+                      ImagePasteSupport.shouldIngestImageFromPasteboard else {
                     return event
                 }
                 let responder = NSApp.keyWindow?.firstResponder
-                if Self.shouldDeferPasteToBlockEditor(responder) {
+                if Self.shouldDeferPasteToTextResponder(responder) {
                     return event
                 }
                 self.onPasteImage()
@@ -64,9 +64,10 @@ struct ChatComposerPasteBridge: NSViewRepresentable {
             monitor = nil
         }
 
-        /// Block editor uses `NSTextView`; chat composer uses SwiftUI `TextField` (`NSTextField`).
-        private static func shouldDeferPasteToBlockEditor(_ responder: NSResponder?) -> Bool {
-            responder is NSTextView
+        /// Let focused text responders handle ⌘V when the pasteboard carries plain text.
+        private static func shouldDeferPasteToTextResponder(_ responder: NSResponder?) -> Bool {
+            guard ImagePasteSupport.pasteboardPrefersPlainText else { return false }
+            return responder is NSTextView || responder is NSTextField
         }
     }
 }
