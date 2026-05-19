@@ -23,7 +23,14 @@ OpenWrite Project Folder/
 /openwritelogo.png
 /openwrite.png
 OpenWrite/Assets.xcassets/
-.cursor/swarm/
+# Cursor / agent swarm (local only — not product code)
+.cursor/
+
+# Agent orchestration docs (local planning)
+docs/SWARM.md
+docs/MajorPlan-*.md
+AGENT_PROMPT*.md
+**/AGENT_PROMPT*.md
 
 # --- Secrets & environment ---
 .env
