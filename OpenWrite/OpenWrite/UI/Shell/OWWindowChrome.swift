@@ -496,6 +496,9 @@ private final class OWSolidTitlebarFillView: NSView {
         chromeColor.setFill()
         bounds.fill()
     }
+
+    /// Phase B: paint only — clicks pass through to SwiftUI title bar controls in the content view.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 private final class OWSolidTitlebarAccessory: NSTitlebarAccessoryViewController {

@@ -4,6 +4,10 @@
 <dict>
 	<key>ATSApplicationFontsPath</key>
 	<string>Fonts</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OpenWrite uses the microphone for voice input in chat.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>OpenWrite transcribes your speech into the chat composer.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fonts/SourceSerif4-Regular.ttf</string>

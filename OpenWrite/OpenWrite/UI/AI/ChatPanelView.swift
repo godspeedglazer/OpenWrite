@@ -467,10 +467,12 @@ final class ChatPanelModel: ObservableObject {
 
         if !messages.isEmpty {
             let payload = messages.map { message in
-                (
+                ChatSessionArchiveMessage(
                     role: message.role == .user ? "user" : "assistant",
                     text: displayText(for: message),
-                    isError: message.isError
+                    isError: message.isError,
+                    attachmentNames: message.attachmentNames,
+                    visionAttachments: message.visionAttachments
                 )
             }
             try? ChatSessionStore.archive(
@@ -496,11 +498,13 @@ final class ChatPanelModel: ObservableObject {
         streamTask = nil
         messages = thread.turns.map { turn in
             let role: ChatMessage.Role = turn.role == "user" ? .user : .assistant
+            let vision = turn.visionAttachments.compactMap { ChatAttachmentStore.attachment(fromSaved: $0) }
             return ChatMessage(
                 role: role,
                 text: turn.text,
                 sourceHits: [],
-                attachmentNames: [],
+                attachmentNames: turn.attachmentNames.isEmpty ? vision.map(\.displayName) : turn.attachmentNames,
+                visionAttachments: vision,
                 isStreaming: false,
                 isError: false
             )

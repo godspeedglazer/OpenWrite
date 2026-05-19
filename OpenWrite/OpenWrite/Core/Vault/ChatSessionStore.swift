@@ -13,6 +13,51 @@ struct SavedChatThread: Codable, Sendable, Identifiable {
 struct SavedChatTurn: Codable, Sendable {
     let role: String
     let text: String
+    var attachmentNames: [String]
+    var visionAttachments: [SavedVisionAttachment]
+
+    init(
+        role: String,
+        text: String,
+        attachmentNames: [String] = [],
+        visionAttachments: [SavedVisionAttachment] = []
+    ) {
+        self.role = role
+        self.text = text
+        self.attachmentNames = attachmentNames
+        self.visionAttachments = visionAttachments
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case role
+        case text
+        case attachmentNames
+        case visionAttachments
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(String.self, forKey: .role)
+        text = try container.decode(String.self, forKey: .text)
+        attachmentNames = try container.decodeIfPresent([String].self, forKey: .attachmentNames) ?? []
+        visionAttachments = try container.decodeIfPresent([SavedVisionAttachment].self, forKey: .visionAttachments) ?? []
+    }
+}
+
+/// Image attachment snapshot for archived threads (absolute path under chat-attachments).
+struct SavedVisionAttachment: Codable, Sendable, Hashable {
+    let id: UUID
+    let displayName: String
+    let storedPath: String
+}
+
+/// In-memory message payload passed into `ChatSessionStore.archive`.
+struct ChatSessionArchiveMessage: Sendable {
+    let role: String
+    let text: String
+    let isError: Bool
+    let attachmentNames: [String]
+    let visionAttachments: [ChatAttachment]
 }
 
 enum ChatSessionStore {
@@ -29,13 +74,26 @@ enum ChatSessionStore {
 
     /// Archives the current in-memory transcript and returns the saved record id.
     @discardableResult
-    static func archive(
-        messages: [(role: String, text: String, isError: Bool)],
-        agentID: String
-    ) throws -> UUID {
-        let turns = messages
-            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .map { SavedChatTurn(role: $0.role, text: $0.text) }
+    static func archive(messages: [ChatSessionArchiveMessage], agentID: String) throws -> UUID {
+        let turns = messages.compactMap { message -> SavedChatTurn? in
+            let trimmed = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty || !message.attachmentNames.isEmpty else { return nil }
+            let savedVision = message.visionAttachments
+                .filter { $0.kind == .image }
+                .map {
+                    SavedVisionAttachment(
+                        id: $0.id,
+                        displayName: $0.displayName,
+                        storedPath: $0.storedURL.path
+                    )
+                }
+            return SavedChatTurn(
+                role: message.role,
+                text: trimmed.isEmpty ? message.text : trimmed,
+                attachmentNames: message.attachmentNames,
+                visionAttachments: savedVision
+            )
+        }
         guard !turns.isEmpty else { return UUID() }
 
         let thread = SavedChatThread(

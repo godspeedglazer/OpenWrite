@@ -21,8 +21,8 @@ OpenWrite cannot rely on default `NSWindow` titlebar vibrancy: on launch macOS p
 
 ## Roadmap (framework, not hacks)
 
-1. **Phase A (done / in progress)** — Reliable cream titlebar + custom controls on standard `NSWindow`.
-2. **Phase B** — `OWChromeHost`: single `NSTitlebarAccessoryViewController` hosting SwiftUI shell header (controls + tabs) so z-order is deterministic.
+1. **Phase A (done)** — Reliable cream titlebar + custom controls on standard `NSWindow`.
+2. **Phase B (done)** — `OWSolidTitlebarAccessory` paints opaque `shellChrome` with `hitTest` pass-through so SwiftUI controls stay clickable; fullscreen re-applies chrome on enter/exit.
 3. **Phase C** — Optional borderless / `NSPanel`-style host for graph-only or minimal windows; shared metrics API.
 4. **Phase D** — Extract public-style module boundaries: `OWChrome`, `OWTheme`, `OWControls` (still in-repo; not a separate package until needed).
 

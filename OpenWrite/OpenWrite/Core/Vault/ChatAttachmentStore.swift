@@ -70,6 +70,19 @@ enum ChatAttachmentStore {
         }
     }
 
+    /// Rehydrates a vision attachment from an archived chat session when the file still exists on disk.
+    static func attachment(fromSaved saved: SavedVisionAttachment) -> ChatAttachment? {
+        let url = URL(fileURLWithPath: saved.storedPath)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return ChatAttachment(
+            id: saved.id,
+            displayName: saved.displayName,
+            storedURL: url,
+            excerpt: "",
+            kind: .image
+        )
+    }
+
     @MainActor
     static func importFile(from sourceURL: URL) throws -> ChatAttachment {
         let ext = sourceURL.pathExtension.lowercased()

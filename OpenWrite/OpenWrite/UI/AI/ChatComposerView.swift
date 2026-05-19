@@ -85,6 +85,9 @@ struct ChatComposerView: View {
             measuredHeight = height
         }
         .help("Paste images with ⌘V or attach files with the document button.")
+        .onDisappear {
+            aiServices.voiceInput.stopListening()
+        }
     }
 
     private var composerModelCaption: some View {
@@ -186,6 +189,21 @@ struct ChatComposerView: View {
             }
 
             HStack(spacing: gap) {
+                Button {
+                    aiServices.voiceInput.toggleListening(currentDraft: model.draft) { model.draft = $0 }
+                } label: {
+                    OWUnicodeIconView(
+                        icon: aiServices.voiceInput.isListening ? .micActive : .mic,
+                        size: iconSize,
+                        color: aiServices.voiceInput.isListening
+                            ? DesignTokens.Color.warning
+                            : DesignTokens.Color.textSecondary
+                    )
+                }
+                .buttonStyle(OWComposerIconButtonStyle())
+                .help(aiServices.voiceInput.statusMessage ?? "Voice input")
+                .disabled(model.isBusy || !aiServices.voiceInput.isAvailable)
+
                 Button {
                     showFileImporter = true
                 } label: {
