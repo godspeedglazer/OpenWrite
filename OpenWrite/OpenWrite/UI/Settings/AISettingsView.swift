@@ -8,6 +8,7 @@ struct AISettingsView: View {
     @State private var baseURLString: String = LMStudioConfig.default.baseURL.absoluteString
     @State private var useCustomEmbeddingID = false
     @State private var allowlistDomains: String = ""
+    @State private var cliInstallMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing5) {
@@ -59,6 +60,34 @@ struct AISettingsView: View {
                         .foregroundStyle(DesignTokens.Color.textTertiary)
                     OWThemedTextField(placeholder: "empty = any HTTPS", text: $allowlistDomains) {
                         commitAllowlist()
+                    }
+                }
+            }
+
+            OWSettingsSection(
+                title: "Command line",
+                footer: "Installs openwrite, openwrite-index, openwrite-query, and openwrite-stats into ~/.local/bin (and Application Support). Included in scripts/install-openwrite.sh for /Applications installs."
+            ) {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                    if OpenWriteCLIInstall.bundledToolsPresent() {
+                        Button("Install CLI tools") {
+                            do {
+                                let bin = try OpenWriteCLIInstall.installBundledTools()
+                                cliInstallMessage = "Installed to \(bin.path) (restart Terminal if needed)."
+                            } catch {
+                                cliInstallMessage = error.localizedDescription
+                            }
+                        }
+                        .buttonStyle(OWSecondaryRectButtonStyle())
+                    } else {
+                        Text("CLI tools ship in Release builds only.")
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                    }
+                    if let cliInstallMessage {
+                        Text(cliInstallMessage)
+                            .font(DesignTokens.Typography.caption)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
                     }
                 }
             }

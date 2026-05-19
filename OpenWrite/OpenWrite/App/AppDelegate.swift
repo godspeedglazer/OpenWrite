@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installBundledCommandLineToolsIfNeeded()
         installWindowChromeObservers()
         presentMainWindow()
         // Launch paint: AppKit may not have laid out ThemeFrame yet when SwiftUI first appears.
@@ -28,6 +29,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowChromeReapplyTask?.cancel()
         for observer in windowChromeObservers {
             NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    private static let cliInstalledDefaultsKey = "openwrite.didInstallBundledCLI"
+
+    private func installBundledCommandLineToolsIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: Self.cliInstalledDefaultsKey) else { return }
+        guard OpenWriteCLIInstall.bundledToolsPresent() else { return }
+        do {
+            _ = try OpenWriteCLIInstall.installBundledTools()
+            UserDefaults.standard.set(true, forKey: Self.cliInstalledDefaultsKey)
+        } catch {
+            // Non-fatal; Settings offers a manual install button.
         }
     }
 

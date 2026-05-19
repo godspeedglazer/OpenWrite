@@ -22,15 +22,24 @@ xcodebuild -scheme OpenWrite -configuration Debug build
 
 Open `OpenWrite/OpenWrite.xcodeproj` in Xcode and run the **OpenWrite** target.
 
+## Install (app + CLI)
+
+Release builds embed CLI tools in `OpenWrite.app/Contents/Helpers/`. Install everything:
+
+```bash
+./scripts/install-openwrite.sh
+```
+
+The app also copies tools to `~/.local/bin` on first launch (Settings → AI → **Install CLI tools** to reinstall).
+
 ## Command-line tools
 
-Native Swift binaries (not shell scripts) for indexing and retrieval probes:
+Native Swift binaries (`openwrite`, `openwrite-index`, `openwrite-query`, `openwrite-stats`):
 
 ```bash
 cd Tools/OpenWriteCLI && make install
 openwrite index
 openwrite query "your question" --limit 5
-openwrite-stats
 ```
 
 See [Tools/OpenWriteCLI/README.md](Tools/OpenWriteCLI/README.md).
