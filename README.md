@@ -2,47 +2,11 @@
 
 Native macOS local-first writer: on-disk notes, Note Design Language (NDL), and LM Studio–backed AI research.
 
-## Handoff (new owners & agents)
-
-**Start here:** [HANDOFF.md](HANDOFF.md) — **Opus 4.7 execution handoff** (P0–P3 issues, acceptance criteria, file map, regression checklist). Short index: [docs/HANDOFF.md](docs/HANDOFF.md).
-
-**UI refactor mission:** [AGENT_PROMPT_UI_REFACTOR.md](AGENT_PROMPT_UI_REFACTOR.md) — copy-paste Cursor agent brief for Anytype-level polish (no vendor code).
 
 ## Requirements
 
 - macOS 14.0+
 - Xcode 15+
-
-## Build
-
-```bash
-cd OpenWrite
-xcodebuild -scheme OpenWrite -configuration Debug build
-```
-
-Open `OpenWrite/OpenWrite.xcodeproj` in Xcode and run the **OpenWrite** target.
-
-## Install (app + CLI)
-
-Release builds embed CLI tools in `OpenWrite.app/Contents/Helpers/`. Install everything:
-
-```bash
-./scripts/install-openwrite.sh
-```
-
-The app also copies tools to `~/.local/bin` on first launch (Settings → AI → **Install CLI tools** to reinstall).
-
-## Command-line tools
-
-Native Swift binaries (`openwrite`, `openwrite-index`, `openwrite-query`, `openwrite-stats`):
-
-```bash
-cd Tools/OpenWriteCLI && make install
-openwrite index
-openwrite query "your question" --limit 5
-```
-
-See [Tools/OpenWriteCLI/README.md](Tools/OpenWriteCLI/README.md).
 
 ## Documentation
 
