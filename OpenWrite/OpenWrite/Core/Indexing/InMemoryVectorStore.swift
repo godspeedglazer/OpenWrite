@@ -24,6 +24,9 @@ private struct PersistedChunkRecord: Codable, Sendable {
     var chunkIndex: Int
     var text: String
     var vector: [Float]
+    var headingPath: String?
+    var documentUpdatedAt: Date?
+    var isTitleLeadChunk: Bool?
 }
 
 enum VectorStorePersistence {
@@ -31,7 +34,7 @@ enum VectorStorePersistence {
     static let filename = "index.json"
     static let legacySubdirectory = "OpenWrite"
     static let legacyFilename = "vector_index.json"
-    static let formatVersion = 2
+    static let formatVersion = 3
 
     private static var applicationSupportBase: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -197,7 +200,10 @@ actor InMemoryVectorStore {
                 blockID: chunk.blockID,
                 chunkIndex: chunk.chunkIndex,
                 text: chunk.text,
-                vector: vectorsByID[chunk.id] ?? []
+                vector: vectorsByID[chunk.id] ?? [],
+                headingPath: chunk.headingPath,
+                documentUpdatedAt: chunk.documentUpdatedAt,
+                isTitleLeadChunk: chunk.isTitleLeadChunk
             )
         }
         let payload = PersistedVectorIndex(version: VectorStorePersistence.formatVersion, chunks: records)

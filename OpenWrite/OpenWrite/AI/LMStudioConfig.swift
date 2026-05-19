@@ -154,8 +154,18 @@ struct LMStudioConfig: Codable, Hashable, Sendable {
 
     /// Sidebar / settings display for the chat completions model.
     var chatModelDisplay: String {
-        let trimmed = chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Not set" : trimmed
+        Self.displayLabel(for: chatModel)
+    }
+
+    /// Short friendly label (`granite-4b`) from a full LM Studio model id (`ibm/granite-4b`).
+    static func displayLabel(for modelID: String) -> String {
+        let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "Not set" }
+        if let slash = trimmed.lastIndex(of: "/") {
+            let tail = String(trimmed[trimmed.index(after: slash)...])
+            return tail.isEmpty ? trimmed : tail
+        }
+        return trimmed
     }
 
     /// Sidebar / settings display for the embeddings model (falls back to chat model when blank).
@@ -233,6 +243,37 @@ enum AIActivityState: Equatable, Sendable {
 }
 
 enum LMStudioURLPolicy {
+    /// LM Studio native REST root (`/api/v1`), distinct from OpenAI-compatible `/v1`.
+    static func nativeAPIBaseURL(from base: URL) -> URL {
+        var root = base
+        var path = root.path
+        if path.hasSuffix("/v1") {
+            path = String(path.dropLast(3))
+            root.deleteLastPathComponent()
+        }
+        if path.hasSuffix("/api/v1") || path == "/api/v1" {
+            return root
+        }
+        return root.appending(path: "api/v1")
+    }
+
+    static func nativeModelsURL(from base: URL) -> URL {
+        nativeAPIBaseURL(from: base).appending(path: "models")
+    }
+
+    static func v0ModelsURL(from base: URL) -> URL {
+        var root = base
+        var path = root.path
+        if path.hasSuffix("/v1") {
+            root.deleteLastPathComponent()
+            path = root.path
+        }
+        if path.hasSuffix("/api/v1") {
+            root.deleteLastPathComponent()
+        }
+        return root.appending(path: "api/v0/models")
+    }
+
     static func v1BaseURL(from base: URL) -> URL {
         var url = base
         let path = url.path

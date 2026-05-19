@@ -1,7 +1,7 @@
 # Inline AI editing (selection refine)
 
-**Version:** 1.1  
-**Last updated:** 2026-05-17  
+**Version:** 1.2  
+**Last updated:** 2026-05-18  
 **Implementation:** Partial — `InlineAssistController`, `SelectablePlainTextEditor`, refine sheet in `EditorView`  
 **Target UX:** Popover at selection with Apply (v1 design decision)  
 **Related:** [EditorAndAIPanel.md](./EditorAndAIPanel.md) · [Components.md § Inline assist](./Components.md#inline-assist) · [**InlineAI-GoogleDocsResearch.md**](./InlineAI-GoogleDocsResearch.md) (Google Docs UX + local-model patterns)
@@ -66,11 +66,20 @@ SelectablePlainTextEditor (NSTextView)
 
 | Constant | Value |
 |----------|-------|
-| `inlineSelectionDebounceSeconds` | 0.4s |
+| `inlineSelectionDebounceSeconds` | 0.12s |
 | `maxInlineSelectionChars` | 1500 (truncated) |
 | Sanitization | `AIInput.sanitizeQuery` on selection text |
 
 Refine runs on `assistQueue` (`userInitiated`); UI updates on `@MainActor`.
+
+### Refine rail UX (shipped direction)
+
+- **Left rail** — `OWRefineAssistPanel` + `OWChatStatusStepper` (not a center sheet).
+- **Immediate open** — panel appears on Refine click; LM check runs while stepper is visible.
+- **Opening beat** — ~220ms per step for *Reading selection* → *Searching vault* so early phases are readable (theatrical vault step even when `refineProse` agent skips wide retrieval).
+- **Streaming** — tokens fill the panel before **Review & apply**; **Apply** merges prose + optional `ow` actions.
+
+See [MajorPlan-2026-05.md](../MajorPlan-2026-05.md) §3 (Refine parity doctrine).
 
 ---
 

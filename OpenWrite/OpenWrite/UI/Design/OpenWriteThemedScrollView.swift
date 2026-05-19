@@ -97,6 +97,17 @@ extension NSScrollView {
         reflectScrolledClipView(clip)
     }
 
+    func openWriteScrollToTop(animated: Bool = false) {
+        let clip = contentView
+        let target = NSPoint(x: 0, y: 0)
+        if animated {
+            clip.animator().setBoundsOrigin(target)
+        } else {
+            clip.scroll(to: target)
+        }
+        reflectScrolledClipView(clip)
+    }
+
     /// Resizes or relayouts the document view without resetting the user's scroll offset.
     func openWriteUpdateDocumentPreservingScroll(_ update: () -> Void) {
         let clip = contentView
@@ -146,8 +157,10 @@ struct OpenWriteThemedScrollView<Content: View>: View {
     private let axes: Axis.Set
     private let scrollToken: Int
     private let canvasColor: Color?
-    /// When true, a changed `scrollToken` scrolls to the bottom (chat). When false, remeasures only (editor).
+    /// When true, a changed `scrollToken` scrolls to the bottom (chat).
     private let scrollToBottomOnTokenChange: Bool
+    /// When set, a changed value scrolls the document to the top (e.g. editor preview toggle).
+    private let scrollToTopToken: Int?
     private let content: Content
 
     init(
@@ -155,12 +168,14 @@ struct OpenWriteThemedScrollView<Content: View>: View {
         scrollToken: Int = 0,
         canvasColor: Color? = nil,
         scrollToBottomOnTokenChange: Bool = false,
+        scrollToTopToken: Int? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.axes = axes
         self.scrollToken = scrollToken
         self.canvasColor = canvasColor
         self.scrollToBottomOnTokenChange = scrollToBottomOnTokenChange
+        self.scrollToTopToken = scrollToTopToken
         self.content = content()
     }
 
@@ -174,6 +189,7 @@ struct OpenWriteThemedScrollView<Content: View>: View {
             scrollToken: scrollToken,
             canvasColor: resolvedCanvasColor,
             scrollToBottomOnTokenChange: scrollToBottomOnTokenChange,
+            scrollToTopToken: scrollToTopToken,
             content: content
         )
     }
@@ -184,6 +200,7 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
     let scrollToken: Int
     let canvasColor: Color
     let scrollToBottomOnTokenChange: Bool
+    let scrollToTopToken: Int?
     let content: Content
 
     func makeCoordinator() -> Coordinator {
@@ -204,9 +221,11 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         scrollView.documentView = hosting
         context.coordinator.installScrollTracking(on: scrollView)
 
-        if scrollToBottomOnTokenChange {
-            scrollView.onClipViewLayout = { [weak coordinator = context.coordinator, weak scrollView] in
-                guard let coordinator, let scrollView else { return }
+        scrollView.onClipViewLayout = { [weak coordinator = context.coordinator, weak scrollView] in
+            guard let coordinator, let scrollView else { return }
+            if coordinator.stickToBottomOnGrowth {
+                coordinator.scheduleRefreshDocumentSizeIfContentGrew(in: scrollView)
+            } else {
                 coordinator.scheduleRefreshDocumentSize(in: scrollView)
             }
         }
@@ -244,12 +263,18 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
             }
         }
 
+        if let scrollToTopToken,
+           context.coordinator.lastScrollToTopToken != scrollToTopToken {
+            context.coordinator.lastScrollToTopToken = scrollToTopToken
+            context.coordinator.scheduleScrollToTop(in: scrollView)
+        }
+
         // INVARIANT: Do not call `scheduleRefreshDocumentSize` on every SwiftUI tick — that fights the
         // nested block-editor paste host and retriggers `invalidateIntrinsicContentSize` in a loop.
         // Remeasure only when theme/scroll token changes or read-only probe shows height drift.
         if themeChanged || scrollTokenChanged {
             context.coordinator.scheduleRefreshDocumentSize(in: scrollView)
-        } else if scrollToBottomOnTokenChange {
+        } else {
             context.coordinator.scheduleRefreshDocumentSizeIfContentGrew(in: scrollView)
         }
     }
@@ -297,6 +322,7 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
         var hostingView: NSHostingView<Content>?
         var stickToBottomOnGrowth: Bool
         var lastScrollToken: Int = -1
+        var lastScrollToTopToken: Int?
         var lastThemeRevision: UInt = 0
         private var lastAppliedDocumentSize = NSSize.zero
         private var lastClipSize: NSSize = .zero
@@ -309,6 +335,16 @@ private struct OpenWriteThemedScrollRepresentable<Content: View>: NSViewRepresen
 
         init(stickToBottomOnGrowth: Bool) {
             self.stickToBottomOnGrowth = stickToBottomOnGrowth
+        }
+
+        func scheduleScrollToTop(in scrollView: NSScrollView) {
+            refreshGeneration += 1
+            let generation = refreshGeneration
+            DispatchQueue.main.async { [weak self, weak scrollView] in
+                guard let self, let scrollView, generation == self.refreshGeneration else { return }
+                self.refreshDocumentSize(in: scrollView)
+                scrollView.openWriteScrollToTop(animated: false)
+            }
         }
 
         deinit {

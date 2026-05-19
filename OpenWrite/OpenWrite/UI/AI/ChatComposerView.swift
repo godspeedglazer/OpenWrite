@@ -20,44 +20,24 @@ struct ChatComposerView: View {
     @Binding var measuredHeight: CGFloat
 
     @Environment(\.openWritePalette) private var palette
-    @Environment(\.workbenchCenterLayout) private var workbenchLayout
+    @Environment(\.agentsWorkbenchPresentation) private var agentsWorkbench
     @EnvironmentObject private var aiServices: OpenWriteAIServices
 
     @State private var showFileImporter = false
     @FocusState private var composerFieldFocused: Bool
 
-    private var usesHorizontalComposer: Bool {
-        workbenchLayout.assistUsesHorizontalComposer
+    private var actionColumnWidth: CGFloat {
+        DesignTokens.Layout.composerActionSize * 2 + DesignTokens.Layout.composerBoardSpacing
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Rectangle()
-                .fill(palette.borderSubtle)
-                .frame(height: DesignTokens.Layout.borderWidth)
-
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-                if let attachmentError = model.attachmentError {
-                    Text(attachmentError)
-                        .font(OWTypography.caption)
-                        .foregroundStyle(DesignTokens.Color.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if !model.pendingAttachments.isEmpty {
-                    pendingAttachmentRow
-                }
-
-                composerInputStack
-                composerModelCaption
+        Group {
+            if agentsWorkbench {
+                agentsFloatingComposer
+            } else {
+                stripComposerChrome
             }
-            .padding(DesignTokens.Spacing.assistStripComposerPadding)
-            .padding(.bottom, DesignTokens.Layout.assistStripComposerBottomInset)
-            .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipped()
-        .background(palette.background)
         .onPasteCommand(of: [.png, .tiff, .jpeg, .heic, .image]) { _ in
             guard ImagePasteSupport.shouldIngestImageFromPasteboard else { return }
             model.importImageFromPasteboard()
@@ -84,60 +64,184 @@ struct ChatComposerView: View {
             guard height > 0, abs(height - measuredHeight) > 0.5 else { return }
             measuredHeight = height
         }
-        .help("Paste images with ⌘V or attach files with the document button.")
+        .help("Paste images with ⌘V. Web (globe) searches the internet for your question or fetches HTTPS links in the message.")
         .onDisappear {
             aiServices.voiceInput.stopListening()
         }
     }
 
-    private var composerModelCaption: some View {
-        composerModelName
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .help(composerModelCaptionHelp)
+    private var stripComposerChrome: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle()
+                .fill(palette.borderSubtle)
+                .frame(height: DesignTokens.Layout.borderWidth)
+
+            composerCore
+                .padding(DesignTokens.Spacing.assistStripComposerPadding)
+                .padding(.bottom, DesignTokens.Layout.assistStripComposerBottomInset)
+                .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.background)
     }
 
-    private var composerModelName: some View {
-        Text(aiServices.lmConfig.chatModelDisplay)
-            .font(OWTypography.caption2)
-            .foregroundStyle(DesignTokens.Color.textTertiary)
-            .lineLimit(usesHorizontalComposer ? 1 : 2)
-            .truncationMode(.tail)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var composerModelCaptionHelp: String {
-        let model = aiServices.lmConfig.chatModelDisplay
-        let state = aiServices.lmConnectionState.statusPillLabel
-        return """
-        Chat model: \(model) (\(state)). \(aiServices.lmStatus). Configure in Settings → AI; \
-        connection is verified with LM Studio GET /v1/models.
-        """
-    }
-
-    @ViewBuilder
-    private var composerInputStack: some View {
-        if usesHorizontalComposer {
-            HStack(alignment: .bottom, spacing: DesignTokens.Spacing.spacing2) {
-                composerTextField(
-                    placeholder: "Ask about your notes…",
-                    minHeight: DesignTokens.Layout.composerBoardHeight
+    private var agentsFloatingComposer: some View {
+        VStack(spacing: 0) {
+            composerCore
+                .padding(DesignTokens.Spacing.spacing3)
+                .background(
+                    palette.surface,
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.large, style: .continuous)
                 )
-                VStack(alignment: .trailing, spacing: DesignTokens.Spacing.spacing1) {
-                    OWLMConnectionStatusPill(state: aiServices.lmConnectionState)
-                    composerActionBoard
+                .overlay {
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.large, style: .continuous)
+                        .strokeBorder(palette.borderSubtle.opacity(0.85), lineWidth: DesignTokens.Layout.borderWidth)
                 }
+                .shadow(color: Color.black.opacity(0.08), radius: 16, y: 6)
+        }
+        .frame(maxWidth: AgentsWorkbenchMetrics.contentMaxWidth)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, DesignTokens.Spacing.spacing4)
+        .padding(.bottom, DesignTokens.Spacing.spacing4)
+        .safeAreaPadding(.bottom, DesignTokens.Spacing.spacing1)
+        .background(Color.clear)
+    }
+
+    private var composerCore: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            if let attachmentError = model.attachmentError {
+                Text(attachmentError)
+                    .font(OWTypography.caption)
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-        } else {
-            VStack(alignment: .leading, spacing: DesignTokens.Layout.composerBoardSpacing) {
+
+            if !model.pendingAttachments.isEmpty {
+                pendingAttachmentRow
+            }
+
+            composerInputStack
+        }
+    }
+
+    /// Wireframe layout: model status header · field (left) · send + 2×2 tools (right).
+    private var composerInputStack: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+            composerModelHeaderRow
+
+            HStack(alignment: .top, spacing: DesignTokens.Spacing.spacing2) {
                 composerTextField(
-                    placeholder: "Ask…",
-                    minHeight: DesignTokens.Layout.composerActionSize
+                    placeholder: agentsWorkbench ? "Ask your agent…" : "Ask about your notes…",
+                    minHeight: agentsWorkbench
+                        ? DesignTokens.Layout.composerColumnHeight + 8
+                        : DesignTokens.Layout.composerColumnHeight
                 )
-                HStack {
-                    Spacer(minLength: 0)
-                    OWLMConnectionStatusPill(state: aiServices.lmConnectionState)
+                composerActionColumn
+            }
+        }
+    }
+
+    private var composerModelHeaderRow: some View {
+        HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
+            OWLMConnectionStatusPill(state: aiServices.lmConnectionState)
+
+            Text(composerModelCaption)
+                .font(OWTypography.caption2)
+                .foregroundStyle(DesignTokens.Color.textTertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    private var composerModelCaption: String {
+        var parts = [aiServices.composerChatModelLabel]
+        if model.searchVaultEnabled { parts.append("vault search") }
+        if model.webLookupEnabled { parts.append("web") }
+        return parts.joined(separator: " · ")
+    }
+
+    private var composerActionColumn: some View {
+        let gap = DesignTokens.Layout.composerBoardSpacing
+
+        return VStack(spacing: gap) {
+            sendOrStopControl
+                .frame(width: actionColumnWidth, height: DesignTokens.Layout.composerBoardHeight)
+
+            composerActionGrid
+        }
+        .frame(width: actionColumnWidth, alignment: .top)
+    }
+
+    /// 2×2 board: Search · Web / Attach · Mic (our shapes, wireframe positions).
+    private var composerActionGrid: some View {
+        let gap = DesignTokens.Layout.composerBoardSpacing
+        let iconSize = DesignTokens.Layout.composerBoardIconSize
+        let cell = DesignTokens.Layout.composerActionSize
+
+        return VStack(spacing: gap) {
+            HStack(spacing: gap) {
+                OWThemedToggleButton(
+                    label: "Search vault notes",
+                    isOn: $model.searchVaultEnabled,
+                    icon: .search,
+                    showsLabel: false
+                )
+                .frame(width: cell, height: cell)
+                .help("Search vault notes")
+
+                OWThemedToggleButton(
+                    label: "Search the web",
+                    isOn: $model.webLookupEnabled,
+                    icon: .wiki,
+                    showsLabel: false
+                )
+                .frame(width: cell, height: cell)
+                .help("Search the web for your question, or fetch HTTPS links in the message.")
+            }
+
+            HStack(spacing: gap) {
+                Button {
+                    showFileImporter = true
+                } label: {
+                    OWUnicodeIconView(
+                        icon: .document,
+                        size: iconSize,
+                        color: DesignTokens.Color.textSecondary
+                    )
                 }
-                composerActionBoard
+                .buttonStyle(OWComposerIconButtonStyle())
+                .frame(width: cell, height: cell)
+                .help("Attach file")
+                .disabled(model.isBusy)
+                .fileImporter(
+                    isPresented: $showFileImporter,
+                    allowedContentTypes: ChatAttachmentStore.allowedContentTypes,
+                    allowsMultipleSelection: true
+                ) { result in
+                    switch result {
+                    case .success(let urls):
+                        model.importAttachments(from: urls)
+                    case .failure(let error):
+                        model.attachmentError = error.localizedDescription
+                    }
+                }
+
+                Button {
+                    aiServices.voiceInput.toggleListening(currentDraft: model.draft) { model.draft = $0 }
+                } label: {
+                    OWUnicodeIconView(
+                        icon: aiServices.voiceInput.isListening ? .micActive : .mic,
+                        size: iconSize,
+                        color: aiServices.voiceInput.isListening
+                            ? DesignTokens.Color.warning
+                            : DesignTokens.Color.textSecondary
+                    )
+                }
+                .buttonStyle(OWComposerIconButtonStyle())
+                .frame(width: cell, height: cell)
+                .help(aiServices.voiceInput.statusMessage ?? "Voice input")
+                .disabled(model.isBusy || !aiServices.voiceInput.isAvailable)
             }
         }
     }
@@ -162,99 +266,44 @@ struct ChatComposerView: View {
             guard ImagePasteSupport.shouldIngestImageFromPasteboard else { return }
             model.importImageFromPasteboard()
         }
+        .help(composerFieldHelp)
     }
 
-    /// 2×2 control board: Notes / Web on top; Attach + Send (or Stop) on bottom.
-    private var composerActionBoard: some View {
-        let gap = DesignTokens.Layout.composerBoardSpacing
+    private var composerFieldHelp: String {
+        let model = aiServices.composerChatModelLabel
+        let state = aiServices.lmConnectionState.statusPillLabel
+        return "Chat model: \(model) (\(state)). \(aiServices.lmStatus)"
+    }
+
+    @ViewBuilder
+    private var sendOrStopControl: some View {
         let iconSize = DesignTokens.Layout.composerBoardIconSize
 
-        return VStack(spacing: gap) {
-            HStack(spacing: gap) {
-                OWThemedToggleButton(
-                    label: "Search vault notes",
-                    isOn: $model.searchVaultEnabled,
-                    icon: .search,
-                    showsLabel: false
-                )
-                .help("Search vault notes")
-
-                OWThemedToggleButton(
-                    label: "Fetch web pages",
-                    isOn: $model.webLookupEnabled,
-                    icon: .wiki,
-                    showsLabel: false
-                )
-                .help("Fetch web pages")
+        if model.isBusy {
+            Button {
+                model.cancelSend(services: aiServices)
+            } label: {
+                OWUnicodeIconView(icon: .stop, size: iconSize, color: DesignTokens.Color.warning)
             }
-
-            HStack(spacing: gap) {
-                Button {
-                    aiServices.voiceInput.toggleListening(currentDraft: model.draft) { model.draft = $0 }
-                } label: {
-                    OWUnicodeIconView(
-                        icon: aiServices.voiceInput.isListening ? .micActive : .mic,
-                        size: iconSize,
-                        color: aiServices.voiceInput.isListening
-                            ? DesignTokens.Color.warning
-                            : DesignTokens.Color.textSecondary
-                    )
-                }
-                .buttonStyle(OWComposerIconButtonStyle())
-                .help(aiServices.voiceInput.statusMessage ?? "Voice input")
-                .disabled(model.isBusy || !aiServices.voiceInput.isAvailable)
-
-                Button {
-                    showFileImporter = true
-                } label: {
-                    OWUnicodeIconView(
-                        icon: .document,
-                        size: iconSize,
-                        color: DesignTokens.Color.textSecondary
-                    )
-                }
-                .buttonStyle(OWComposerIconButtonStyle())
-                .help("Attach file")
-                .disabled(model.isBusy)
-                .fileImporter(
-                    isPresented: $showFileImporter,
-                    allowedContentTypes: ChatAttachmentStore.allowedContentTypes,
-                    allowsMultipleSelection: true
-                ) { result in
-                    switch result {
-                    case .success(let urls):
-                        model.importAttachments(from: urls)
-                    case .failure(let error):
-                        model.attachmentError = error.localizedDescription
-                    }
-                }
-
-                if model.isBusy {
-                    Button {
-                        model.cancelSend(services: aiServices)
-                    } label: {
-                        OWUnicodeIconView(icon: .stop, size: iconSize, color: DesignTokens.Color.warning)
-                    }
-                    .buttonStyle(OWComposerStopButtonStyle())
-                    .help("Stop generation")
-                } else {
-                    Button {
-                        model.send(services: aiServices, agent: aiServices.selectedAgent)
-                    } label: {
-                        OWUnicodeIconView(
-                            icon: .send,
-                            size: iconSize,
-                            color: DesignTokens.Color.selectionPill
-                        )
-                    }
-                    .buttonStyle(OWComposerSendButtonStyle(isEnabled: canSendMessage))
-                    .disabled(!canSendMessage)
-                    .help("Send message")
-                    .keyboardShortcut(.return, modifiers: [.command])
-                }
+            .buttonStyle(OWComposerStopButtonStyle())
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .help("Stop generation")
+        } else {
+            Button {
+                model.send(services: aiServices, agent: aiServices.selectedAgent)
+            } label: {
+                OWUnicodeIconView(
+                    icon: .send,
+                    size: iconSize + 2,
+                    color: DesignTokens.Color.selectionPill
+                )
             }
+            .buttonStyle(OWComposerSendButtonStyle(isEnabled: canSendMessage))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .disabled(!canSendMessage)
+            .help("Send (⌘↩)")
+            .keyboardShortcut(.return, modifiers: [.command])
         }
-        .fixedSize(horizontal: true, vertical: true)
     }
 
     private var canSendMessage: Bool {

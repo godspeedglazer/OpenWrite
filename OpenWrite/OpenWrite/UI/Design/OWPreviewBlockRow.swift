@@ -69,8 +69,7 @@ struct OWPreviewBlockRow: View {
                 foreground: DesignTokens.Color.textPrimary
             )
         }
-        .owBlockCardPadding()
-        .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .owBlockSurfaceCard(fill: blockFill, previewMode: previewMode)
     }
 
     private var paragraphRow: some View {
@@ -81,8 +80,7 @@ struct OWPreviewBlockRow: View {
                 foreground: DesignTokens.Color.textPrimary
             )
         }
-        .owBlockCardPadding()
-        .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .owBlockSurfaceCard(fill: blockFill, previewMode: previewMode)
     }
 
     private var bulletRow: some View {
@@ -98,8 +96,7 @@ struct OWPreviewBlockRow: View {
                 )
             }
         }
-        .owBlockListCardPadding()
-        .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .owBlockListSurfaceCard(fill: blockFill, previewMode: previewMode)
     }
 
     private var todoRow: some View {
@@ -115,8 +112,7 @@ struct OWPreviewBlockRow: View {
                 )
             }
         }
-        .owBlockListCardPadding()
-        .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .owBlockListSurfaceCard(fill: blockFill, previewMode: previewMode)
     }
 
     @ViewBuilder
@@ -165,12 +161,7 @@ struct OWPreviewBlockRow: View {
                 )
             }
         }
-        .owBlockCardPadding()
-        .background(calloutFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-                .strokeBorder(calloutAccent.opacity(0.22), lineWidth: 1)
-        }
+        .owCalloutSurface(previewMode: previewMode, fill: calloutFill, accent: calloutAccent)
     }
 
     @ViewBuilder
@@ -205,8 +196,7 @@ struct OWPreviewBlockRow: View {
                     .italic(!isEditing)
             }
         }
-        .owBlockCardPadding()
-        .background(blockFill.opacity(0.85), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .owQuoteSurface(previewMode: previewMode, fill: blockFill)
     }
 
     private var codeRow: some View {
@@ -245,8 +235,7 @@ struct OWPreviewBlockRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .owBlockCardPadding()
-        .background(DesignTokens.Color.codeBackground, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .owCodeSurface(previewMode: previewMode)
         .overlay {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
                 .strokeBorder(DesignTokens.Color.borderHairline, lineWidth: 1)
@@ -299,12 +288,7 @@ struct OWPreviewBlockRow: View {
             OWUnicodeIconView(icon: .link, size: 14, color: DesignTokens.Color.wikilink)
             label()
         }
-        .owBlockCardPadding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            DesignTokens.Color.wikilink.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
-        )
+        .owLinkSurface(previewMode: previewMode)
     }
 
     private func openWikilinkTarget(named title: String) {
@@ -357,8 +341,7 @@ struct OWPreviewBlockRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .owBlockCardPadding()
-        .background(blockFill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        .owBlockSurfaceCard(fill: blockFill, previewMode: previewMode)
         .accessibilityLabel(block.text.isEmpty ? "Image" : block.text)
     }
 
@@ -434,7 +417,7 @@ struct OWPreviewBlockRow: View {
     }
 
     private var blockFill: Color {
-        DesignTokens.Color.surface
+        previewMode ? palette.editorCanvas : DesignTokens.Color.surface
     }
 
     private var calloutVariant: String {
@@ -508,6 +491,67 @@ private enum BlockRowLayout {
 // MARK: - Block card padding
 
 private extension View {
+    @ViewBuilder
+    func owBlockSurfaceCard(fill: Color, previewMode: Bool) -> some View {
+        if previewMode {
+            padding(.vertical, DesignTokens.Spacing.spacing1)
+        } else {
+            owBlockCardPadding()
+                .background(fill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    func owBlockListSurfaceCard(fill: Color, previewMode: Bool) -> some View {
+        if previewMode {
+            padding(.vertical, DesignTokens.Spacing.spacing1)
+        } else {
+            owBlockListCardPadding()
+                .background(fill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    func owCalloutSurface(previewMode: Bool, fill: Color, accent: Color) -> some View {
+        owBlockCardPadding()
+            .background(fill, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                    .strokeBorder(accent.opacity(0.22), lineWidth: 1)
+            }
+    }
+
+    @ViewBuilder
+    func owQuoteSurface(previewMode: Bool, fill: Color) -> some View {
+        if previewMode {
+            padding(.vertical, DesignTokens.Spacing.spacing1)
+        } else {
+            owBlockCardPadding()
+                .background(fill.opacity(0.85), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    func owCodeSurface(previewMode: Bool) -> some View {
+        owBlockCardPadding()
+            .background(DesignTokens.Color.codeBackground, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous))
+    }
+
+    @ViewBuilder
+    func owLinkSurface(previewMode: Bool) -> some View {
+        if previewMode {
+            padding(.vertical, DesignTokens.Spacing.spacing1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            owBlockCardPadding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    DesignTokens.Color.wikilink.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: DesignTokens.Radius.medium, style: .continuous)
+                )
+        }
+    }
+
     /// Inner card breathing room; pairs with `openWriteEditorLeadingInset` on the block column.
     func owBlockCardPadding() -> some View {
         padding(.top, DesignTokens.Spacing.spacing2)
@@ -564,11 +608,42 @@ private final class ImageCopyContainerView: NSView {
         if imageView.superview == nil {
             addSubview(imageView)
         }
+        if menu == nil {
+            menu = makeContextMenu()
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 1 {
+            window?.makeFirstResponder(self)
+        }
+        super.mouseDown(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command),
+           event.charactersIgnoringModifiers?.lowercased() == "c" {
+            copy(nil)
+            return
+        }
+        super.keyDown(with: event)
     }
 
     @objc func copy(_ sender: Any?) {
-        if let block, ImagePasteSupport.copyImageToPasteboard(for: block) {
-            return
-        }
+        guard let block else { return }
+        _ = ImagePasteSupport.copyImageToPasteboard(for: block)
+    }
+
+    private func makeContextMenu() -> NSMenu {
+        let menu = NSMenu()
+        let item = NSMenuItem(
+            title: "Copy Image",
+            action: #selector(copy(_:)),
+            keyEquivalent: "c"
+        )
+        item.keyEquivalentModifierMask = .command
+        item.target = self
+        menu.addItem(item)
+        return menu
     }
 }

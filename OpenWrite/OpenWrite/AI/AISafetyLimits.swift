@@ -16,15 +16,21 @@ enum AISafetyLimits {
     static let systemPromptReservedTokens = 320
     static let maxCompletionTokens = 1024
     static let searchDebounceSeconds: TimeInterval = 0.35
-    static let inlineSelectionDebounceSeconds: TimeInterval = 0.4
+    static let inlineSelectionDebounceSeconds: TimeInterval = 0.12
     static let maxInlineSelectionChars = 1500
     static let maxInlineRefineContextChunks = 4
     static let maxInlineRefinePromptTokens = 2000
     static let hybridVectorWeight = 0.7
+    /// Extra keyword weight for title / filename / title-lead chunk matches.
+    static let titleKeywordBoostMultiplier = 2.5
+    /// Added to fused score when query is temporal and chunk has a recent `documentUpdatedAt`.
+    static let recencyBoostWeight = 0.12
+    /// Max chunks returned per document after hybrid fusion.
+    static let maxChunksPerDocumentInResults = 2
     /// Reor default `chunkSize` (store migrator); heading groups larger than this are split recursively.
     static let indexChunkMaxChars = 1000
-    /// Reor `chunkMarkdownByHeadingsAndByCharsIfBig` overlap.
-    static let indexChunkOverlap = 20
+    /// ~15% overlap for recursive splits and cross-section bridges.
+    static let indexChunkOverlap = 150
     static let embeddingDimensions = 384
     static let maxEmbeddingInputChars = 2000
 
@@ -39,12 +45,18 @@ enum AISafetyLimits {
     static let embeddingCircuitCooldownSeconds: TimeInterval = 120
     /// Minimum spacing for a single in-app “LM Studio unreachable” notice.
     static let embeddingUnreachableNoticeIntervalSeconds: TimeInterval = 90
-    /// Whole vault search phase in chat (embed + vector scan); then chat continues with no hits.
+    /// Whole note-index search phase in chat (embed + vector scan); then chat continues with no hits.
     static let vaultSearchTimeoutSeconds: TimeInterval = 15
     /// Chat HTTP connect + first streamed token; fails connect step when LM Studio is down.
     static let chatStreamTimeoutSeconds: TimeInterval = 30
     static let webFetchMaxRedirects = 3
+    /// Single-pass web lookup (default chat).
     static let maxWebURLsPerMessage = 2
+    /// Multi-hop research pass (Research Q&A + Web on).
+    static let maxWebURLsPerResearchPass = 5
+    static let maxWebResearchPasses = 2
+    static let maxWebChunksPerPage = 4
+    static let maxWebChunkChars = 900
     static let maxWebTextChars = 12_000
     /// Per-image cap for vision chat payloads (base64 in LM Studio / OpenAI-compatible API).
     static let maxVisionImageBytes = 4 * 1024 * 1024
@@ -110,6 +122,8 @@ enum AIInput {
         let patterns = [
             #"\[chunk:\s*[^\]]*\]?"#,
             #"\[chunk:[^\]\n]*"#,
+            #"\[web:\s*[^\]]*\]?"#,
+            #"\[web:[^\]\n]*"#,
             #"\bchunk:\s*[0-9a-fA-F-]{8,}(?:-[0-9a-fA-F-]+)*\b"#
         ]
         var result = text
@@ -120,10 +134,12 @@ enum AIInput {
             let range = NSRange(result.startIndex..., in: result)
             result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: "")
         }
-        if let trailing = try? NSRegularExpression(pattern: #"\[chunk:[^\]]*$"#, options: [.caseInsensitive]),
-           let match = trailing.firstMatch(in: result, range: NSRange(result.startIndex..., in: result)),
-           let range = Range(match.range, in: result) {
-            result.removeSubrange(range)
+        for partial in [#"\[chunk:[^\]]*$"#, #"\[web:[^\]]*$"#] {
+            if let trailing = try? NSRegularExpression(pattern: partial, options: [.caseInsensitive]),
+               let match = trailing.firstMatch(in: result, range: NSRange(result.startIndex..., in: result)),
+               let range = Range(match.range, in: result) {
+                result.removeSubrange(range)
+            }
         }
         return result
             .replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)

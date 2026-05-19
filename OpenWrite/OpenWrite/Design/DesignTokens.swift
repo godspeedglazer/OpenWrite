@@ -377,12 +377,14 @@ enum DesignTokens {
         static let inspectorMaxWidth: CGFloat = assistStripMaxWidth
         static let assistBottomBarHeight: CGFloat = 32
         static let assistStripComposerBottomInset: CGFloat = Spacing.spacing2
-        /// Chat composer attach / send / stop / toggle cell size (2×2 board beside field).
+        /// Chat composer icon cell (2×2 grid + send column).
         static let composerActionSize: CGFloat = 36
-        /// Gap between cells in the composer 2×2 action board.
+        /// Gap between cells in the composer action column.
         static let composerBoardSpacing: CGFloat = Spacing.spacing1
-        /// Height of the 2×2 action board (field min height aligns to this).
+        /// One band in the right column (send block or 2×2 grid).
         static var composerBoardHeight: CGFloat { composerActionSize * 2 + composerBoardSpacing }
+        /// Right action column + text field row height.
+        static var composerColumnHeight: CGFloat { composerBoardHeight * 2 + composerBoardSpacing }
         /// Inner text inset for multiline composer (clears left edge of field chrome).
         static let composerFieldLeadingInset: CGFloat = Spacing.spacing3
         static let composerFieldTrailingInset: CGFloat = Spacing.spacing2
@@ -392,7 +394,7 @@ enum DesignTokens {
         static let composerFieldMaxHeight: CGFloat = 120
         /// Bottom inset for chat transcript above the composer (compact vertical stack + caption).
         static var assistTranscriptBottomReserve: CGFloat {
-            composerBoardHeight + composerFieldMaxHeight + Spacing.spacing6 * 2
+            composerColumnHeight + composerFieldMaxHeight + Spacing.spacing6 * 2
         }
         static let centerCardOuterPadding: CGFloat = Spacing.spacing2
         static let shellColumnGutter: CGFloat = Spacing.spacing2
@@ -427,6 +429,8 @@ enum DesignTokens {
         static let editorScrollBottomCushion: CGFloat = 96
         /// Vertical gap between block rows in the WYSIWYG editor.
         static let editorBlockStackSpacing: CGFloat = Spacing.spacing2
+        /// Tighter vertical rhythm for read-only preview (no block cards).
+        static let editorPreviewStackSpacing: CGFloat = Spacing.spacing3
         static let editorMetadataToToolbarSpacing: CGFloat = Spacing.spacing3
         /// Left-rail refine assistant beside the editor column.
         static let refinePanelWidth: CGFloat = 380
@@ -436,7 +440,8 @@ enum DesignTokens {
         }
         static let refinePanelMinHeight: CGFloat = 280
         static let refinePanelMaxHeight: CGFloat = 520
-        static let refinePanelRailWidth: CGFloat = 148
+        /// Stepper column inside the refine rail (labels + dots); content pane uses the remainder.
+        static let refinePanelStepperWidth: CGFloat = 176
         static let captureSheetWidth: CGFloat = 520
         static let captureSheetMinHeight: CGFloat = 200
         static let graphNodeMinSize: CGFloat = 44

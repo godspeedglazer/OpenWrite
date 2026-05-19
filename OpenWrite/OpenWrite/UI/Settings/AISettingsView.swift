@@ -80,7 +80,7 @@ struct AISettingsView: View {
                             ProgressView(value: aiServices.ingestionHealth.health.progressFraction)
                                 .controlSize(.small)
                                 .tint(DesignTokens.Color.accent)
-                            Text("Indexing vault…")
+                            Text("Indexing notes…")
                                 .font(DesignTokens.Typography.caption)
                                 .foregroundStyle(DesignTokens.Color.textSecondary)
                         }

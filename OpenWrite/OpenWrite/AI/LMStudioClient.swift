@@ -37,6 +37,21 @@ struct LMStudioModel: Identifiable, Hashable, Sendable {
     let ownedBy: String?
 }
 
+/// Entry from LM Studio `GET /api/v1/models` (includes in-memory `loaded_instances`).
+struct LMStudioNativeModel: Sendable, Hashable {
+    let key: String
+    let displayName: String
+    let type: String
+    let loadedInstanceIDs: [String]
+
+    var isLoaded: Bool { !loadedInstanceIDs.isEmpty }
+
+    /// Instance id used for OpenAI-compatible `model` requests (first loaded slot).
+    var activeInstanceID: String? {
+        loadedInstanceIDs.first
+    }
+}
+
 /// OpenAI-compatible LM Studio REST client.
 struct LMStudioClient: Sendable {
     let config: LMStudioConfig
@@ -79,6 +94,84 @@ struct LMStudioClient: Sendable {
         return dataArray.compactMap { entry in
             guard let id = entry["id"] as? String else { return nil }
             return LMStudioModel(id: id, ownedBy: entry["owned_by"] as? String)
+        }
+    }
+
+    /// LM Studio native catalog — only models with non-empty `loaded_instances` are in GPU memory.
+    func listNativeModels() async throws -> [LMStudioNativeModel] {
+        var request = URLRequest(url: LMStudioURLPolicy.nativeModelsURL(from: config.baseURL))
+        request.httpMethod = "GET"
+        request.timeoutInterval = min(config.timeoutSeconds, 15)
+        applyAuth(&request)
+
+        let (data, response) = try await session.data(for: request)
+        try validateHTTP(response: response, data: data)
+
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let models = json["models"] as? [[String: Any]]
+        else {
+            throw LMStudioError.decodeFailed
+        }
+
+        var parsed = models.compactMap { entry -> LMStudioNativeModel? in
+            guard let key = entry["key"] as? String else { return nil }
+            let display = entry["display_name"] as? String ?? key
+            let type = entry["type"] as? String ?? "llm"
+            let instances = entry["loaded_instances"] as? [[String: Any]] ?? []
+            let ids = instances.compactMap { $0["id"] as? String }
+            return LMStudioNativeModel(
+                key: key,
+                displayName: display,
+                type: type,
+                loadedInstanceIDs: ids
+            )
+        }
+
+        if parsed.contains(where: { $0.isLoaded }) {
+            return parsed
+        }
+
+        let v0Loaded = (try? await listV0LoadedLLMIDs()) ?? []
+        guard !v0Loaded.isEmpty else { return parsed }
+
+        let loadedSet = Set(v0Loaded)
+        return parsed.map { model in
+            guard model.type == "llm" else { return model }
+            let instance = model.loadedInstanceIDs.first(where: { loadedSet.contains($0) })
+                ?? (loadedSet.contains(model.key) ? model.key : nil)
+            guard let instance else { return model }
+            return LMStudioNativeModel(
+                key: model.key,
+                displayName: model.displayName,
+                type: model.type,
+                loadedInstanceIDs: [instance]
+            )
+        }
+    }
+
+    /// Fallback when `/api/v1/models` omits `loaded_instances` but v0 exposes `state: loaded`.
+    private func listV0LoadedLLMIDs() async throws -> [String] {
+        var request = URLRequest(url: LMStudioURLPolicy.v0ModelsURL(from: config.baseURL))
+        request.httpMethod = "GET"
+        request.timeoutInterval = min(config.timeoutSeconds, 15)
+        applyAuth(&request)
+
+        let (data, response) = try await session.data(for: request)
+        try validateHTTP(response: response, data: data)
+
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let dataArray = json["data"] as? [[String: Any]]
+        else {
+            throw LMStudioError.decodeFailed
+        }
+
+        return dataArray.compactMap { entry in
+            guard (entry["type"] as? String) == "llm",
+                  (entry["state"] as? String) == "loaded",
+                  let id = entry["id"] as? String else { return nil }
+            return id
         }
     }
 

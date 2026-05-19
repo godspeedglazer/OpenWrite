@@ -61,13 +61,15 @@ final class InlineAssistController: ObservableObject {
     @Published var showRefineResult = false
     @Published private(set) var refinePipelineSteps: [ChatPipelineStep] = []
     @Published private(set) var pendingActions: [OWAction] = []
+    /// Live model output while refine streams (shown in the panel before `.ready`).
+    @Published private(set) var streamingProse: String = ""
 
     private var debounceTask: Task<Void, Never>?
     private var refineTask: Task<Void, Never>?
-    private var refineIntroTask: Task<Void, Never>?
 
     private static let refineStepOrder = ["selection", "vault", "model", "review"]
-    private static let refineIntroStepDelayNs: UInt64 = 240_000_000
+    /// Brief pacing so early stepper beats are visible (panel still opens immediately).
+    private static let refinePacingStepDelayNs: UInt64 = 220_000_000
 
     private var pendingDocumentID: UUID?
     private var pendingBlockID: UUID?
@@ -238,10 +240,38 @@ final class InlineAssistController: ObservableObject {
     private func seedRefinePipelinePending() {
         refinePipelineSteps = [
             ChatPipelineStep(id: "selection", title: "Reading selection", status: .pending),
-            ChatPipelineStep(id: "vault", title: "Vault context", status: .pending),
+            ChatPipelineStep(id: "vault", title: "Searching vault", status: .pending),
             ChatPipelineStep(id: "model", title: "Local model", status: .pending),
             ChatPipelineStep(id: "review", title: "Review & apply", status: .pending)
         ]
+    }
+
+    /// Opens the refine rail immediately; early steps animate via `playRefineOpeningBeat`.
+    func beginRefineSession() {
+        refineTask?.cancel()
+        streamingProse = ""
+        pendingActions = []
+        phase = .refining
+        showRefineResult = true
+        seedRefinePipelinePending()
+        setRefineSteps(upTo: "selection")
+    }
+
+    /// Enjoyable stepper pacing — selection then vault — without blocking panel open.
+    private func playRefineOpeningBeat() async {
+        setRefineSteps(upTo: "selection")
+        try? await Task.sleep(nanoseconds: Self.refinePacingStepDelayNs)
+        guard !Task.isCancelled else { return }
+        setRefineStep("selection", status: .completed, title: "Selection captured")
+        setRefineStep("vault", status: .active, title: "Searching vault")
+        try? await Task.sleep(nanoseconds: Self.refinePacingStepDelayNs)
+        guard !Task.isCancelled else { return }
+        setRefineStep("vault", status: .completed, title: "Vault context")
+        setRefineSteps(upTo: "model")
+    }
+
+    func setRefineModelStepTitle(_ title: String) {
+        setRefineStep("model", status: .active, title: title)
     }
 
     private func setRefineStep(_ id: String, status: ChatPipelineStep.Status, title: String? = nil) {
@@ -268,60 +298,50 @@ final class InlineAssistController: ObservableObject {
         }
     }
 
-    /// Staggered rail animation when the panel opens (before network work finishes).
-    private func playRefineIntroAnimation() async {
-        seedRefinePipelinePending()
-        for stepID in Self.refineStepOrder {
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                setRefineSteps(upTo: stepID)
-            }
-            if stepID != Self.refineStepOrder.last {
-                try? await Task.sleep(nanoseconds: Self.refineIntroStepDelayNs)
-            }
-        }
-        await MainActor.run {
-            setRefineStep("selection", status: .completed, title: "Selection captured")
-            setRefineStep("vault", status: .active, title: "Searching vault")
-        }
-    }
-
     func refineSelection(
         using rag: RAGService,
         preset: InlineRefinePreset = .improve,
         noteExcerpt: String? = nil
     ) {
-        guard let snapshot = latestSnapshot else { return }
-        refineTask?.cancel()
-        refineIntroTask?.cancel()
-        phase = .refining
-        showRefineResult = true
-        seedRefinePipelinePending()
+        guard latestSnapshot != nil else { return }
+        if !isRefining {
+            beginRefineSession()
+        }
 
         let query = Self.refineQuery(
-            for: snapshot.selectedText,
+            for: latestSnapshot!.selectedText,
             preset: preset,
             noteExcerpt: noteExcerpt
         )
         let agent = BuiltInAgents.refineProse
 
-        refineIntroTask = Task {
-            await playRefineIntroAnimation()
-        }
-
+        refineTask?.cancel()
         refineTask = Task {
+            await playRefineOpeningBeat()
+            guard !Task.isCancelled else { return }
             do {
-                _ = await refineIntroTask?.value
-                guard !Task.isCancelled else { return }
-                let answer = try await Self.runRefine(
+                let answer = try await Self.runRefineStream(
                     rag: rag,
                     query: query,
-                    agent: agent
+                    agent: agent,
+                    onToken: { [weak self] partial in
+                        Task { @MainActor in
+                            self?.streamingProse = partial
+                            if partial.isEmpty == false {
+                                self?.setRefineStep("model", status: .active, title: "Writing…")
+                            }
+                        }
+                    },
+                    onModelConnecting: { [weak self] in
+                        Task { @MainActor in
+                            self?.setRefineModelStepTitle("Connecting…")
+                        }
+                    }
                 )
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
-                    setRefineStep("vault", status: .completed, title: "Vault context")
-                    setRefineStep("model", status: .completed, title: "Local model")
+                    streamingProse = ""
+                    setRefineStep("model", status: .completed, title: "Draft ready")
                     setRefineStep("review", status: .active, title: "Review & apply")
                     let stripped = AIInput.stripChunkReferences(answer.text)
                     let parsed = OWActionScript.parse(in: stripped)
@@ -332,6 +352,7 @@ final class InlineAssistController: ObservableObject {
             } catch {
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
+                    streamingProse = ""
                     setRefineStep("model", status: .failed, title: "Refine failed")
                     setRefineStep("review", status: .failed, title: "Unavailable")
                     phase = .failed(error.localizedDescription)
@@ -342,32 +363,32 @@ final class InlineAssistController: ObservableObject {
 
     func dismissRefine() {
         refineTask?.cancel()
-        refineIntroTask?.cancel()
         showRefineResult = false
         pendingActions = []
+        streamingProse = ""
         if case .ready = phase {
             phase = .idle
         } else if case .failed = phase {
             phase = .idle
+        } else if case .refining = phase {
+            phase = .idle
         }
     }
 
-    /// Opens the refine sheet with a user-visible message (no selection, LM Studio offline hint, etc.).
+    /// Opens the refine rail with a user-visible message (no selection, LM Studio offline, etc.).
     func presentRefineMessage(_ message: String) {
         refineTask?.cancel()
-        refineIntroTask?.cancel()
-        refineIntroTask = Task {
-            await playRefineIntroAnimation()
+        beginRefineSession()
+        refineTask = Task {
+            await playRefineOpeningBeat()
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 setRefineStep("model", status: .failed, title: "Unavailable")
                 setRefineStep("review", status: .failed, title: "Cannot continue")
+                streamingProse = ""
                 phase = .failed(message)
             }
         }
-        phase = .refining
-        showRefineResult = true
-        seedRefinePipelinePending()
     }
 
     private static func refineQuery(
@@ -398,25 +419,54 @@ final class InlineAssistController: ObservableObject {
         return body
     }
 
-    private static func runRefine(
+    private static func runRefineStream(
         rag: RAGService,
         query: String,
-        agent: AgentConfig
+        agent: AgentConfig,
+        onToken: @escaping @Sendable (String) -> Void,
+        onModelConnecting: @escaping @Sendable () -> Void
     ) async throws -> RAGAnswer {
         try await withCheckedThrowingContinuation { continuation in
             Self.assistQueue.async {
                 Task {
                     do {
-                        let answer = try await rag.answer(query: query, agent: agent, attachments: [])
-                        let trimmed = answer.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let context = try await rag.buildContext(
+                            query: query,
+                            agent: agent,
+                            attachments: []
+                        )
+                        var fullText = ""
+                        var citationIDs: [UUID] = []
+                        var announcedConnecting = false
+
+                        for try await event in rag.streamAnswer(context: context, agent: agent) {
+                            switch event.kind {
+                            case .activity(let state):
+                                if state == .connecting, !announcedConnecting {
+                                    announcedConnecting = true
+                                    onModelConnecting()
+                                }
+                            case .token(let token):
+                                fullText += token
+                                onToken(fullText)
+                            case .citations(let ids):
+                                citationIDs = ids
+                            case .error(let message):
+                                throw LMStudioError.httpStatus(0, message)
+                            case .completed:
+                                break
+                            }
+                        }
+
+                        let trimmed = fullText.trimmingCharacters(in: .whitespacesAndNewlines)
                         if trimmed.isEmpty {
                             continuation.resume(throwing: LMStudioError.emptyResponse)
                         } else {
                             continuation.resume(
                                 returning: RAGAnswer(
                                     text: trimmed,
-                                    citationChunkIDs: answer.citationChunkIDs,
-                                    hits: answer.hits
+                                    citationChunkIDs: citationIDs,
+                                    hits: context.allHits
                                 )
                             )
                         }

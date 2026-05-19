@@ -124,6 +124,8 @@ struct OWSettingsSheet<Content: View>: View {
     let title: String
     var dismissButtonTitle: String = "Done"
     var dismissButtonUsesSecondaryStyle: Bool = false
+    /// When false, sheet height hugs content (e.g. Create page) instead of filling the presentation.
+    var contentFillsAvailableHeight: Bool = true
     let onDone: () -> Void
     @ViewBuilder let content: () -> Content
 
@@ -144,8 +146,15 @@ struct OWSettingsSheet<Content: View>: View {
                 .fill(DesignTokens.Color.separator)
                 .frame(height: DesignTokens.Layout.borderWidth)
 
-            content()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Group {
+                if contentFillsAvailableHeight {
+                    content()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                } else {
+                    content()
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+            }
         }
         .background(DesignTokens.Color.background)
     }
@@ -221,7 +230,7 @@ struct OWComposerSendButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .frame(width: DesignTokens.Layout.composerActionSize, height: DesignTokens.Layout.composerActionSize)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 DesignTokens.Color.accent.opacity(
                     !isEnabled ? 0.35 : (configuration.isPressed ? 0.82 : 1)
@@ -236,7 +245,7 @@ struct OWComposerSendButtonStyle: ButtonStyle {
 struct OWComposerStopButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .frame(width: DesignTokens.Layout.composerActionSize, height: DesignTokens.Layout.composerActionSize)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 DesignTokens.Color.surfaceElevated.opacity(configuration.isPressed ? 0.8 : 0.95),
                 in: RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous)

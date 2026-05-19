@@ -25,6 +25,7 @@ struct GraphView: View {
     @State private var usesManualLayout = false
     @State private var draggingNodeID: UUID?
     @State private var nodeDragTranslation: CGSize = .zero
+    @State private var graphSearchQuery: String = ""
 
     private var effectivePan: CGSize {
         CGSize(
@@ -65,6 +66,7 @@ struct GraphView: View {
                     graphNodeCards(snapshot: snapshot)
                 }
 
+                graphTopSearchBar
                 graphChrome(snapshot: snapshot)
             }
             .background(OWDisablesWindowDrag())
@@ -129,10 +131,14 @@ struct GraphView: View {
                 var path = GraphViewModel.bezierPath(for: route)
                 path = path.applying(transform)
 
+                let highlighted = edgeIsHighlighted(edge)
+                let edgeColor = DesignTokens.Color.graphEdge.opacity(highlighted ? 1 : 0.14)
+                let lineWidth = (highlighted ? 1.75 : 1.1) / zoom
+
                 context.stroke(
                     path,
-                    with: .color(DesignTokens.Color.graphEdge),
-                    lineWidth: 1.25 / zoom
+                    with: .color(edgeColor),
+                    lineWidth: lineWidth
                 )
 
                 let transformedRoute = GraphEdgeRoute(
@@ -145,7 +151,8 @@ struct GraphView: View {
                     context: &context,
                     tip: arrow.tip,
                     direction: arrow.direction,
-                    zoom: zoom
+                    zoom: zoom,
+                    color: edgeColor
                 )
             }
         }
@@ -169,11 +176,26 @@ struct GraphView: View {
             }
     }
 
+    private func edgeIsHighlighted(_ edge: GraphSnapshot.Edge) -> Bool {
+        guard let selectedDocumentID else { return true }
+        return edge.sourceID == selectedDocumentID || edge.targetID == selectedDocumentID
+    }
+
+    private func nodeIsGraphFocusNeighbor(_ nodeID: UUID) -> Bool {
+        guard let selectedDocumentID else { return true }
+        if nodeID == selectedDocumentID { return true }
+        return snapshot.edges.contains { edge in
+            (edge.sourceID == selectedDocumentID && edge.targetID == nodeID)
+                || (edge.targetID == selectedDocumentID && edge.sourceID == nodeID)
+        }
+    }
+
     private func drawArrowhead(
         context: inout GraphicsContext,
         tip: CGPoint,
         direction: CGPoint,
-        zoom: CGFloat
+        zoom: CGFloat,
+        color: Color = DesignTokens.Color.graphEdge
     ) {
         let ux = direction.x
         let uy = direction.y
@@ -186,7 +208,7 @@ struct GraphView: View {
         arrow.addLine(to: left)
         arrow.addLine(to: right)
         arrow.closeSubpath()
-        context.fill(arrow, with: .color(DesignTokens.Color.graphEdge))
+        context.fill(arrow, with: .color(color))
     }
 
     // MARK: - Nodes
@@ -198,10 +220,11 @@ struct GraphView: View {
                     .position(displayPosition(for: node))
                     .scaleEffect(zoom)
                     .highPriorityGesture(nodeDragGesture(node: node))
-                    .onTapGesture {
+                    .onTapGesture(count: 1) {
                         guard draggingNodeID == nil else { return }
                         onSelectDocument(node.id)
                     }
+                    .help("Open in editor")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -248,7 +271,8 @@ struct GraphView: View {
     }
 
     private func graphNodeCard(node: GraphSnapshot.Node) -> some View {
-        HStack(spacing: DesignTokens.Spacing.spacing2) {
+        let matchesSearch = nodeMatchesSearch(node)
+        return HStack(spacing: DesignTokens.Spacing.spacing2) {
             OWUnicodeIconView(
                 pageType: node.pageType,
                 size: 14,
@@ -282,7 +306,32 @@ struct GraphView: View {
             y: 1
         )
         .contentShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.owRect, style: .continuous))
+        .opacity(nodeCardOpacity(node: node, matchesSearch: matchesSearch))
         .background(OWDisablesWindowDrag())
+    }
+
+    private func nodeCardOpacity(node: GraphSnapshot.Node, matchesSearch: Bool) -> Double {
+        let searchOpacity = matchesSearch ? 1.0 : 0.2
+        guard selectedDocumentID != nil else { return searchOpacity }
+        let focusOpacity = nodeIsGraphFocusNeighbor(node.id) ? 1.0 : 0.28
+        return min(searchOpacity, focusOpacity)
+    }
+
+    private func nodeMatchesSearch(_ node: GraphSnapshot.Node) -> Bool {
+        let query = graphSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        return node.title.localizedCaseInsensitiveContains(query)
+    }
+
+    private var graphTopSearchBar: some View {
+        VStack {
+            OWRailSearchField(text: $graphSearchQuery, placeholder: "Filter graph…")
+                .frame(maxWidth: DesignTokens.Layout.graphFloatingBarMaxWidth)
+                .padding(.horizontal, DesignTokens.Spacing.spacing3)
+                .padding(.top, DesignTokens.Spacing.spacing2)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func transformed(_ point: CGPoint) -> CGPoint {

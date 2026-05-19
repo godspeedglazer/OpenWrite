@@ -66,6 +66,9 @@ final class OpenWriteAIServices: ObservableObject {
     @Published var lmStatus: String = "Not checked"
     @Published var lmConnectionState: LMConnectionState = .notChecked
     @Published var availableModels: [LMStudioModel] = []
+    /// Chat model instance actually loaded in LM Studio (from native `/api/v1/models`).
+    @Published private(set) var activeChatModelID: String = ""
+    @Published private(set) var activeChatModelDisplay: String = ""
     @Published var isIndexing = false
     @Published var indexedChunkCount = 0
     @Published var activityState: AIActivityState = .idle
@@ -83,6 +86,7 @@ final class OpenWriteAIServices: ObservableObject {
     private(set) var retrieval: RetrievalService
     private(set) var rag: RAGService
     let webFetch = WebFetchService()
+    let webResearchCache = WebResearchSessionCache()
 
     private var ingestionPipeline: IngestionPipeline?
     private var indexingTask: Task<Void, Never>?
@@ -96,6 +100,13 @@ final class OpenWriteAIServices: ObservableObject {
     /// True after a successful connection check (`lmStatus` begins with "Connected").
     var isLMStudioConnected: Bool {
         lmConnectionState == .connected
+    }
+
+    /// Composer / status line model name — prefers in-memory loaded model over saved config id.
+    var composerChatModelLabel: String {
+        let live = activeChatModelDisplay.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !live.isEmpty { return live }
+        return lmConfig.chatModelDisplay
     }
 
     /// User-facing connection suffix for the chat composer caption (`model · connected`).
@@ -168,6 +179,9 @@ final class OpenWriteAIServices: ObservableObject {
         hasher.combine(entry.documentID)
         hasher.combine(entry.title)
         hasher.combine(entry.sourceFilename ?? "")
+        if let updated = entry.documentUpdatedAt {
+            hasher.combine(updated.timeIntervalSinceReferenceDate)
+        }
         for block in entry.blocks {
             hasher.combine(block.id)
             hasher.combine(block.kind)
@@ -291,20 +305,15 @@ final class OpenWriteAIServices: ObservableObject {
         do {
             let models = try await lmClient.listModels()
             availableModels = models
-            if let resolved = Self.resolveChatModelID(
-                current: lmConfig.chatModel,
-                available: models.map(\.id)
-            ), resolved != lmConfig.chatModel {
-                lmConfig.chatModel = resolved
-                LMStudioConfigPersistence.save(lmConfig)
-                rebuildPipeline()
-            }
-            applyLMConnectionState(from: models)
+            let nativeModels = (try? await lmClient.listNativeModels()) ?? []
+            syncActiveChatModel(nativeModels: nativeModels, catalogModels: models)
             if !silent {
                 setActivity(.idle)
             }
         } catch {
             availableModels = []
+            activeChatModelID = ""
+            activeChatModelDisplay = ""
             lmStatus = "Error: \(error.localizedDescription)"
             lmConnectionState = .offline
             if silent {
@@ -321,24 +330,105 @@ final class OpenWriteAIServices: ObservableObject {
         }
     }
 
-    private func applyLMConnectionState(from models: [LMStudioModel]) {
+    /// Refreshes loaded-model display from LM Studio (call before showing model name in chat steppers).
+    func refreshLoadedChatModel() async {
+        await checkConnection(silent: true)
+    }
+
+    private func syncActiveChatModel(
+        nativeModels: [LMStudioNativeModel],
+        catalogModels: [LMStudioModel]
+    ) {
+        let loadedLLMs = nativeModels.filter { $0.type == "llm" && $0.isLoaded }
+
+        // Native `/api/v1/models` is authoritative — never treat OpenAI catalog membership as "loaded".
+        if !nativeModels.isEmpty {
+            if let active = Self.pickLoadedChatModel(
+                loadedLLMs: loadedLLMs,
+                preferredID: lmConfig.chatModel
+            ) {
+                let instanceID = active.activeInstanceID ?? active.key
+                activeChatModelID = instanceID
+                activeChatModelDisplay = active.displayName
+
+                if instanceID != lmConfig.chatModel {
+                    lmConfig.chatModel = instanceID
+                    LMStudioConfigPersistence.save(lmConfig)
+                    rebuildPipeline()
+                }
+                lmStatus = "Connected · \(active.displayName)"
+                lmConnectionState = .connected
+                return
+            }
+
+            activeChatModelID = ""
+            activeChatModelDisplay = ""
+            lmStatus = "Connected — load a chat model in LM Studio"
+            lmConnectionState = .noModelLoaded
+            return
+        }
+
+        // Ollama / servers without native load metadata — catalog fallback only.
+        activeChatModelID = ""
+        activeChatModelDisplay = ""
+
+        if catalogModels.isEmpty {
+            lmStatus = "Connected (no models listed)"
+            lmConnectionState = .noModelLoaded
+            return
+        }
+
+        if let resolved = Self.resolveChatModelID(
+            current: lmConfig.chatModel,
+            available: catalogModels.map(\.id)
+        ), resolved != lmConfig.chatModel {
+            lmConfig.chatModel = resolved
+            LMStudioConfigPersistence.save(lmConfig)
+            rebuildPipeline()
+        }
+        applyLMConnectionStateFromCatalog(catalogModels)
+    }
+
+    private func applyLMConnectionStateFromCatalog(_ models: [LMStudioModel]) {
         if models.isEmpty {
-            lmStatus = "Connected (no models loaded)"
+            lmStatus = "Connected (no models listed)"
             lmConnectionState = .noModelLoaded
             return
         }
         let chatID = lmConfig.chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
         let modelIDs = models.map(\.id)
         if !chatID.isEmpty, !modelIDs.contains(chatID) {
-            lmStatus = "Connected — load “\(chatID)” in LM Studio"
+            lmStatus = "Connected — load “\(LMStudioConfig.displayLabel(for: chatID))” on the server"
             lmConnectionState = .noModelLoaded
         } else {
-            lmStatus = "Connected · \(models.count) model\(models.count == 1 ? "" : "s")"
+            if !chatID.isEmpty {
+                activeChatModelDisplay = LMStudioConfig.displayLabel(for: chatID)
+                activeChatModelID = chatID
+            }
+            lmStatus = "Connected · \(models.count) model\(models.count == 1 ? "" : "s") in catalog"
             lmConnectionState = .connected
         }
     }
 
-    /// Picks the saved chat model when listed; otherwise the first `/v1/models` entry (never Gemma-specific).
+    /// Picks the in-memory loaded model; prefers saved config only when that id is actually loaded.
+    static func pickLoadedChatModel(
+        loadedLLMs: [LMStudioNativeModel],
+        preferredID: String
+    ) -> LMStudioNativeModel? {
+        guard !loadedLLMs.isEmpty else { return nil }
+        let pref = preferredID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !pref.isEmpty,
+           let match = loadedLLMs.first(where: { model in
+               model.loadedInstanceIDs.contains(pref)
+                   || model.key == pref
+                   || model.loadedInstanceIDs.contains(where: { $0 == pref })
+           }) {
+            return match
+        }
+        return loadedLLMs.first
+    }
+
+    /// Picks the saved chat model when listed; otherwise the first `/v1/models` entry (catalog fallback only).
     static func resolveChatModelID(current: String, available: [String]) -> String? {
         guard let first = available.first else { return nil }
         let chat = current.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -356,19 +446,23 @@ final class OpenWriteAIServices: ObservableObject {
         do {
             let models = try await lmClient.listModels()
             availableModels = models
-            let modelList = models.isEmpty
-                ? "Server reachable but no models loaded in LM Studio."
-                : "Server OK · \(models.count) model\(models.count == 1 ? "" : "s") loaded."
+            let nativeModels = (try? await lmClient.listNativeModels()) ?? []
+            syncActiveChatModel(nativeModels: nativeModels, catalogModels: models)
+            let loadedCount = nativeModels.filter { $0.type == "llm" && $0.isLoaded }.count
+            let modelList = loadedCount > 0
+                ? "Server OK · \(loadedCount) chat model\(loadedCount == 1 ? "" : "s") loaded."
+                : (models.isEmpty
+                    ? "Server reachable but no models loaded in LM Studio."
+                    : "Server OK · load a chat model in LM Studio.")
             let chatListed = models.contains { $0.id == lmConfig.chatModel }
             let embedListed = models.contains { $0.id == lmConfig.resolvedEmbeddingModel }
             var hints: [String] = [modelList]
             if !chatListed, !lmConfig.chatModel.isEmpty {
-                hints.append("Chat model “\(lmConfig.chatModel)” is not in the server list — pick a Chat model in Settings.")
+                hints.append("Chat model “\(lmConfig.chatModelDisplay)” is not in the server list — pick a Chat model in Settings.")
             }
             if !embedListed, lmConfig.usesDedicatedEmbeddingModel {
                 hints.append("Embedding model “\(lmConfig.resolvedEmbeddingModel)” is not loaded — set Embedding model or load it in LM Studio.")
             }
-            applyLMConnectionState(from: models)
             setActivity(.error("\(base)\n\n\(hints.joined(separator: " "))"))
             lastChatError = activityState.statusMessage
             return lastChatError ?? base
@@ -416,7 +510,8 @@ final class OpenWriteAIServices: ObservableObject {
                 documentID: doc.id,
                 title: doc.title,
                 blocks: doc.rootBlocks,
-                sourceFilename: nil
+                sourceFilename: nil,
+                documentUpdatedAt: doc.updatedAt
             )
         }
 
@@ -427,7 +522,8 @@ final class OpenWriteAIServices: ObservableObject {
                 documentID: file.documentID,
                 title: file.title,
                 blocks: blocks,
-                sourceFilename: file.sourceFilename
+                sourceFilename: file.sourceFilename,
+                documentUpdatedAt: file.modifiedAt
             )
         }
         return byID.values.sorted {
@@ -518,7 +614,8 @@ final class OpenWriteAIServices: ObservableObject {
                         documentID: entry.documentID,
                         title: entry.title,
                         blocks: entry.blocks,
-                        sourceFilename: entry.sourceFilename
+                        sourceFilename: entry.sourceFilename,
+                        documentUpdatedAt: entry.documentUpdatedAt
                     )
                     indexedDocumentFingerprints[entry.documentID] = Self.entryFingerprint(entry)
                 }
@@ -544,14 +641,16 @@ final class OpenWriteAIServices: ObservableObject {
             documentID: document.id,
             title: document.title,
             blocks: document.rootBlocks,
-            sourceFilename: nil
+            sourceFilename: nil,
+            documentUpdatedAt: document.updatedAt
         )
         do {
             try await indexer.index(
                 documentID: entry.documentID,
                 title: entry.title,
                 blocks: entry.blocks,
-                sourceFilename: entry.sourceFilename
+                sourceFilename: entry.sourceFilename,
+                documentUpdatedAt: entry.documentUpdatedAt
             )
             indexedDocumentFingerprints[document.id] = Self.entryFingerprint(entry)
             indexedChunkCount = await vectorStore.chunkCount

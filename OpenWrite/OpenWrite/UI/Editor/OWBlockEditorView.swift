@@ -11,22 +11,29 @@ struct OWBlockEditorView: View {
     var onActivateBlock: ((UUID) -> Void)? = nil
     var onSelectionChange: ((String?) -> Void)? = nil
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)? = nil
+    /// Notifies the outer `OpenWriteThemedScrollView` when AppKit remeasures block stack height.
+    var onLaidOutHeightChange: ((CGFloat) -> Void)? = nil
+    /// Insert pasted / dropped images after this block (nil → end of note).
+    var insertAfterBlockID: UUID? = nil
+    var onBlocksStructureChange: (() -> Void)? = nil
     /// SwiftUI `ScrollView` ignores AppKit intrinsic height — keep measured body height in sync.
     @State private var laidOutHeight: CGFloat = 480
 
     var body: some View {
         let layoutWidth = max(columnWidth, 320)
+        let stackHeight = max(laidOutHeight, 120)
         BlockEditorPasteHost(
             blocks: $blocks,
             laidOutHeight: $laidOutHeight,
             columnWidth: layoutWidth,
+            insertAfterBlockID: insertAfterBlockID,
             onActivateBlock: onActivateBlock,
             onSelectionChange: onSelectionChange,
-            onRefinePreset: onRefinePreset
+            onRefinePreset: onRefinePreset,
+            onLaidOutHeightChange: onLaidOutHeightChange,
+            onBlocksStructureChange: onBlocksStructureChange
         )
-        .frame(width: layoutWidth, alignment: .topLeading)
-        .frame(minHeight: max(laidOutHeight, 120), alignment: .topLeading)
-        .clipped()
+        .frame(width: layoutWidth, height: stackHeight, alignment: .topLeading)
     }
 }
 
@@ -145,12 +152,20 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     @Binding var blocks: [NoteBlock]
     @Binding var laidOutHeight: CGFloat
     var columnWidth: CGFloat
+    var insertAfterBlockID: UUID?
     var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
+    var onLaidOutHeightChange: ((CGFloat) -> Void)?
+    var onBlocksStructureChange: (() -> Void)?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(blocks: $blocks, laidOutHeight: $laidOutHeight)
+        Coordinator(
+            blocks: $blocks,
+            laidOutHeight: $laidOutHeight,
+            onLaidOutHeightChange: onLaidOutHeightChange,
+            onBlocksStructureChange: onBlocksStructureChange
+        )
     }
 
     func makeNSView(context: Context) -> BlockEditorPasteCaptureView {
@@ -199,6 +214,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     }
 
     func updateNSView(_ host: BlockEditorPasteCaptureView, context: Context) {
+        context.coordinator.insertAfterBlockID = insertAfterBlockID
         host.onPasteImage = {
             context.coordinator.ingestPastedImage()
         }
@@ -297,6 +313,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     final class Coordinator {
         var blocks: Binding<[NoteBlock]>
         var laidOutHeight: Binding<CGFloat>
+        var onLaidOutHeightChange: ((CGFloat) -> Void)?
+        var onBlocksStructureChange: (() -> Void)?
+        var insertAfterBlockID: UUID?
         var onSelectionChange: ((String?) -> Void)?
         var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
         weak var hostingView: NSHostingView<BlockEditorHostedContent>?
@@ -313,14 +332,22 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         private var contentGrowthRefreshScheduled = false
         private var heightPublishWorkItem: DispatchWorkItem?
         var lastPublishedHeight: CGFloat = 0
+        var lastNotifiedOuterHeight: CGFloat = 0
         var lastMeasuredContentRevision: UInt64 = 0
         private var pendingLayoutWidth: CGFloat?
         private var pendingContentRevision: UInt64 = 0
         private var imagePasteObserver: NSObjectProtocol?
 
-        init(blocks: Binding<[NoteBlock]>, laidOutHeight: Binding<CGFloat>) {
+        init(
+            blocks: Binding<[NoteBlock]>,
+            laidOutHeight: Binding<CGFloat>,
+            onLaidOutHeightChange: ((CGFloat) -> Void)?,
+            onBlocksStructureChange: (() -> Void)?
+        ) {
             self.blocks = blocks
             self.laidOutHeight = laidOutHeight
+            self.onLaidOutHeightChange = onLaidOutHeightChange
+            self.onBlocksStructureChange = onBlocksStructureChange
         }
 
         deinit {
@@ -343,7 +370,12 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
 
         func publishDocumentHeight(_ height: CGFloat) {
             let safe = max(Self.roundedLayoutHeight(height), 120)
+            let grew = safe > lastPublishedHeight + 0.5
             lastPublishedHeight = safe
+            if abs(lastNotifiedOuterHeight - safe) > 0.5 {
+                lastNotifiedOuterHeight = safe
+                onLaidOutHeightChange?(safe)
+            }
             guard abs(laidOutHeight.wrappedValue - safe) > 0.5 else { return }
             heightPublishWorkItem?.cancel()
             let work = DispatchWorkItem { [weak self] in
@@ -352,7 +384,8 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
                 self.laidOutHeight.wrappedValue = safe
             }
             heightPublishWorkItem = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02, execute: work)
+            let delay: TimeInterval = grew ? 0 : 0.02
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         }
 
         /// After static Welcome content settles, re-apply layout if measure grew (mirrors chat scroll host).
@@ -396,48 +429,25 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             return true
         }
 
-        func append(_ block: NoteBlock) {
-            blocks.wrappedValue.append(block)
-        }
-
-        func replaceBlock(id: UUID, with block: NoteBlock) {
-            guard let index = blocks.wrappedValue.firstIndex(where: { $0.id == id }) else { return }
-            blocks.wrappedValue[index] = block
-        }
-
-        func removeBlock(id: UUID) {
-            blocks.wrappedValue.removeAll { $0.id == id }
-        }
-
         func ingestPastedImage() {
-            guard ImagePasteSupport.shouldIngestImageFromPasteboard else { return }
-            ingestImageWithPlaceholder {
-                await ImagePasteSupport.finalizePastedImage()
-            }
+            BlockDocumentEditing.ingestImage(
+                into: blocks,
+                after: insertAfterBlockID,
+                onSettled: { [weak self] in
+                    self?.onBlocksStructureChange?()
+                }
+            )
         }
 
         func ingestImageFile(_ url: URL) {
-            ingestImageWithPlaceholder {
-                await ImagePasteSupport.finalizeImage(at: url)
-            }
-        }
-
-        func ingestImageWithPlaceholder(
-            finalize: @escaping () async -> NoteBlock?
-        ) {
-            let placeholder = ImagePasteSupport.placeholderBlock()
-            let blockID = placeholder.id
-            append(placeholder)
-            Task {
-                let finalized = await finalize()
-                await MainActor.run {
-                    if let finalized {
-                        replaceBlock(id: blockID, with: finalized)
-                    } else {
-                        removeBlock(id: blockID)
-                    }
+            BlockDocumentEditing.ingestImageFile(
+                at: url,
+                into: blocks,
+                after: insertAfterBlockID,
+                onSettled: { [weak self] in
+                    self?.onBlocksStructureChange?()
                 }
-            }
+            )
         }
 
         func blocksContentRevision(_ blocks: [NoteBlock]) -> UInt64 {
@@ -485,6 +495,6 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
 }
 
 private func applyEditorCanvasLayer(to hosting: NSHostingView<BlockEditorHostedContent>) {
-    let canvas = ThemeManager.shared.palette.editorCanvas
-    hosting.layer?.backgroundColor = NSColor(canvas).cgColor
+    hosting.wantsLayer = true
+    hosting.layer?.backgroundColor = NSColor.clear.cgColor
 }

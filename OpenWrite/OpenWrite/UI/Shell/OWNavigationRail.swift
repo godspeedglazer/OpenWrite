@@ -104,9 +104,12 @@ struct OWNavigationRail: View {
         }
         let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return docs }
-        return docs.filter {
-            $0.displayTitle.localizedCaseInsensitiveContains(q)
-                || $0.plainText.localizedCaseInsensitiveContains(q)
+        return docs.filter { document in
+            document.displayTitle.localizedCaseInsensitiveContains(q)
+                || document.plainText.localizedCaseInsensitiveContains(q)
+                || document.rootBlocks.contains {
+                    $0.text.localizedCaseInsensitiveContains(q)
+                }
         }
     }
 
@@ -118,6 +121,12 @@ struct OWNavigationRail: View {
                     navigationRailBrandHeader
                     spaceSwitcherStub
                     OWRailSearchField(text: $searchQuery)
+                    if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("\(filteredDocuments.count) result\(filteredDocuments.count == 1 ? "" : "s")")
+                            .font(OWTypography.caption2)
+                            .foregroundStyle(DesignTokens.Color.textSecondary)
+                            .padding(.horizontal, DesignTokens.Spacing.spacing2)
+                    }
                     objectsSection
                     DatabaseListView(
                         workbench: workbench,

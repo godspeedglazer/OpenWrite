@@ -17,6 +17,7 @@ struct ChatMessage: Identifiable, Hashable {
     let role: Role
     var text: String
     var sourceHits: [RetrievalHit]
+    var webSources: [WebSourceReference] = []
     var attachmentNames: [String]
     /// Image files sent with this user turn (for vision history on follow-up questions).
     var visionAttachments: [ChatAttachment] = []
@@ -94,8 +95,8 @@ final class ChatPanelModel: ObservableObject {
         persistComposerToggles()
 
         let effectiveAgent = agent.withVaultRetrieval(searchVaultEnabled)
-        let webURLs = webLookupEnabled ? WebURLExtractor.extract(from: query) : []
-        let fetchesWeb = webLookupEnabled && !webURLs.isEmpty
+        let explicitWebURLs = webLookupEnabled ? WebURLExtractor.extract(from: query) : []
+        let fetchesWeb = webLookupEnabled
         let attachmentNames = attachments.map(\.displayName)
 
         messages.append(
@@ -124,7 +125,8 @@ final class ChatPanelModel: ObservableObject {
         mutateMessage(at: assistantIndex) { message in
             message.pipelineSteps = Self.initialPipelineSteps(
                 searchesVault: searchesVault,
-                fetchesWeb: fetchesWeb
+                fetchesWeb: fetchesWeb,
+                webUsesSearch: fetchesWeb && explicitWebURLs.isEmpty
             )
         }
         if fetchesWeb {
@@ -153,34 +155,67 @@ final class ChatPanelModel: ObservableObject {
             var didEstablishStream = false
             do {
                 var webPages: [WebPageSnapshot] = []
+                var webChunks: [WebCorpusChunk] = []
+                var webSources: [WebSourceReference] = []
                 if fetchesWeb {
-                    webPages = await services.webFetch.fetchPages(urls: webURLs)
-                    guard assistantIndex < messages.count else { return }
-                    let count = webPages.count
-                    if count > 0 {
+                    let usedWebSearch = explicitWebURLs.isEmpty
+                    let profile: WebResearchProfile = effectiveAgent.id == AgentRegistry.researchQA.id
+                        ? .deep
+                        : .standard
+                    if usedWebSearch {
                         updatePipelineStepTitle(
                             at: assistantIndex,
                             id: "web",
-                            title: "Fetched \(count) page\(count == 1 ? "" : "s")"
+                            title: profile.expandQueries ? "Researching the web…" : "Searching the web…"
                         )
                     } else {
-                        updatePipelineStepTitle(at: assistantIndex, id: "web", title: "Couldn't fetch page")
+                        updatePipelineStepTitle(at: assistantIndex, id: "web", title: "Fetching page…")
+                    }
+
+                    let cached = await services.webResearchCache.pages(matching: query, limit: profile.maxURLsPerPass)
+                    let research = await WebResearchPipeline.run(
+                        query: query,
+                        explicitURLs: explicitWebURLs,
+                        fetcher: services.webFetch,
+                        profile: profile
+                    )
+                    webPages = research.pages
+                    webChunks = research.chunks
+                    webSources = research.sources
+                    if !cached.isEmpty {
+                        var merged = cached
+                        for page in webPages where !merged.contains(where: { $0.finalURL == page.finalURL }) {
+                            merged.append(page)
+                        }
+                        webPages = merged
+                        webChunks = WebCorpusChunker.chunks(from: webPages)
+                    }
+                    await services.webResearchCache.merge(webPages)
+                    guard assistantIndex < messages.count else { return }
+
+                    mutateMessage(at: assistantIndex) { message in
+                        message.webSources = webSources
+                    }
+
+                    let count = webPages.count
+                    if count > 0 {
+                        let passNote = research.passesCompleted > 1 ? " · \(research.passesCompleted) passes" : ""
+                        updatePipelineStepTitle(
+                            at: assistantIndex,
+                            id: "web",
+                            title: "Fetched \(count) page\(count == 1 ? "" : "s")\(passNote)"
+                        )
+                        setPipelineStep(at: assistantIndex, id: "web", status: .completed)
+                    } else {
+                        updatePipelineStepTitle(
+                            at: assistantIndex,
+                            id: "web",
+                            title: usedWebSearch ? "No web results" : "Couldn't fetch link"
+                        )
                         setPipelineStep(at: assistantIndex, id: "web", status: .failed)
                     }
                     await completePipelineStep(at: assistantIndex, id: "web", skipDelay: webPages.isEmpty)
-                    if webPages.isEmpty {
-                        mutateMessage(at: assistantIndex) { message in
-                            message.text = """
-                            Couldn't load the linked page. Turn on Web, use HTTPS, and check Settings if you use a domain allowlist.
-                            """
-                            message.isError = true
-                            message.isStreaming = false
-                        }
-                        markPipelineFailed(at: assistantIndex)
-                        clearPipelineTimingState(for: assistantIndex)
-                        services.setActivity(.idle)
-                        return
-                    }
+
                     if searchesVault {
                         activatePipelineStep(at: assistantIndex, id: "search")
                         services.setActivity(.retrieving)
@@ -196,6 +231,7 @@ final class ChatPanelModel: ObservableObject {
                     agent: effectiveAgent,
                     attachments: attachments,
                     webPages: webPages,
+                    webChunks: webChunks,
                     searchesVault: searchesVault
                 )
 
@@ -233,10 +269,11 @@ final class ChatPanelModel: ObservableObject {
                 if messages[assistantIndex].pipelineSteps.first(where: { $0.id == "connect" })?.status != .active {
                     activatePipelineStep(at: assistantIndex, id: "connect")
                 }
+                await services.refreshLoadedChatModel()
                 updatePipelineStepTitle(
                     at: assistantIndex,
                     id: "connect",
-                    title: "Connecting to \(services.lmConfig.chatModelDisplay)…"
+                    title: "Connecting to \(services.composerChatModelLabel)…"
                 )
 
                 // Do not complete "connect" until the HTTP stream succeeds (first token or `.streaming`).
@@ -252,7 +289,7 @@ final class ChatPanelModel: ObservableObject {
                     if !connectStepFinished, Date() >= connectDeadline {
                         throw ChatPanelStreamError(
                             message: """
-                            Timed out connecting to \(services.lmConfig.chatModelDisplay) after \
+                            Timed out connecting to \(services.composerChatModelLabel) after \
                             \(Int(AISafetyLimits.chatStreamTimeoutSeconds)) seconds. \
                             Start LM Studio (or your configured server) and load the chat model.
                             """
@@ -324,7 +361,7 @@ final class ChatPanelModel: ObservableObject {
                     let diagnosed = await services.diagnoseChatFailure(
                         ChatPanelStreamError(
                             message: """
-                            Timed out connecting to \(services.lmConfig.chatModelDisplay). \
+                            Timed out connecting to \(services.composerChatModelLabel). \
                             Start LM Studio and load the chat model, or change Chat model in Settings.
                             """
                         )
@@ -576,6 +613,7 @@ final class ChatPanelModel: ObservableObject {
         agent: AgentConfig,
         attachments: [ChatAttachment],
         webPages: [WebPageSnapshot],
+        webChunks: [WebCorpusChunk],
         searchesVault: Bool
     ) async throws -> (RAGContext, Bool) {
         do {
@@ -585,7 +623,8 @@ final class ChatPanelModel: ObservableObject {
                         query: query,
                         agent: agent,
                         attachments: attachments,
-                        webPages: webPages
+                        webPages: webPages,
+                        webChunks: webChunks
                     )
                 }
                 return (context, false)
@@ -594,7 +633,8 @@ final class ChatPanelModel: ObservableObject {
                 query: query,
                 agent: agent,
                 attachments: attachments,
-                webPages: webPages
+                webPages: webPages,
+                webChunks: webChunks
             )
             return (context, false)
         } catch is CancellationError {
@@ -608,11 +648,15 @@ final class ChatPanelModel: ObservableObject {
                     limit: agent.effectiveChunkLimit
                 )) ?? []
             }
+            let resolvedChunks = webChunks.isEmpty && !webPages.isEmpty
+                ? WebCorpusChunker.chunks(from: webPages)
+                : webChunks
             let fallback = RAGContext(
                 query: sanitized,
                 hits: hits,
                 attachmentHits: ChatAttachmentStore.retrievalHits(from: attachments),
-                webPages: webPages
+                webPages: webPages,
+                webChunks: resolvedChunks
             )
             return (fallback, true)
         } catch {
@@ -620,10 +664,15 @@ final class ChatPanelModel: ObservableObject {
         }
     }
 
-    private static func initialPipelineSteps(searchesVault: Bool, fetchesWeb: Bool = false) -> [ChatPipelineStep] {
+    private static func initialPipelineSteps(
+        searchesVault: Bool,
+        fetchesWeb: Bool = false,
+        webUsesSearch: Bool = false
+    ) -> [ChatPipelineStep] {
         var steps: [ChatPipelineStep] = []
         if fetchesWeb {
-            steps.append(ChatPipelineStep(id: "web", title: "Fetching page…", status: .pending))
+            let webTitle = webUsesSearch ? "Searching the web…" : "Fetching page…"
+            steps.append(ChatPipelineStep(id: "web", title: webTitle, status: .pending))
         }
         if searchesVault {
             steps.append(ChatPipelineStep(id: "search", title: "Searching vault…", status: .pending))
@@ -733,7 +782,7 @@ final class ChatPanelModel: ObservableObject {
             at: index,
             id: "connect",
             title: AIActivityState.connecting.connectedStatus(
-                modelDisplay: services.lmConfig.chatModelDisplay
+                modelDisplay: services.composerChatModelLabel
             )
         )
         services.markChatStreamConnected()
@@ -924,6 +973,7 @@ struct ChatPanelView: View {
     @Environment(ThemeManager.self) private var themeManager
     @EnvironmentObject private var aiServices: OpenWriteAIServices
     @EnvironmentObject private var workbench: WorkbenchState
+    @Environment(\.agentsWorkbenchPresentation) private var agentsWorkbench
     @StateObject private var model = ChatPanelModel()
     /// True when the transcript bottom sentinel is visible — auto-scroll only while pinned.
     @State private var chatPinnedToBottom = true
@@ -934,7 +984,11 @@ struct ChatPanelView: View {
 
     /// Assist strip owns top chrome at root; avoid duplicate headers and orphan icon rows.
     private var showsEmbeddedAssistStripChrome: Bool {
-        navigation.isAtRoot
+        navigation.isAtRoot && !agentsWorkbench
+    }
+
+    private var showsConversationHeader: Bool {
+        !agentsWorkbench && !showsEmbeddedAssistStripChrome
     }
 
     /// Composer sits in `safeAreaInset`; only a small slack gap is needed above it.
@@ -968,6 +1022,7 @@ struct ChatPanelView: View {
     }
 
     private var effectiveScreen: ChatPanelScreen {
+        if agentsWorkbench { return .conversation }
         if navigation.current == .chatThread {
             return .conversation
         }
@@ -1043,23 +1098,24 @@ struct ChatPanelView: View {
 
     private var conversationPanel: some View {
         VStack(spacing: 0) {
-            if !showsEmbeddedAssistStripChrome {
+            if showsConversationHeader {
                 conversationHeader
             }
             ChatTranscriptView(
                 messages: model.messages,
                 scrollToken: model.messages.chatScrollToken,
                 bottomPadding: transcriptBottomPadding,
-                background: palette.background,
+                background: agentsWorkbench ? .clear : palette.background,
                 isPinnedToBottom: $chatPinnedToBottom
             )
+            .layoutPriority(1)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .clipped()
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ChatComposerView(model: model, measuredHeight: $measuredComposerHeight)
         }
-        .background(palette.background)
+        .background(agentsWorkbench ? Color.clear : palette.background)
         .task {
             await aiServices.checkConnection()
         }

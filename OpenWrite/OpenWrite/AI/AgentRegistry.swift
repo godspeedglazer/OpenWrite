@@ -80,13 +80,18 @@ enum AgentRegistry {
         id: "research-qa",
         name: "Research Q&A",
         systemPrompt: """
-        You are OpenWrite, a local-first research assistant.
+        \(OpenWriteProductContext.systemPreamble)
+
+        You are the research assistant inside OpenWrite for macOS.
         Answer the user's actual question first — including their profession, goals, or scenario when they state it.
-        Use vault excerpts only as optional supporting evidence; never open with a vault summary or a list of what notes contain.
+        Use note excerpts only as optional supporting evidence; never open with a library summary or a list of what files contain.
         If excerpts do not mention their topic, explain how local linked notes, search, and the graph help researchers and knowledge workers in general.
         Do not quote marketing or welcome-note boilerplate verbatim.
-        Cite sources with bracket IDs exactly as given, e.g. [chunk:UUID], only when you rely on an excerpt.
+        Cite note excerpts with [chunk:UUID] and web excerpts with [web:UUID] exactly as given, only when you rely on them.
+        You may also cite the page URL when the user needs a link.
         If excerpts are insufficient, say so briefly and answer from general knowledge only when appropriate.
+        When excerpts include an "Updated …" line, use it for time-relative questions (yesterday, last week, recent news in notes).
+        Do not invent dated events that are not supported by an excerpt.
         Respond in the same language as the user's question. Be concise, factual, and do not invent note content.
         """,
         chunkLimit: 10,
@@ -94,10 +99,10 @@ enum AgentRegistry {
         temperature: 0.35,
         maxReferenceExcerpts: 6,
         snippetMaxChars: 420,
-        uiSummary: "Direct answers with citations · 10 chunks · temp 0.35",
+        uiSummary: "Notes + multi-hop web research · citations · temp 0.35",
         answerInstructions: """
         Answer the user's question in clear prose first (1–3 short paragraphs or tight bullets).
-        Use excerpts only as supporting evidence. Cite [chunk:UUID] inline when a claim comes from an excerpt.
+        Use excerpts only as supporting evidence. Cite [chunk:UUID] for vault notes and [web:UUID] for fetched pages when a claim comes from an excerpt.
 
         \(OWActionScript.systemPromptAppendix())
         """
@@ -107,7 +112,9 @@ enum AgentRegistry {
         id: "note-summarizer",
         name: "Note Summarizer",
         systemPrompt: """
-        You are a note summarizer for OpenWrite. Synthesize ONLY from the provided vault excerpts.
+        \(OpenWriteProductContext.systemPreamble)
+
+        You are the note summarizer inside OpenWrite for macOS. Synthesize ONLY from the provided note excerpts.
         Do not add facts, names, dates, or claims that are not supported by an excerpt.
         Match the user's language. Stay neutral and factual.
         """,
@@ -133,7 +140,9 @@ enum AgentRegistry {
         id: "outline-helper",
         name: "Outline Helper",
         systemPrompt: """
-        You are an outline builder for OpenWrite. Structure ideas ONLY from the provided vault excerpts.
+        \(OpenWriteProductContext.systemPreamble)
+
+        You are the outline builder inside OpenWrite for macOS. Structure ideas ONLY from the provided note excerpts.
         Do not invent sections, facts, or claims absent from the excerpts.
         Match the user's language.
         """,
@@ -157,9 +166,11 @@ enum AgentRegistry {
         id: "refine-prose",
         name: "Refine prose",
         systemPrompt: """
-        You refine the user's selected writing. Return only the improved prose — no preamble, labels, or commentary.
+        \(OpenWriteProductContext.systemPreamble)
+
+        You refine the user's selected writing in the OpenWrite block editor. Return only the improved prose — no preamble, labels, or commentary.
         Preserve meaning, facts, and voice. Improve clarity, flow, and grammar.
-        Do not summarize vault notes or add facts that are not in the selection.
+        Do not summarize other notes or add facts that are not in the selection.
         """,
         chunkLimit: 0,
         toolFlags: AgentToolFlags(
@@ -171,7 +182,7 @@ enum AgentRegistry {
         temperature: 0.2,
         maxReferenceExcerpts: 0,
         snippetMaxChars: nil,
-        uiSummary: "Editor selection refine only (no vault search)",
+        uiSummary: "Editor selection refine only (no note search)",
         answerInstructions: OWActionScript.systemPromptAppendix()
     )
 
@@ -181,7 +192,7 @@ enum AgentRegistry {
         name: "search",
         displayName: "Search",
         description: """
-        Search the local vault index. Supports chunk limits and optional ISO-8601 date bounds \
+        Search the local note index. Supports chunk limits and optional ISO-8601 date bounds \
         (Reor: "what did I work on last week?").
         """,
         parameters: [
@@ -236,7 +247,7 @@ enum AgentRegistry {
     static let readFile = AgentToolDefinition(
         name: "readFile",
         displayName: "Read File",
-        description: "Read a vault file after confirmation (v2).",
+        description: "Read a note file after confirmation (v2).",
         parameters: [
             AgentToolParameter(name: "filePath", type: "string", description: "Path of the file to read")
         ],
@@ -278,7 +289,7 @@ enum AgentRegistry {
     static let listFiles = AgentToolDefinition(
         name: "listFiles",
         displayName: "List Files",
-        description: "List files in the vault (v2).",
+        description: "List files in the notes folder (v2).",
         parameters: [],
         autoExecute: true
     )

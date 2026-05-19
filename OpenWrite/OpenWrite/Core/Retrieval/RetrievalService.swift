@@ -18,7 +18,7 @@ struct RetrievalHit: Identifiable, Hashable, Sendable {
         self.blockID = chunk.blockID
         self.chunkIndex = chunk.chunkIndex
         self.score = score
-        self.snippet = AIInput.sanitizeSnippet(chunk.text, maxChars: AISafetyLimits.maxSnippetCharsPerChunk)
+        self.snippet = AIInput.sanitizeSnippet(chunk.snippetText, maxChars: AISafetyLimits.maxSnippetCharsPerChunk)
     }
 
     /// Synthetic hit for a chat file attachment (not in the vector index).
@@ -59,7 +59,8 @@ struct HybridRetrievalService: RetrievalService {
 
     func search(query: String, limit: Int) async throws -> [RetrievalHit] {
         guard let sanitized = AIInput.sanitizeQuery(query) else { return [] }
-        let pool = max(limit, AISafetyLimits.prefilterCandidateCount)
+        let analysis = RetrievalQueryAnalysis.analyze(sanitized)
+        let pool = max(limit * 2, AISafetyLimits.rerankCandidateCount)
 
         let queryVector = try await embeddings.embed(text: sanitized)
         let vectorResults = await vectorStore.search(queryVector: queryVector, limit: pool)
@@ -72,14 +73,20 @@ struct HybridRetrievalService: RetrievalService {
         }
 
         let vectorPool = vectorHits.map(\.chunk)
-        let keywordHits = ranker.keywordHits(query: sanitized, in: vectorPool, limit: pool)
+        let keywordHits = ranker.keywordHits(
+            query: sanitized,
+            in: vectorPool,
+            limit: pool,
+            expandedTokens: analysis.expandedTokens
+        )
 
-        var ranked = ranker.rank(vectorHits: vectorHits, keywordHits: keywordHits, limit: limit)
+        var ranked = ranker.rank(vectorHits: vectorHits, keywordHits: keywordHits, limit: pool)
         if ranked.isEmpty {
             let lexical = ranker.keywordHits(
                 query: sanitized,
                 in: await vectorStore.allChunks(),
-                limit: limit
+                limit: pool,
+                expandedTokens: analysis.expandedTokens
             )
             ranked = lexical.map {
                 HybridRankCandidate(
@@ -90,15 +97,42 @@ struct HybridRetrievalService: RetrievalService {
                 )
             }
         }
+
+        ranked = RetrievalDiversity.applyRecencyBoost(ranked, isTemporal: analysis.isTemporal)
+        ranked = RetrievalDiversity.capPerDocument(
+            ranked,
+            limit: limit,
+            maxPerDocument: AISafetyLimits.maxChunksPerDocumentInResults
+        )
         return ranked.map { RetrievalHit(chunk: $0.chunk, score: $0.combinedScore) }
     }
 
     func keywordSearch(query: String, limit: Int) async throws -> [RetrievalHit] {
         guard let sanitized = AIInput.sanitizeQuery(query) else { return [] }
+        let analysis = RetrievalQueryAnalysis.analyze(sanitized)
         let pool = await vectorStore.allChunks()
         guard !pool.isEmpty else { return [] }
-        let hits = ranker.keywordHits(query: sanitized, in: pool, limit: limit)
-        return hits.map { RetrievalHit(chunk: $0.chunk, score: $0.score) }
+        let hits = ranker.keywordHits(
+            query: sanitized,
+            in: pool,
+            limit: max(limit * 2, AISafetyLimits.rerankCandidateCount),
+            expandedTokens: analysis.expandedTokens
+        )
+        var ranked = hits.map {
+            HybridRankCandidate(
+                chunk: $0.chunk,
+                vectorScore: 0,
+                keywordScore: $0.score,
+                combinedScore: $0.score
+            )
+        }
+        ranked = RetrievalDiversity.applyRecencyBoost(ranked, isTemporal: analysis.isTemporal)
+        ranked = RetrievalDiversity.capPerDocument(
+            ranked,
+            limit: limit,
+            maxPerDocument: AISafetyLimits.maxChunksPerDocumentInResults
+        )
+        return ranked.map { RetrievalHit(chunk: $0.chunk, score: $0.combinedScore) }
     }
 
     func related(to documentID: UUID, limit: Int) async throws -> [RetrievalHit] {

@@ -58,6 +58,10 @@ out/
 coverage/
 *.tsbuildinfo
 
+# --- OpenWrite CLI (SwiftPM; sync-core-sources.sh generates OpenWriteCore) ---
+Tools/OpenWriteCLI/Sources/OpenWriteCore/
+Tools/OpenWriteCLI/Fixtures/test-index.json
+
 # --- Xcode / Swift ---
 DerivedData/
 *.xcuserstate

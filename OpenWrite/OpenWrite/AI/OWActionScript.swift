@@ -38,7 +38,7 @@ enum OWActionScript {
 
         ```ow
         insert paragraph "Optional caption"
-        insert todo unchecked "Task label"
+        insert todo unchecked "Task label only — no checked/unchecked words inside quotes"
         insert h2 "Section title"
         insert checklist
           First item
@@ -48,7 +48,11 @@ enum OWActionScript {
         ```
 
         Use `insert` kinds: paragraph, bullet, todo, h1, h2, h3, quote, callout, code, divider, wikilink.
-        For todos use `checked` or `unchecked`. Checklist items are indented lines after `insert checklist`.
+        For todos/checkboxes, set state with `checked` or `unchecked` before the quoted label — never put those words inside the quotes.
+        Correct: `insert todo unchecked "Document the release delta"`
+        Wrong: `insert todo (unchecked): unchecked "Document the release delta"`
+        The app renders [ ] / [x] from the flag; the label is only human-readable task text.
+        Checklist items are indented lines after `insert checklist`.
         `graph refresh` asks the app to reload the link graph view.
         """
     }
@@ -166,28 +170,101 @@ enum OWActionScript {
     }
 
     private static func parseInsertTail(_ tail: String) -> OWAction? {
-        var working = tail
+        var working = tail.trimmingCharacters(in: .whitespaces)
         var checked: Bool?
-        for flag in ["unchecked", "checked"] {
-            if working.lowercased().hasPrefix(flag) {
-                checked = flag == "checked"
-                working = String(working.dropFirst(flag.count)).trimmingCharacters(in: .whitespaces)
-                break
-            }
-        }
+
+        working = consumeLeadingCheckFlag(from: working, checked: &checked)
 
         guard let firstToken = working.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true).first else {
             return nil
         }
         let kindToken = String(firstToken).lowercased()
-        let textTail = working.dropFirst(firstToken.count).trimmingCharacters(in: .whitespaces)
-        let text = parseQuoted(Substring(textTail)) ?? textTail.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        var textTail = String(working.dropFirst(firstToken.count)).trimmingCharacters(in: .whitespaces)
+        textTail = consumeCheckStatePrefix(from: textTail, checked: &checked)
+
+        var text = parseQuoted(Substring(textTail)) ?? textTail.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        if kindToken == "todo" || kindToken == "task" || kindToken == "checkbox" {
+            text = sanitizeTodoLabel(text)
+        }
 
         guard let kind = mapKind(kindToken) else { return nil }
         if kind == .todo {
             return .insertBlock(kind: .todo, text: text, checked: checked ?? false)
         }
         return .insertBlock(kind: kind, text: text, checked: nil)
+    }
+
+    /// `unchecked todo …` / `insert unchecked todo …` (flag before kind).
+    private static func consumeLeadingCheckFlag(from working: String, checked: inout Bool?) -> String {
+        var remainder = working
+        while let state = peelLeadingCheckFlag(from: remainder) {
+            if checked == nil { checked = state.value }
+            remainder = state.remainder
+        }
+        return remainder
+    }
+
+    /// `(unchecked):`, `unchecked`, or `todo (unchecked):` tail after the kind token.
+    private static func consumeCheckStatePrefix(from textTail: String, checked: inout Bool?) -> String {
+        var remainder = textTail
+        while let state = peelCheckStateToken(from: remainder) {
+            if checked == nil { checked = state.value }
+            remainder = state.remainder
+        }
+        return remainder
+    }
+
+    private struct CheckFlagPeel {
+        let value: Bool
+        let remainder: String
+    }
+
+    private static func peelLeadingCheckFlag(from s: String) -> CheckFlagPeel? {
+        let trimmed = s.trimmingCharacters(in: .whitespaces)
+        for (flag, value) in [("unchecked", false), ("checked", true)] {
+            if trimmed.lowercased().hasPrefix(flag) {
+                let rest = String(trimmed.dropFirst(flag.count)).trimmingCharacters(in: .whitespaces)
+                return CheckFlagPeel(value: value, remainder: rest)
+            }
+        }
+        return nil
+    }
+
+    private static func peelCheckStateToken(from s: String) -> CheckFlagPeel? {
+        if let leading = peelLeadingCheckFlag(from: s) { return leading }
+        let trimmed = s.trimmingCharacters(in: .whitespaces)
+        for (flag, value) in [("unchecked", false), ("checked", true)] {
+            let wrapped = "(\(flag))"
+            if trimmed.lowercased().hasPrefix(wrapped) {
+                var rest = String(trimmed.dropFirst(wrapped.count)).trimmingCharacters(in: .whitespaces)
+                if rest.first == ":" {
+                    rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
+                }
+                return CheckFlagPeel(value: value, remainder: rest)
+            }
+        }
+        return nil
+    }
+
+    /// Strips duplicate `checked` / `unchecked` words models often echo inside quotes.
+    static func sanitizeTodoLabel(_ text: String) -> String {
+        var s = text.trimmingCharacters(in: .whitespaces)
+        if s.count >= 2, s.first == "\"", s.last == "\"" {
+            s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
+        }
+        while true {
+            let lower = s.lowercased()
+            if lower.hasPrefix("unchecked ") {
+                s = String(s.dropFirst("unchecked ".count)).trimmingCharacters(in: .whitespaces)
+            } else if lower.hasPrefix("checked ") {
+                s = String(s.dropFirst("checked ".count)).trimmingCharacters(in: .whitespaces)
+            } else if lower == "unchecked" || lower == "checked" {
+                s = ""
+            } else {
+                break
+            }
+        }
+        return s
     }
 
     private static func parseQuoted(_ raw: Substring) -> String? {

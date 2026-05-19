@@ -2,7 +2,7 @@ import Foundation
 
 /// Idempotent demo corpus — interconnected [[wikilinks]] for graph and object-type showcases.
 enum DemoVaultSeeder {
-    static let seedVersion = "2026-05-18-graph-v2"
+    static let seedVersion = "2026-05-18-graph-v3"
     static let hubDocumentID = UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000001")!
 
     static func documents() -> [VaultDocument] {
@@ -57,6 +57,23 @@ enum DemoVaultSeeder {
         NoteBlock.todoBlock(text: text, checked: checked)
     }
 
+    private static func linkChainBlocks(previous: String?, next: String?, step: Int) -> [NoteBlock] {
+        var blocks: [NoteBlock] = [
+            h2("Chain step \(step)"),
+            para("Follow the directed edges on Graph — each page links to the next in the chain.")
+        ]
+        if let previous {
+            blocks.append(link(previous))
+        }
+        if let next {
+            blocks.append(link(next))
+        }
+        blocks.append(link("Arrow Tour"))
+        blocks.append(link("Graph Tour"))
+        blocks.append(link("OpenWrite Demo Space"))
+        return blocks
+    }
+
     private static func atlasClusterBlocks(node: Int, peers: [Int], blurb: String) -> [NoteBlock] {
         var blocks: [NoteBlock] = [
             para(blurb),
@@ -100,7 +117,10 @@ enum DemoVaultSeeder {
                 h2("Graph atlas"),
                 link("Graph Atlas 01"),
                 link("Graph Atlas 06"),
-                link("Graph Atlas 12")
+                link("Graph Atlas 12"),
+                h2("Arrows & chains"),
+                link("Arrow Tour"),
+                link("Link Chain 01")
             ]
         ),
         PageSpec(
@@ -558,6 +578,71 @@ enum DemoVaultSeeder {
             icon: "⑫",
             cover: nil,
             blocks: atlasClusterBlocks(node: 12, peers: [11, 1, 5], blurb: "Twelfth atlas node — completes the ring.")
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-00000000003C")!,
+            title: "Arrow Tour",
+            pageType: .note,
+            icon: "→",
+            cover: .anytypeCalm,
+            blocks: [
+                h2("Test directed edges"),
+                para("Open Graph and zoom the link chain — arrows show wikilink direction between notes."),
+                link("Link Chain 01"),
+                link("Link Chain 06"),
+                link("Graph Atlas 01"),
+                link("Graph Tour"),
+                link("OpenWrite Demo Space"),
+                todo("Drag nodes to stress-test edge routing", checked: false)
+            ]
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000030")!,
+            title: "Link Chain 01",
+            pageType: .note,
+            icon: "①",
+            cover: nil,
+            blocks: linkChainBlocks(previous: nil, next: "Link Chain 02", step: 1)
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000031")!,
+            title: "Link Chain 02",
+            pageType: .note,
+            icon: "②",
+            cover: nil,
+            blocks: linkChainBlocks(previous: "Link Chain 01", next: "Link Chain 03", step: 2)
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000032")!,
+            title: "Link Chain 03",
+            pageType: .note,
+            icon: "③",
+            cover: nil,
+            blocks: linkChainBlocks(previous: "Link Chain 02", next: "Link Chain 04", step: 3)
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000033")!,
+            title: "Link Chain 04",
+            pageType: .note,
+            icon: "④",
+            cover: nil,
+            blocks: linkChainBlocks(previous: "Link Chain 03", next: "Link Chain 05", step: 4)
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000034")!,
+            title: "Link Chain 05",
+            pageType: .note,
+            icon: "⑤",
+            cover: nil,
+            blocks: linkChainBlocks(previous: "Link Chain 04", next: "Link Chain 06", step: 5)
+        ),
+        PageSpec(
+            id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-000000000035")!,
+            title: "Link Chain 06",
+            pageType: .note,
+            icon: "⑥",
+            cover: nil,
+            blocks: linkChainBlocks(previous: "Link Chain 05", next: nil, step: 6)
         ),
         PageSpec(
             id: UUID(uuidString: "E1C00002-7B2A-4E8F-9D01-00000000001C")!,

@@ -6,7 +6,8 @@ protocol IndexerService: Sendable {
         documentID: UUID,
         title: String,
         blocks: [NoteBlock],
-        sourceFilename: String?
+        sourceFilename: String?,
+        documentUpdatedAt: Date?
     ) async throws
     func remove(documentID: UUID) async throws
     func rebuildAll(entries: [VaultIndexEntry]) async throws
@@ -21,13 +22,15 @@ struct PipelineIndexerService: IndexerService {
         documentID: UUID,
         title: String,
         blocks: [NoteBlock],
-        sourceFilename: String?
+        sourceFilename: String?,
+        documentUpdatedAt: Date?
     ) async throws {
         try await pipeline.ingest(
             documentID: documentID,
             title: title,
             blocks: blocks,
             sourceFilename: sourceFilename,
+            documentUpdatedAt: documentUpdatedAt,
             isRebuild: false
         )
     }
@@ -54,14 +57,16 @@ struct InMemoryIndexerService: IndexerService {
         documentID: UUID,
         title: String,
         blocks: [NoteBlock],
-        sourceFilename: String?
+        sourceFilename: String?,
+        documentUpdatedAt: Date?
     ) async throws {
         await vectorStore.remove(documentID: documentID)
         let chunks = TextChunker.chunks(
             documentID: documentID,
             title: title,
             blocks: blocks,
-            sourceFilename: sourceFilename
+            sourceFilename: sourceFilename,
+            documentUpdatedAt: documentUpdatedAt
         )
         for chunk in chunks {
             let vector = try await embeddings.embed(text: chunk.text)
@@ -80,7 +85,8 @@ struct InMemoryIndexerService: IndexerService {
                 documentID: entry.documentID,
                 title: entry.title,
                 blocks: entry.blocks,
-                sourceFilename: entry.sourceFilename
+                sourceFilename: entry.sourceFilename,
+                documentUpdatedAt: entry.documentUpdatedAt
             )
         }
     }
@@ -94,12 +100,14 @@ struct NoOpIndexerService: IndexerService {
         documentID: UUID,
         title: String,
         blocks: [NoteBlock],
-        sourceFilename: String?
+        sourceFilename: String?,
+        documentUpdatedAt: Date?
     ) async throws {
         _ = documentID
         _ = title
         _ = blocks
         _ = sourceFilename
+        _ = documentUpdatedAt
     }
 
     func remove(documentID: UUID) async throws {

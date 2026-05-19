@@ -30,6 +30,13 @@ final class WorkbenchState: ObservableObject {
     }
     private var vaultTypeFilters: [UUID: PageType?] = [:]
     private var chromeSnapshotBeforeFocus: (sidebar: Bool, assist: Bool)?
+    /// Restores sideline AI assist when leaving the Agents center tab.
+    private var assistExpandedBeforeAgents: Bool?
+
+    var isAgentsWorkbench: Bool {
+        if case .agents = centerTab { return true }
+        return false
+    }
 
     init(selectedSection: SidebarSection = .notes) {
         self.selectedSection = selectedSection
@@ -56,18 +63,42 @@ final class WorkbenchState: ObservableObject {
     }
 
     func showGraph() {
+        restoreAssistChromeLeavingAgents()
         selectedSection = .graph
         centerTab = .graph
     }
 
     func showEditor() {
+        restoreAssistChromeLeavingAgents()
         selectedSection = .notes
         centerTab = .editor
     }
 
+    func showAgents() {
+        enterAgentsChrome()
+        centerTab = .agents
+    }
+
     func showDatabase(_ database: OWDatabase) {
+        restoreAssistChromeLeavingAgents()
         selectedSection = .notes
         centerTab = .database(database)
+    }
+
+    private func enterAgentsChrome() {
+        guard centerTab != .agents else { return }
+        assistExpandedBeforeAgents = aiAssistExpanded
+        aiAssistExpanded = false
+        persistChromePreferences()
+    }
+
+    private func restoreAssistChromeLeavingAgents() {
+        guard centerTab == .agents else { return }
+        if let prior = assistExpandedBeforeAgents {
+            aiAssistExpanded = prior
+        }
+        assistExpandedBeforeAgents = nil
+        persistChromePreferences()
     }
 
     func clearVaultTypeFilter(for vaultID: UUID?) {

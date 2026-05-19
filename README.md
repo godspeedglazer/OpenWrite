@@ -1,6 +1,6 @@
 # OpenWrite
 
-Native macOS local-first writer: encrypted vault, Note Design Language (NDL), and LM Studio–backed AI research.
+Native macOS local-first writer: on-disk notes, Note Design Language (NDL), and LM Studio–backed AI research.
 
 ## Handoff (new owners & agents)
 
@@ -21,6 +21,19 @@ xcodebuild -scheme OpenWrite -configuration Debug build
 ```
 
 Open `OpenWrite/OpenWrite.xcodeproj` in Xcode and run the **OpenWrite** target.
+
+## Command-line tools
+
+Native Swift binaries (not shell scripts) for indexing and retrieval probes:
+
+```bash
+cd Tools/OpenWriteCLI && make install
+openwrite index
+openwrite query "your question" --limit 5
+openwrite-stats
+```
+
+See [Tools/OpenWriteCLI/README.md](Tools/OpenWriteCLI/README.md).
 
 ## Documentation
 

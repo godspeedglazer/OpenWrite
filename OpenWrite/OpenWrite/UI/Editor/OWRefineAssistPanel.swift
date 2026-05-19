@@ -10,10 +10,16 @@ struct OWRefineAssistPanel: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            OWChatStatusStepper(steps: inlineAssist.refinePipelineSteps, showsStreamingDots: inlineAssist.isRefining)
-                .frame(width: DesignTokens.Layout.refinePanelRailWidth)
-                .padding(.vertical, DesignTokens.Spacing.spacing3)
-                .padding(.leading, DesignTokens.Spacing.spacing2)
+            OWChatStatusStepper(
+                steps: inlineAssist.refinePipelineSteps,
+                showsStreamingDots: inlineAssist.refinePipelineSteps.contains {
+                    $0.id == "model" && $0.status == .active
+                },
+                layout: .refineRail
+            )
+            .frame(width: DesignTokens.Layout.refinePanelStepperWidth, alignment: .leading)
+            .padding(.vertical, DesignTokens.Spacing.spacing3)
+            .padding(.leading, DesignTokens.Spacing.spacing2)
 
             Rectangle()
                 .fill(palette.borderSubtle)
@@ -34,8 +40,11 @@ struct OWRefineAssistPanel: View {
             maxHeight: DesignTokens.Layout.refinePanelMaxHeight,
             alignment: .topLeading
         )
-        .background(palette.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.large, style: .continuous))
+        .padding(DesignTokens.Spacing.spacing1)
+        .background(
+            palette.surfaceElevated,
+            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.large, style: .continuous)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: DesignTokens.Radius.large, style: .continuous)
                 .strokeBorder(palette.borderSubtle, lineWidth: DesignTokens.Layout.borderWidth)
@@ -44,6 +53,7 @@ struct OWRefineAssistPanel: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Refine assistant")
         .animation(.easeInOut(duration: 0.32), value: inlineAssist.refinePipelineSteps)
+        .onExitCommand { inlineAssist.dismissRefine() }
     }
 
     private var header: some View {
@@ -88,70 +98,50 @@ struct OWRefineAssistPanel: View {
     }
 
     private var refiningBody: some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-            OWBrandLogoSpinner(size: 36, periodSeconds: 2.2)
-            Text(inlineAssist.refineActiveStepTitle)
-                .font(OWTypography.callout)
-                .foregroundStyle(palette.textSecondary)
-            if let preview = inlineAssist.latestSnapshot?.selectedText {
-                Text(preview)
-                    .font(OWTypography.caption)
-                    .foregroundStyle(palette.textTertiary)
-                    .lineLimit(4)
-                    .padding(DesignTokens.Spacing.spacing2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        palette.editorCanvas.opacity(0.65),
-                        in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
-                    )
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                HStack(alignment: .center, spacing: DesignTokens.Spacing.spacing2) {
+                    OWBrandLogoSpinner(size: 28, periodSeconds: 2.2)
+                    Text(inlineAssist.refineActiveStepTitle)
+                        .font(OWTypography.callout)
+                        .foregroundStyle(palette.textSecondary)
+                }
+
+                if !inlineAssist.streamingProse.isEmpty {
+                    Text(AIInput.stripChunkReferences(inlineAssist.streamingProse))
+                        .font(OWTypography.body)
+                        .lineSpacing(OWTypography.bodyLineSpacing)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else if let preview = inlineAssist.latestSnapshot?.selectedText {
+                    Text(preview)
+                        .font(OWTypography.caption)
+                        .foregroundStyle(palette.textTertiary)
+                        .lineLimit(4)
+                        .padding(DesignTokens.Spacing.spacing2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            palette.editorCanvas.opacity(0.65),
+                            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
+                        )
+                }
             }
+            .padding(DesignTokens.Spacing.spacing3)
         }
-        .padding(DesignTokens.Spacing.spacing3)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var applyButtonTitle: String {
-        if !inlineAssist.pendingActions.isEmpty,
-           let prose = inlineAssist.readyProse,
-           !prose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Apply text & actions"
-        }
         if !inlineAssist.pendingActions.isEmpty {
-            return "Apply actions"
+            let hasProse = inlineAssist.readyProse?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty == false
+            return OWActionSummary.applyButtonTitle(
+                actions: inlineAssist.pendingActions,
+                hasProse: hasProse ?? false
+            )
         }
         return "Apply to selection"
-    }
-
-    private var actionPlanSection: some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
-            Text("Suggested actions")
-                .font(OWTypography.captionEmphasis)
-                .foregroundStyle(palette.textSecondary)
-            ForEach(Array(inlineAssist.pendingActions.enumerated()), id: \.offset) { _, action in
-                Text(actionSummary(action))
-                    .font(OWTypography.caption)
-                    .foregroundStyle(palette.textPrimary)
-            }
-        }
-        .padding(DesignTokens.Spacing.spacing2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            palette.editorCanvas.opacity(0.65),
-            in: RoundedRectangle(cornerRadius: DesignTokens.Radius.small, style: .continuous)
-        )
-    }
-
-    private func actionSummary(_ action: OWAction) -> String {
-        switch action {
-        case .insertBlock(let kind, let text, let checked):
-            let state = checked.map { $0 ? "checked" : "unchecked" } ?? ""
-            let suffix = state.isEmpty ? "" : " (\(state))"
-            return "Insert \(kind.rawValue)\(suffix): \(text.isEmpty ? "…" : text)"
-        case .insertChecklist(let items):
-            return "Insert checklist (\(items.count) item\(items.count == 1 ? "" : "s"))"
-        case .refreshGraph:
-            return "Refresh graph view"
-        }
     }
 
     private func resultBody(text: String, hits: [RetrievalHit]) -> some View {
@@ -169,12 +159,18 @@ struct OWRefineAssistPanel: View {
                 }
 
                 if !inlineAssist.pendingActions.isEmpty {
-                    actionPlanSection
-                }
-
-                if inlineAssist.canApplyRefinement {
+                    OWSuggestedActionsPanel(
+                        actions: inlineAssist.pendingActions,
+                        applyButtonTitle: applyButtonTitle,
+                        applyHelp: "Apply the refined text and any suggested block actions to your selection."
+                    ) {
+                        onApply()
+                    }
+                } else if inlineAssist.canApplyRefinement {
                     Button(applyButtonTitle) { onApply() }
                         .buttonStyle(OWAccentCapsuleButtonStyle())
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .help("Replace the selection with the refined text (⌘↩).")
                 }
             }
             .padding(DesignTokens.Spacing.spacing3)

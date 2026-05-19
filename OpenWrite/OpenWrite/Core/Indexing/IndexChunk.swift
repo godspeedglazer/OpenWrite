@@ -15,7 +15,13 @@ struct IndexChunk: Identifiable, Hashable, Sendable {
     let sourceFilename: String?
     let blockID: UUID?
     let chunkIndex: Int
+    /// Full retrieval payload (header + section + body) embedded and keyword-scanned.
     let text: String
+    /// Breadcrumb for the heading group, e.g. `Overnight > Markets`.
+    let headingPath: String?
+    let documentUpdatedAt: Date?
+    /// High-recall chunk repeating title + filename for “find this note” queries.
+    let isTitleLeadChunk: Bool
 
     init(
         id: UUID = UUID(),
@@ -24,7 +30,10 @@ struct IndexChunk: Identifiable, Hashable, Sendable {
         sourceFilename: String? = nil,
         blockID: UUID?,
         chunkIndex: Int,
-        text: String
+        text: String,
+        headingPath: String? = nil,
+        documentUpdatedAt: Date? = nil,
+        isTitleLeadChunk: Bool = false
     ) {
         self.id = id
         self.documentID = documentID
@@ -33,10 +42,18 @@ struct IndexChunk: Identifiable, Hashable, Sendable {
         self.blockID = blockID
         self.chunkIndex = chunkIndex
         self.text = text
+        self.headingPath = headingPath
+        self.documentUpdatedAt = documentUpdatedAt
+        self.isTitleLeadChunk = isTitleLeadChunk
     }
 
     var fusionKey: String {
         "\(documentID.uuidString)-\(blockID?.uuidString ?? "nil")-\(chunkIndex)"
+    }
+
+    /// Body text for LLM snippets (drops repeated page header).
+    var snippetText: String {
+        TextChunker.stripRetrievalHeader(from: text)
     }
 }
 
@@ -51,11 +68,19 @@ enum TextChunker {
         documentID: UUID,
         title: String,
         blocks: [NoteBlock],
-        sourceFilename: String? = nil
+        sourceFilename: String? = nil,
+        documentUpdatedAt: Date? = nil
     ) -> [IndexChunk] {
-        var headingChunks: [(blockID: UUID?, text: String)] = []
+        var headingChunks: [(blockID: UUID?, headingPath: String?, text: String)] = []
         var buffer: [String] = []
         var bufferBlockID: UUID?
+        var headingLevels: [String?] = [nil, nil, nil]
+
+        func headingPathString() -> String? {
+            let parts = headingLevels.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            return parts.isEmpty ? nil : parts.joined(separator: " > ")
+        }
 
         func flush() {
             let joined = buffer.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -63,24 +88,45 @@ enum TextChunker {
                 buffer.removeAll()
                 return
             }
-            headingChunks.append((bufferBlockID, joined))
+            headingChunks.append((bufferBlockID, headingPathString(), joined))
             buffer.removeAll()
             bufferBlockID = nil
         }
 
+        func setHeading(level: Int, text: String) {
+            let index = min(max(level - 1, 0), 2)
+            headingLevels[index] = text
+            for i in (index + 1) ..< headingLevels.count {
+                headingLevels[i] = nil
+            }
+        }
+
         func visit(_ block: NoteBlock) {
             switch block.kind {
-            case .heading1, .heading2, .heading3:
+            case .heading1:
                 flush()
+                setHeading(level: 1, text: block.text)
+                buffer.append(plainLine(for: block))
+                if bufferBlockID == nil { bufferBlockID = block.id }
+            case .heading2:
+                flush()
+                setHeading(level: 2, text: block.text)
+                buffer.append(plainLine(for: block))
+                if bufferBlockID == nil { bufferBlockID = block.id }
+            case .heading3:
+                flush()
+                setHeading(level: 3, text: block.text)
                 buffer.append(plainLine(for: block))
                 if bufferBlockID == nil { bufferBlockID = block.id }
             case .divider:
                 flush()
+            case .code:
+                break
             default:
-                if !block.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    if bufferBlockID == nil { bufferBlockID = block.id }
-                    buffer.append(plainLine(for: block))
-                }
+                let line = plainLine(for: block)
+                guard !line.isEmpty else { break }
+                if bufferBlockID == nil { bufferBlockID = block.id }
+                buffer.append(line)
             }
             for child in block.children {
                 visit(child)
@@ -93,7 +139,7 @@ enum TextChunker {
         flush()
 
         if headingChunks.isEmpty, !title.isEmpty {
-            headingChunks.append((nil, title))
+            headingChunks.append((nil, nil, title))
         }
 
         let maxChars = AISafetyLimits.indexChunkMaxChars
@@ -101,13 +147,37 @@ enum TextChunker {
         var result: [IndexChunk] = []
         var chunkIndex = 0
 
+        if let lead = titleLeadChunk(
+            documentID: documentID,
+            title: title,
+            blocks: blocks,
+            sourceFilename: sourceFilename,
+            documentUpdatedAt: documentUpdatedAt,
+            chunkIndex: chunkIndex
+        ) {
+            result.append(lead)
+            chunkIndex += 1
+        }
+
+        var priorSectionTail = ""
+
         for group in headingChunks {
-            let pieces = group.text.count > maxChars
-                ? splitRecursively(group.text, maxChars: maxChars, overlap: overlap)
-                : [group.text]
+            var body = group.text
+            if !priorSectionTail.isEmpty {
+                let bridged = priorSectionTail + body
+                if bridged.count <= maxChars {
+                    body = bridged
+                }
+            }
+
+            let pieces = body.count > maxChars
+                ? splitRecursively(body, maxChars: maxChars, overlap: overlap)
+                : [body]
+
             for piece in pieces {
                 let trimmed = piece.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else { continue }
+                let sectionBody = sectionBodyText(headingPath: group.headingPath, body: trimmed)
                 result.append(
                     IndexChunk(
                         documentID: documentID,
@@ -115,13 +185,46 @@ enum TextChunker {
                         sourceFilename: sourceFilename,
                         blockID: group.blockID,
                         chunkIndex: chunkIndex,
-                        text: trimmed
+                        text: embedRetrievalHeader(
+                            title: title,
+                            updatedAt: documentUpdatedAt,
+                            body: sectionBody
+                        ),
+                        headingPath: group.headingPath,
+                        documentUpdatedAt: documentUpdatedAt,
+                        isTitleLeadChunk: false
                     )
                 )
                 chunkIndex += 1
             }
+
+            if let last = pieces.last {
+                priorSectionTail = String(last.suffix(min(overlap, last.count)))
+            } else {
+                priorSectionTail = ""
+            }
         }
         return result
+    }
+
+    static func stripRetrievalHeader(from text: String) -> String {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        guard !lines.isEmpty else { return text }
+        var index = 0
+        if lines[0].hasPrefix("Page:") {
+            index = 1
+            while index < lines.count, lines[index].trimmingCharacters(in: .whitespaces).isEmpty {
+                index += 1
+            }
+        }
+        if index < lines.count, lines[index].hasPrefix("Section:") {
+            index += 1
+            while index < lines.count, lines[index].trimmingCharacters(in: .whitespaces).isEmpty {
+                index += 1
+            }
+        }
+        guard index < lines.count else { return text }
+        return lines[index...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func keywordTokens(from query: String) -> [String] {
@@ -184,6 +287,86 @@ enum TextChunker {
         return applyOverlap(to: merged, maxChars: maxChars, overlap: overlap)
     }
 
+    private static func sectionBodyText(headingPath: String?, body: String) -> String {
+        guard let headingPath, !headingPath.isEmpty else { return body }
+        return "Section: \(headingPath)\n\n\(body)"
+    }
+
+    private static func titleLeadChunk(
+        documentID: UUID,
+        title: String,
+        blocks: [NoteBlock],
+        sourceFilename: String?,
+        documentUpdatedAt: Date?,
+        chunkIndex: Int
+    ) -> IndexChunk? {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        var lines: [String] = [title]
+        if let sourceFilename, !sourceFilename.isEmpty {
+            lines.append("File: \(sourceFilename)")
+        }
+        let preview = firstParagraphPreview(from: blocks)
+        if !preview.isEmpty {
+            lines.append(preview)
+        }
+        let wikilinks = collectWikilinks(from: blocks, limit: 8)
+        if !wikilinks.isEmpty {
+            lines.append("Links: " + wikilinks.joined(separator: ", "))
+        }
+        let body = lines.joined(separator: "\n")
+        return IndexChunk(
+            documentID: documentID,
+            documentTitle: title,
+            sourceFilename: sourceFilename,
+            blockID: nil,
+            chunkIndex: chunkIndex,
+            text: embedRetrievalHeader(title: title, updatedAt: documentUpdatedAt, body: body),
+            headingPath: nil,
+            documentUpdatedAt: documentUpdatedAt,
+            isTitleLeadChunk: true
+        )
+    }
+
+    private static func firstParagraphPreview(from blocks: [NoteBlock], maxChars: Int = 280) -> String {
+        for block in blocks {
+            if let text = paragraphPreview(from: block) {
+                if text.count <= maxChars { return text }
+                return String(text.prefix(maxChars))
+            }
+        }
+        return ""
+    }
+
+    private static func paragraphPreview(from block: NoteBlock) -> String? {
+        switch block.kind {
+        case .paragraph, .bullet, .quote, .callout:
+            let trimmed = block.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        default:
+            break
+        }
+        for child in block.children {
+            if let nested = paragraphPreview(from: child) { return nested }
+        }
+        return nil
+    }
+
+    private static func collectWikilinks(from blocks: [NoteBlock], limit: Int) -> [String] {
+        var links: [String] = []
+        func visit(_ block: NoteBlock) {
+            if block.kind == .wikilink {
+                let name = block.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty, !links.contains(name) { links.append(name) }
+            }
+            for child in block.children { visit(child) }
+        }
+        for block in blocks {
+            visit(block)
+            if links.count >= limit { break }
+        }
+        return Array(links.prefix(limit))
+    }
+
     private static func splitKeepingSeparator(_ text: String, separator: String) -> [String] {
         guard !separator.isEmpty else {
             return text.map { String($0) }
@@ -223,6 +406,22 @@ enum TextChunker {
         return result
     }
 
+    /// Prefix each embedded chunk so lexical + vector search can match dates and titles.
+    private static func embedRetrievalHeader(title: String, updatedAt: Date?, body: String) -> String {
+        var header = "Page: \(title)"
+        if let updatedAt {
+            header += " · Updated \(indexDateFormatter.string(from: updatedAt))"
+        }
+        return "\(header)\n\n\(body)"
+    }
+
+    private static let indexDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
     private static func plainLine(for block: NoteBlock) -> String {
         switch block.kind {
         case .wikilink:
@@ -237,6 +436,8 @@ enum TextChunker {
         case .callout:
             let type = block.attributes["callout"] ?? "note"
             return "> [!\(type)] \(block.text)"
+        case .code:
+            return ""
         case .image:
             return NDLSerializer.serializeBlock(block)
         default:

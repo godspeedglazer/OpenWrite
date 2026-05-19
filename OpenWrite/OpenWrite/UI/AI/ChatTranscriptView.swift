@@ -13,6 +13,7 @@ extension Array where Element == ChatMessage {
             hasher.combine(last.isStreaming)
             hasher.combine(last.isError)
             hasher.combine(last.sourceHits.count)
+            hasher.combine(last.text.count)
         }
         return hasher.finalize()
     }
@@ -29,6 +30,20 @@ extension Array where Element == ChatMessage {
     }
 }
 
+// MARK: - Transcript padding
+
+private struct ChatTranscriptListPadding: ViewModifier {
+    let agentsWorkbench: Bool
+
+    func body(content: Content) -> some View {
+        if agentsWorkbench {
+            content.padding(.horizontal, DesignTokens.Spacing.spacing4)
+        } else {
+            content.padding(DesignTokens.Spacing.assistStripMessageListPadding)
+        }
+    }
+}
+
 // MARK: - Transcript
 
 struct ChatTranscriptView: View {
@@ -39,6 +54,8 @@ struct ChatTranscriptView: View {
     @Binding var isPinnedToBottom: Bool
 
     @EnvironmentObject private var vaultStore: VaultStore
+    @EnvironmentObject private var aiServices: OpenWriteAIServices
+    @Environment(\.agentsWorkbenchPresentation) private var agentsWorkbench
 
     var body: some View {
         ChatTranscriptScrollView(
@@ -46,7 +63,7 @@ struct ChatTranscriptView: View {
             background: background,
             isPinnedToBottom: $isPinnedToBottom
         ) {
-            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
+            VStack(alignment: agentsWorkbench ? .center : .leading, spacing: DesignTokens.Spacing.spacing3) {
                 if messages.isEmpty {
                     emptyPlaceholder
                 }
@@ -57,13 +74,27 @@ struct ChatTranscriptView: View {
                     .id(message.id)
                 }
             }
-            .padding(DesignTokens.Spacing.assistStripMessageListPadding)
+            .frame(maxWidth: agentsWorkbench ? AgentsWorkbenchMetrics.contentMaxWidth : .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            .modifier(ChatTranscriptListPadding(agentsWorkbench: agentsWorkbench))
+            .padding(.top, agentsWorkbench ? AgentsWorkbenchMetrics.heroTopPadding : 0)
             .padding(.bottom, bottomPadding)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyPlaceholder: some View {
+        Group {
+            if agentsWorkbench {
+                agentsHeroPlaceholder
+            } else {
+                stripEmptyPlaceholder
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var stripEmptyPlaceholder: some View {
         VStack(spacing: DesignTokens.Spacing.spacing2) {
             OWUnicodeIconView(icon: .sparkles, size: 22)
                 .foregroundStyle(DesignTokens.Color.textTertiary)
@@ -74,8 +105,30 @@ struct ChatTranscriptView: View {
                 .foregroundStyle(DesignTokens.Color.textTertiary)
                 .multilineTextAlignment(.center)
         }
-        .frame(maxWidth: .infinity)
         .padding(.vertical, DesignTokens.Spacing.spacing6)
+    }
+
+    private var agentsHeroPlaceholder: some View {
+        let agent = AgentRegistry.agent(id: aiServices.selectedAgentID)
+        return VStack(spacing: DesignTokens.Spacing.spacing3) {
+            OWUnicodeIconView(icon: .agent, size: 36, color: DesignTokens.Color.accent)
+            Text("Where should we start?")
+                .font(OWTypography.heading1)
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            Text(agent.name)
+                .font(OWTypography.calloutEmphasis)
+                .foregroundStyle(DesignTokens.Color.accent)
+            Text(agentsHeroSubtitle(agent: agent))
+                .font(OWTypography.body)
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 480)
+        }
+        .padding(.vertical, DesignTokens.Spacing.spacing4)
+    }
+
+    private func agentsHeroSubtitle(agent: AgentConfig) -> String {
+        "Research your vault, search the web, and cite sources — without leaving this workspace."
     }
 }
 
@@ -86,6 +139,7 @@ private struct ChatTranscriptMessageRow: View {
     let onOpenDocument: (UUID) -> Void
 
     @EnvironmentObject private var workbench: WorkbenchState
+    @EnvironmentObject private var vaultStore: VaultStore
 
     var body: some View {
         switch message.role {
@@ -155,7 +209,7 @@ private struct ChatTranscriptMessageRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if !message.isStreaming, !parsedActions.isEmpty {
-                    assistantActionsRow(count: parsedActions.count, actions: parsedActions)
+                    assistantActionsRow(actions: parsedActions)
                 }
             }
         }
@@ -165,6 +219,7 @@ private struct ChatTranscriptMessageRow: View {
     private var showsAssistantBubble: Bool {
         if message.isError { return true }
         if !message.sourceHits.isEmpty { return true }
+        if !message.webSources.isEmpty { return true }
         if vaultSearchHadNoSources { return true }
         if !displayText.isEmpty { return true }
         return !message.isStreaming
@@ -202,6 +257,9 @@ private struct ChatTranscriptMessageRow: View {
     private var assistantMessageBody: some View {
         assistantBubble {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
+                if !message.webSources.isEmpty {
+                    WebSourcePillsView(sources: message.webSources, compact: true)
+                }
                 if !message.sourceHits.isEmpty {
                     RAGSourcePillsView(hits: message.sourceHits, onOpenDocument: onOpenDocument, compact: true)
                 } else if vaultSearchHadNoSources {
@@ -276,26 +334,23 @@ private struct ChatTranscriptMessageRow: View {
         return OWActionScript.parse(in: message.text).actions
     }
 
-    private func assistantActionsRow(count: Int, actions: [OWAction]) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing2) {
-            Text(
-                "Detected \(count) OpenWrite action\(count == 1 ? "" : "s") in this reply."
-            )
-            .font(OWTypography.caption)
-            .foregroundStyle(DesignTokens.Color.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            Button {
-                workbench.showEditor()
-                workbench.requestApplyChatOWActions(actions)
-            } label: {
-                Text("Apply to open note")
-                    .font(OWTypography.captionEmphasis)
-            }
-            .buttonStyle(OWAccentCapsuleButtonStyle())
-            .help("Inserts blocks and checklist items from the assistant script into the note you have open in the editor.")
+    private func assistantActionsRow(actions: [OWAction]) -> some View {
+        OWSuggestedActionsPanel(
+            actions: actions,
+            applyButtonTitle: OWActionSummary.applyButtonTitle(
+                actions: actions,
+                hasProse: !displayText.isEmpty
+            ),
+            applyHelp: vaultStore.selectedDocument == nil
+                ? "Open a note in the editor first, then apply these actions."
+                : "Inserts blocks and checklist items from this reply into the open note."
+        ) {
+            workbench.showEditor()
+            workbench.requestApplyChatOWActions(actions)
         }
         .padding(.top, DesignTokens.Spacing.spacing1)
+        .disabled(vaultStore.selectedDocument == nil)
+        .opacity(vaultStore.selectedDocument == nil ? 0.55 : 1)
     }
 }
 
@@ -328,7 +383,6 @@ private struct ChatTranscriptScrollView<Content: View>: View {
     @State private var contentHeight: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
     @State private var topOffset: CGFloat = 0
-
     var body: some View {
         GeometryReader { viewport in
             ScrollViewReader { proxy in
@@ -372,10 +426,17 @@ private struct ChatTranscriptScrollView<Content: View>: View {
                 .onChange(of: viewport.size.height) { _, newValue in
                     viewportHeight = newValue
                     recalculatePinnedState()
+                    if isPinnedToBottom {
+                        scrollToBottom(using: proxy, animated: false)
+                    }
                 }
                 .onPreferenceChange(ChatTranscriptContentHeightKey.self) { value in
+                    let grew = value > contentHeight + 0.5
                     contentHeight = value
                     recalculatePinnedState()
+                    if isPinnedToBottom, grew {
+                        scrollToBottom(using: proxy, animated: true)
+                    }
                 }
                 .onPreferenceChange(ChatTranscriptTopOffsetKey.self) { value in
                     topOffset = value

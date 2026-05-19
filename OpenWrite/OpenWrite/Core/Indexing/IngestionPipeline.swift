@@ -115,11 +115,13 @@ actor IngestionPipeline {
         let documentID = VaultMarkdownCatalog.stableDocumentID(relativePath: relative)
         let blocks = MarkdownImporter().importString(source)
 
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
         try await ingest(
             documentID: documentID,
             title: title,
             blocks: blocks,
             sourceFilename: relative,
+            documentUpdatedAt: modified,
             isRebuild: false
         )
         return documentID
@@ -138,6 +140,7 @@ actor IngestionPipeline {
                 title: file.title,
                 blocks: blocks,
                 sourceFilename: file.sourceFilename,
+                documentUpdatedAt: file.modifiedAt,
                 isRebuild: false
             )
             ingested += 1
@@ -195,6 +198,7 @@ actor IngestionPipeline {
         title: String,
         blocks: [NoteBlock],
         sourceFilename: String? = nil,
+        documentUpdatedAt: Date? = nil,
         isRebuild: Bool
     ) async throws {
         do {
@@ -206,7 +210,8 @@ actor IngestionPipeline {
                 documentID: documentID,
                 title: title,
                 blocks: blocks,
-                sourceFilename: sourceFilename
+                sourceFilename: sourceFilename,
+                documentUpdatedAt: documentUpdatedAt
             )
             guard !chunks.isEmpty else { return }
 
@@ -258,6 +263,7 @@ actor IngestionPipeline {
                 title: entry.title,
                 blocks: entry.blocks,
                 sourceFilename: entry.sourceFilename,
+                documentUpdatedAt: entry.documentUpdatedAt,
                 isRebuild: true
             )
 

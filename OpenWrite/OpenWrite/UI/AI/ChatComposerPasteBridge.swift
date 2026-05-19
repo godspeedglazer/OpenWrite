@@ -66,7 +66,7 @@ struct ChatComposerPasteBridge: NSViewRepresentable {
 
         /// Let focused text responders handle ⌘V when the pasteboard carries plain text.
         private static func shouldDeferPasteToTextResponder(_ responder: NSResponder?) -> Bool {
-            guard ImagePasteSupport.pasteboardPrefersPlainText else { return false }
+            guard ImagePasteSupport.pasteboardHasSubstantivePlainText else { return false }
             return responder is NSTextView || responder is NSTextField
         }
     }

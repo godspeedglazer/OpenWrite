@@ -1,38 +1,23 @@
 import SwiftUI
 
-/// SwiftUI-only preview surface — no AppKit hosting (avoids empty grey preview cards).
+/// Read-only rendered note — flat typography on the editor canvas (no edit-mode block cards).
 struct EditorPreviewBlockStack: View {
     let blocks: [NoteBlock]
 
+    private var bodyBlocks: [NoteBlock] {
+        blocks.filter { $0.kind != .property }
+    }
+
     var body: some View {
-        LazyVStack(
+        VStack(
             alignment: .leading,
-            spacing: DesignTokens.Layout.editorBlockStackSpacing
+            spacing: DesignTokens.Layout.editorPreviewStackSpacing
         ) {
-            ForEach(blocks) { block in
-                previewRow(for: block)
+            ForEach(bodyBlocks) { block in
+                OWPreviewBlockRow(block: block, previewMode: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    @ViewBuilder
-    private func previewRow(for block: NoteBlock) -> some View {
-        switch block.kind {
-        case .todo:
-            OWPreviewBlockRow(block: block, previewMode: true)
-        case .callout:
-            OWPreviewBlockRow(block: block, previewMode: true)
-        case .code:
-            OWPreviewBlockRow(block: block, previewMode: true)
-        case .heading1, .heading2, .heading3, .paragraph, .bullet, .quote, .wikilink:
-            OWPreviewBlockRow(block: block, previewMode: true)
-        case .image:
-            OWPreviewBlockRow(block: block, previewMode: true)
-        default:
-            OWPreviewBlockRow(block: block, previewMode: true)
-        }
     }
 }

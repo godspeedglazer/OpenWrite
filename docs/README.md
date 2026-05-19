@@ -20,7 +20,7 @@ Welcome to the canonical documentation index for OpenWrite. This hub is the entr
 | NDL / editor work | [NDL/Specification.md](./NDL/Specification.md) | [NDL/Migration.md](./NDL/Migration.md) |
 | AI / search work | [Architecture/AI-Pipeline.md](./Architecture/AI-Pipeline.md) | [Glossary.md](./Glossary.md) (RAG, dual-generator) |
 | Designer | [design/README.md](./design/README.md) | [ProductPhilosophy.md](./ProductPhilosophy.md) |
-| PM / planning | [**ProductDirection.md**](./ProductDirection.md) (firm grasp) | [RoadmapEpics.md](./RoadmapEpics.md), [FeatureParityMatrix.md](./FeatureParityMatrix.md) |
+| PM / planning | [**MajorPlan-2026-05.md**](./MajorPlan-2026-05.md) (current phases) | [ProductDirection.md](./ProductDirection.md), [RoadmapEpics.md](./RoadmapEpics.md) |
 | Designer (visual target) | [**ProductDirection.md**](./ProductDirection.md) § Visual | [design/OpenWriteDesignLanguage.md](./design/OpenWriteDesignLanguage.md) |
 
 ---

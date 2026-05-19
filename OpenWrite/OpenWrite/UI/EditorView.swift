@@ -24,6 +24,7 @@ struct EditorView: View {
     @StateObject private var inlineAssist = InlineAssistController()
     @StateObject private var blockFormatting = BlockFormattingState()
     @State private var isEditorPreviewMode = false
+    @State private var blockStackLaidOutHeight: CGFloat = 0
     @State private var blocksCommitTask: Task<Void, Never>?
 
     init(document: VaultDocument) {
@@ -310,7 +311,10 @@ struct EditorView: View {
             )
 
             HStack(spacing: DesignTokens.Spacing.spacing2) {
-                EditorBlockInsertMenu { insertBlock($0) }
+                EditorBlockInsertMenu(
+                    onInsert: { insertBlock($0) },
+                    onInsertImageFile: { url in ingestImageFileIntoDocument(url) }
+                )
                 Spacer(minLength: 0)
                 refineChromeButton
             }
@@ -355,56 +359,69 @@ struct EditorView: View {
         )
     }
 
+    private var editorScrollToken: Int {
+        var hasher = Hasher()
+        hasher.combine(editingBlocks.count)
+        hasher.combine(Int(resolvedBlockColumnWidth.rounded()))
+        if blockStackLaidOutHeight > 0 {
+            hasher.combine(Int(blockStackLaidOutHeight.rounded()))
+        }
+        for block in editingBlocks {
+            hasher.combine(block.id)
+            hasher.combine(block.kind)
+        }
+        return hasher.finalize()
+    }
+
     @ViewBuilder
     private func editorScrollSurface(_ document: VaultDocument) -> some View {
-        ScrollViewReader { scrollProxy in
-            ScrollView(.vertical, showsIndicators: true) {
-                editorBlocksStack(document)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .scrollClipDisabled(false)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                editorHeaderChrome(document)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .onChange(of: isEditorPreviewMode) { _, preview in
-                if preview {
-                    blockFormatting.clearActiveEditor()
-                }
-                withAnimation(.easeOut(duration: 0.15)) {
-                    scrollProxy.scrollTo("openwrite.editor.blocks.top", anchor: .top)
-                }
-            }
+        OpenWriteThemedScrollView(
+            scrollToken: editorScrollToken,
+            canvasColor: palette.editorCanvas,
+            scrollToBottomOnTokenChange: false,
+            scrollToTopToken: isEditorPreviewMode ? 1 : 0
+        ) {
+            editorBlocksStack(document)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            editorHeaderChrome(document)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(palette.editorCanvas)
+        .onChange(of: isEditorPreviewMode) { _, preview in
+            if preview {
+                blockFormatting.clearActiveEditor()
+                blockStackLaidOutHeight = 0
+            }
+        }
+        .onPasteCommand(of: [.png, .tiff, .jpeg, .heic, .image, .fileURL]) { _ in
+            ingestPastedImageIntoDocument()
+        }
     }
 
     @ViewBuilder
     private func editorHeaderChrome(_ document: VaultDocument) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            pageBanner(document)
-
-            if !isEditorPreviewMode {
-                blockFormattingBar
-                    .padding(.top, DesignTokens.Spacing.spacing2)
-            } else {
-                previewReturnBar
-                    .padding(.top, DesignTokens.Spacing.spacing2)
-                    .padding(.bottom, DesignTokens.Spacing.spacing1)
-            }
-
-            Rectangle()
-                .fill(palette.borderSubtle)
-                .frame(height: DesignTokens.Layout.borderWidth)
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(palette.editorCanvas)
+        pageBanner(document)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(palette.editorCanvas)
     }
 
     @ViewBuilder
     private func editorBlocksStack(_ document: VaultDocument) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            Color.clear
+                .frame(height: 0)
+                .id("openwrite.editor.blocks.top")
+
+            if !isEditorPreviewMode {
+                blockFormattingBar
+            } else {
+                previewReturnBar
+                    .openWriteEditorChromeRow()
+                    .padding(.bottom, DesignTokens.Spacing.spacing2)
+            }
+
             Group {
                 if isEditorPreviewMode {
                     EditorPreviewBlockStack(blocks: editingBlocks)
@@ -426,6 +443,15 @@ struct EditorView: View {
                                 preset: preset,
                                 selectedText: selectedText
                             )
+                        },
+                        onLaidOutHeightChange: { height in
+                            let rounded = floor(height + 0.5)
+                            guard abs(blockStackLaidOutHeight - rounded) > 0.5 else { return }
+                            blockStackLaidOutHeight = rounded
+                        },
+                        insertAfterBlockID: blockFormatting.focusedBlockID,
+                        onBlocksStructureChange: {
+                            scheduleCommitBlocks(document: document, blocks: editingBlocks)
                         }
                     )
                 }
@@ -438,13 +464,10 @@ struct EditorView: View {
                 .bottom,
                 DesignTokens.Layout.editorScrollBottomCushion + assistBottomBarInset
             )
+            .id(isEditorPreviewMode ? "openwrite.editor.preview" : "openwrite.editor.edit")
             .onChange(of: editingBlocks) { _, newBlocks in
                 scheduleCommitBlocks(document: document, blocks: newBlocks)
             }
-
-            Color.clear
-                .frame(height: 0)
-                .id("openwrite.editor.blocks.top")
         }
     }
 
@@ -513,6 +536,43 @@ struct EditorView: View {
             selectedText: selectedText
         )
         inlineAssist.commitPendingCapture()
+        guard inlineAssist.latestSnapshot != nil else {
+            inlineAssist.presentRefineMessage(
+                "Select text inside a block (drag across words), then choose Refine again."
+            )
+            return
+        }
+        inlineAssist.beginRefineSession()
+        startRefineTask(document: document, preset: preset)
+    }
+
+    private func requestInlineRefine(preset: InlineRefinePreset) {
+        guard let document else { return }
+        if let capture = blockFormatting.refineSelectionSnapshot() {
+            inlineAssist.scheduleSelectionCapture(
+                documentID: document.id,
+                blockID: capture.blockID,
+                selectedText: capture.text
+            )
+            requestInlineRefine(
+                document: document,
+                preset: preset,
+                selectedText: capture.text
+            )
+            return
+        }
+        inlineAssist.commitPendingCapture()
+        guard inlineAssist.latestSnapshot != nil else {
+            inlineAssist.presentRefineMessage(
+                "Place the cursor in a block with text, or select a passage, then choose Refine."
+            )
+            return
+        }
+        inlineAssist.beginRefineSession()
+        startRefineTask(document: document, preset: preset)
+    }
+
+    private func startRefineTask(document: VaultDocument, preset: InlineRefinePreset) {
         Task {
             if let lmMessage = await ensureLMReadyForRefine() {
                 await MainActor.run { inlineAssist.presentRefineMessage(lmMessage) }
@@ -532,90 +592,84 @@ struct EditorView: View {
         }
     }
 
-    private func requestInlineRefine(preset: InlineRefinePreset) {
-        guard let document else { return }
-        if let capture = blockFormatting.refineSelectionSnapshot() {
-            inlineAssist.scheduleSelectionCapture(
-                documentID: document.id,
-                blockID: capture.blockID,
-                selectedText: capture.text
-            )
-            requestInlineRefine(
-                document: document,
-                preset: preset,
-                selectedText: capture.text
-            )
-            return
-        }
-        inlineAssist.commitPendingCapture()
-        Task {
-            if let lmMessage = await ensureLMReadyForRefine() {
-                await MainActor.run { inlineAssist.presentRefineMessage(lmMessage) }
-                return
-            }
-            await MainActor.run { performToolbarInlineRefine(preset: preset) }
-        }
-    }
-
     private func ensureLMReadyForRefine() async -> String? {
-        if aiServices.lmConnectionState == .notChecked || aiServices.lmConnectionState == .checking {
+        await MainActor.run {
+            if inlineAssist.isRefining {
+                inlineAssist.setRefineModelStepTitle("Checking LM Studio…")
+            }
+        }
+        if aiServices.lmConnectionState == .notChecked
+            || aiServices.lmConnectionState == .checking
+            || aiServices.lmConnectionState == .connecting {
             await aiServices.checkConnection()
+        }
+        if aiServices.lmConnectionState == .connecting {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            await aiServices.checkConnection(silent: true)
         }
         return await MainActor.run {
             Self.refineLMUnavailableMessage(connectionState: aiServices.lmConnectionState)
         }
     }
 
-    @MainActor
-    private func performToolbarInlineRefine(preset: InlineRefinePreset) {
-        guard inlineAssist.canRefineSelection else {
-            inlineAssist.presentRefineMessage(
-                "Select text inside a block (drag across words), then choose Refine again."
-            )
-            return
-        }
-        let excerpt = editingBlocks
-            .map(\.text)
-            .joined(separator: "\n")
-            .prefix(1200)
-        inlineAssist.refineSelection(
-            using: aiServices.rag,
-            preset: preset,
-            noteExcerpt: String(excerpt)
-        )
-    }
-
     private static func refineLMUnavailableMessage(
         connectionState: OpenWriteAIServices.LMConnectionState
     ) -> String? {
         switch connectionState {
-        case .offline, .notChecked:
+        case .offline:
             return """
             Start LM Studio on this Mac, load a chat model, then try Refine again. \
             Open Settings → AI to verify the server URL and chat model.
+            """
+        case .notChecked, .checking, .connecting:
+            return """
+            Could not verify LM Studio yet. Confirm the server is running and a chat model is loaded, \
+            then try Refine again.
             """
         case .noModelLoaded:
             return """
             LM Studio is reachable but no chat model is loaded. Load a model in LM Studio, \
             then try Refine again.
             """
-        case .checking, .connecting:
-            return "Checking LM Studio connection… try Refine again in a moment."
         case .connected:
             return nil
         }
     }
 
     private func insertBlock(_ block: NoteBlock) {
-        if let after = blockFormatting.focusedBlockID,
-           let index = editingBlocks.firstIndex(where: { $0.id == after }) {
-            editingBlocks.insert(block, at: index + 1)
-        } else {
-            editingBlocks.append(block)
-        }
+        BlockDocumentEditing.insert(
+            block,
+            into: &editingBlocks,
+            after: blockFormatting.focusedBlockID
+        )
         if let document {
             commitBlocks(document: document, blocks: editingBlocks)
         }
+    }
+
+    private func ingestPastedImageIntoDocument() {
+        guard !isEditorPreviewMode else { return }
+        BlockDocumentEditing.ingestImage(
+            into: $editingBlocks,
+            after: blockFormatting.focusedBlockID,
+            onSettled: { [self] in
+                guard let document else { return }
+                scheduleCommitBlocks(document: document, blocks: editingBlocks)
+            }
+        )
+    }
+
+    private func ingestImageFileIntoDocument(_ url: URL) {
+        guard !isEditorPreviewMode else { return }
+        BlockDocumentEditing.ingestImageFile(
+            at: url,
+            into: $editingBlocks,
+            after: blockFormatting.focusedBlockID,
+            onSettled: { [self] in
+                guard let document else { return }
+                scheduleCommitBlocks(document: document, blocks: editingBlocks)
+            }
+        )
     }
 
     private func applyRefinementToDocument() {

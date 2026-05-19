@@ -43,11 +43,11 @@ struct OpenWriteSettingsView: View {
 
     private var vaultSection: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing3) {
-            Text("Vault")
+            Text("Library")
                 .font(DesignTokens.Typography.heading3)
                 .foregroundStyle(DesignTokens.Color.textPrimary)
 
-            Text("Install the Links Demo vault for a pre-wired graph of sample pages. Your primary vault (including Welcome) is never modified.")
+            Text("Install the Links Demo pack for a pre-wired graph of sample pages. Your primary notes folder (including Welcome) is never modified.")
                 .font(DesignTokens.Typography.caption)
                 .foregroundStyle(DesignTokens.Color.textSecondary)
 
@@ -56,7 +56,7 @@ struct OpenWriteSettingsView: View {
                     let installed = vaultStore.installDemoVault(selectHub: true)
                     demoInstallMessage = installed
                         ? "Added \(DemoVaultSeeder.seededDocumentIDs.count) demo pages. Switched to Links Demo."
-                        : "Demo vault is already installed."
+                        : "Demo pack is already installed."
                 }
                 .buttonStyle(OWSecondaryRectButtonStyle())
                 .disabled(vaultStore.isDemoVaultInstalled)

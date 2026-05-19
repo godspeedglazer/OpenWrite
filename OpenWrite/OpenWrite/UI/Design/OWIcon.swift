@@ -218,6 +218,7 @@ extension CenterWorkbenchTab {
   var owIcon: OWIcon {
     switch self {
     case .editor: return .note
+    case .agents: return .agent
     case .graph: return .graph
     case .database: return .database
     }

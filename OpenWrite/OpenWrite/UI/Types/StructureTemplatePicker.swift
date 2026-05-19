@@ -25,7 +25,6 @@ struct StructureTemplatePicker: View {
                 }
             }
         }
-        .padding(.vertical, 4)
     }
 
     private func structureButton(_ structure: StructureTemplate) -> some View {

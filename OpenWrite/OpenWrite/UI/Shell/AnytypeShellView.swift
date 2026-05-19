@@ -45,6 +45,12 @@ struct AnytypeShellView: View {
         .environment(\.editorWorkbenchWidth, centerLayout.editorBodyWidth)
         .onChange(of: workbench.sidebarVisible) { _, _ in workbench.persistChromePreferences() }
         .onChange(of: workbench.aiAssistExpanded) { _, _ in workbench.persistChromePreferences() }
+        .onChange(of: workbench.centerTab) { _, tab in
+            if case .agents = tab {
+                workbench.aiAssistExpanded = false
+                workbench.persistChromePreferences()
+            }
+        }
         .onChange(of: workbench.navigationRailCollapsed) { _, collapsed in
             workbench.persistChromePreferences()
             if collapsed {
@@ -193,9 +199,17 @@ struct AnytypeShellView: View {
         .background(palette.workbenchChrome)
     }
 
+    private var isAgentsWorkbench: Bool {
+        workbench.isAgentsWorkbench
+    }
+
     @ViewBuilder
     private func centerWorkbenchColumns(layout: WorkbenchCenterLayout) -> some View {
-        if workbench.aiAssistExpanded, layout.assistColumnWidth > 0 {
+        if isAgentsWorkbench {
+            centerEditorColumn
+                .frame(width: layout.paddedInnerWidth, alignment: .topLeading)
+                .frame(maxHeight: .infinity, alignment: .top)
+        } else if workbench.aiAssistExpanded, layout.assistColumnWidth > 0 {
             HStack(alignment: .top, spacing: 0) {
                 centerEditorColumn
                     .frame(width: layout.editorColumnWidth, alignment: .topLeading)
@@ -253,7 +267,7 @@ struct AnytypeShellView: View {
             centerPageCard
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if !workbench.aiAssistExpanded {
+            if !workbench.aiAssistExpanded, !isAgentsWorkbench {
                 AIAssistBottomBar(workbench: workbench) {
                     withAnimation(DesignTokens.Motion.animationStandard) {
                         workbench.aiAssistExpanded = true
@@ -262,11 +276,11 @@ struct AnytypeShellView: View {
                 }
             }
         }
-        .workbenchAssistBottomBarEnvironment(active: !workbench.aiAssistExpanded)
+        .workbenchAssistBottomBarEnvironment(active: !workbench.aiAssistExpanded && !isAgentsWorkbench)
     }
 
     private var centerTabBarItems: [CenterWorkbenchTab] {
-        var items: [CenterWorkbenchTab] = [.editor, .graph]
+        var items: [CenterWorkbenchTab] = [.editor, .agents, .graph]
         if let database = vaultStore.selectedDatabase {
             items.append(.database(database))
         } else if case .database(let database) = workbench.centerTab {
@@ -280,6 +294,8 @@ struct AnytypeShellView: View {
             switch tab {
             case .editor:
                 workbench.showEditor()
+            case .agents:
+                workbench.showAgents()
             case .graph:
                 workbench.showGraph()
             case .database(let database):
@@ -292,33 +308,42 @@ struct AnytypeShellView: View {
 
     @ViewBuilder
     private var centerPageCard: some View {
-        OWRoundedRect(style: .editorPanel, padding: 0) {
-            Group {
-                switch workbench.centerTab {
-                case .editor:
-                    editorCenter
-                case .database(let database):
-                    databaseCenter(database)
-                case .graph:
-                    GraphView(
-                        vaultID: vaultStore.activeVaultID,
-                        documents: vaultStore.documentsInActiveVault,
-                        backlinkIndex: backlinkIndex,
-                        selectedDocumentID: vaultStore.selectedDocumentID,
-                        onSelectDocument: { documentID in
-                            vaultStore.selectedDocumentID = documentID
-                            withAnimation(DesignTokens.Motion.animationStandard) {
-                                workbench.showEditor()
-                            }
+        Group {
+            if isAgentsWorkbench {
+                AgentsWorkbenchView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            } else {
+                OWRoundedRect(style: .editorPanel, padding: 0) {
+                    Group {
+                        switch workbench.centerTab {
+                        case .editor:
+                            editorCenter
+                        case .agents:
+                            EmptyView()
+                        case .database(let database):
+                            databaseCenter(database)
+                        case .graph:
+                            GraphView(
+                                vaultID: vaultStore.activeVaultID,
+                                documents: vaultStore.documentsInActiveVault,
+                                backlinkIndex: backlinkIndex,
+                                selectedDocumentID: vaultStore.selectedDocumentID,
+                                onSelectDocument: { documentID in
+                                    vaultStore.selectedDocumentID = documentID
+                                    withAnimation(DesignTokens.Motion.animationStandard) {
+                                        workbench.showEditor()
+                                    }
+                                }
+                            )
+                            .id(vaultStore.activeVaultID)
+                            .id(workbench.graphRefreshToken)
                         }
-                    )
-                    .id(vaultStore.activeVaultID)
-                    .id(workbench.graphRefreshToken)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
+                .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.large, style: .continuous))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.large, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 

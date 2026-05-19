@@ -133,31 +133,30 @@ struct ContentView: View {
             title: "Create page",
             dismissButtonTitle: "Cancel",
             dismissButtonUsesSecondaryStyle: true,
+            contentFillsAvailableHeight: false,
             onDone: { showNewPageSheet = false }
         ) {
-            OpenWriteThemedScrollView(canvasColor: DesignTokens.Color.background) {
-                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing5) {
-                    StructureTemplatePicker { newID in
-                        vaultStore.selectedDocumentID = newID
-                        showNewPageSheet = false
-                    }
-
-                    Rectangle()
-                        .fill(DesignTokens.Color.separator)
-                        .frame(height: DesignTokens.Layout.borderWidth)
-
-                    TypePickerView(documentID: nil, mode: .create) { newID in
-                        vaultStore.selectedDocumentID = newID
-                        showNewPageSheet = false
-                    }
+            VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing4) {
+                StructureTemplatePicker { newID in
+                    vaultStore.selectedDocumentID = newID
+                    showNewPageSheet = false
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DesignTokens.Spacing.spacing5)
-                .padding(.vertical, DesignTokens.Spacing.spacing4)
+
+                Rectangle()
+                    .fill(DesignTokens.Color.separator)
+                    .frame(height: DesignTokens.Layout.borderWidth)
+
+                TypePickerView(documentID: nil, mode: .create) { newID in
+                    vaultStore.selectedDocumentID = newID
+                    showNewPageSheet = false
+                }
             }
-            .background(DesignTokens.Color.background)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, DesignTokens.Spacing.spacing4)
+            .padding(.vertical, DesignTokens.Spacing.spacing3)
         }
-        .frame(minWidth: 440, minHeight: 480)
+        .frame(minWidth: 440)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

@@ -3,11 +3,29 @@ import os
 
 // MARK: - Models
 
-struct WebPageSnapshot: Sendable, Hashable {
+struct WebPageSnapshot: Sendable, Hashable, Identifiable {
+    let id: UUID
     let url: URL
     let finalURL: URL
     let title: String?
     let text: String
+    let fetchedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        url: URL,
+        finalURL: URL,
+        title: String?,
+        text: String,
+        fetchedAt: Date = .now
+    ) {
+        self.id = id
+        self.url = url
+        self.finalURL = finalURL
+        self.title = title
+        self.text = text
+        self.fetchedAt = fetchedAt
+    }
 }
 
 enum WebFetchError: Error, LocalizedError, Sendable {
@@ -275,8 +293,28 @@ enum WebFetchPolicy {
 // MARK: - HTML → text
 
 enum HTMLTextExtractor {
+    /// Prefer article/main content before stripping tags (news pages, blogs).
+    static func extractMainHTML(from html: String) -> String {
+        let candidates: [String] = [
+            "(?is)<article[^>]*>(.*?)</article>",
+            "(?is)<main[^>]*>(.*?)</main>",
+            "(?is)<div[^>]+role=[\"']main[\"'][^>]*>(.*?)</div>",
+            "(?is)<div[^>]+class=[\"'][^\"']*(?:article|post|story|content-body)[^\"']*[\"'][^>]*>(.*?)</div>"
+        ]
+        for pattern in candidates {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let range = NSRange(html.startIndex..., in: html)
+            guard let match = regex.firstMatch(in: html, range: range),
+                  let capture = Range(match.range(at: 1), in: html)
+            else { continue }
+            let slice = String(html[capture])
+            if slice.count > 400 { return slice }
+        }
+        return html
+    }
+
     static func plainText(from html: String, maxChars: Int) -> String {
-        var work = html
+        var work = extractMainHTML(from: html)
         let patterns = [
             "(?is)<script[^>]*>.*?</script>",
             "(?is)<style[^>]*>.*?</style>",
@@ -327,6 +365,145 @@ enum HTMLTextExtractor {
     }
 }
 
+// MARK: - Query search (no URL in message)
+
+/// Resolves HTTPS URLs for a user question when Web is on but the draft has no links.
+enum WebSearchResolver {
+    private static let searchSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = AISafetyLimits.webFetchTimeoutSeconds
+        configuration.timeoutIntervalForResource = AISafetyLimits.webFetchTimeoutSeconds
+        configuration.waitsForConnectivity = false
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieAcceptPolicy = .never
+        return URLSession(configuration: configuration)
+    }()
+
+  static func searchURLs(for query: String, limit: Int = AISafetyLimits.maxWebURLsPerMessage) async -> [URL] {
+        guard let sanitized = AIInput.sanitizeQuery(query) else { return [] }
+        let cap = max(1, min(limit, AISafetyLimits.maxWebURLsPerMessage))
+
+        var urls: [URL] = []
+        urls.append(contentsOf: await instantAnswerURLs(for: sanitized, limit: cap))
+        if urls.count < cap {
+            let extra = await htmlLiteURLs(for: sanitized, limit: cap - urls.count)
+            for url in extra where !urls.contains(url) {
+                urls.append(url)
+                if urls.count >= cap { break }
+            }
+        }
+        return Array(urls.prefix(cap))
+    }
+
+    private static func instantAnswerURLs(for query: String, limit: Int) async -> [URL] {
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let endpoint = URL(string: "https://api.duckduckgo.com/?q=\(encoded)&format=json&no_redirect=1&skip_disambig=1")
+        else { return [] }
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.timeoutInterval = AISafetyLimits.webFetchTimeoutSeconds
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("OpenWrite/1.0 (web-search)", forHTTPHeaderField: "User-Agent")
+
+        do {
+            let (data, _) = try await searchSession.data(for: request)
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return []
+            }
+            var found: [URL] = []
+            if let abstract = json["AbstractURL"] as? String, let url = validatedURL(abstract) {
+                found.append(url)
+            }
+            collectTopicURLs(json["RelatedTopics"], into: &found, limit: limit)
+            if let results = json["Results"] as? [[String: Any]] {
+                for item in results {
+                    guard found.count < limit else { break }
+                    if let raw = item["FirstURL"] as? String, let url = validatedURL(raw) {
+                        if !found.contains(url) { found.append(url) }
+                    }
+                }
+            }
+            return Array(found.prefix(limit))
+        } catch {
+            return []
+        }
+    }
+
+    private static func collectTopicURLs(_ value: Any?, into found: inout [URL], limit: Int) {
+        guard found.count < limit else { return }
+        if let topics = value as? [[String: Any]] {
+            for topic in topics {
+                guard found.count < limit else { break }
+                if let raw = topic["FirstURL"] as? String, let url = validatedURL(raw), !found.contains(url) {
+                    found.append(url)
+                }
+                collectTopicURLs(topic["Topics"], into: &found, limit: limit)
+            }
+        }
+    }
+
+    private static func htmlLiteURLs(for query: String, limit: Int) async -> [URL] {
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let endpoint = URL(string: "https://lite.duckduckgo.com/lite/?q=\(encoded)")
+        else { return [] }
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.timeoutInterval = AISafetyLimits.webFetchTimeoutSeconds
+        request.setValue("text/html", forHTTPHeaderField: "Accept")
+        request.setValue("OpenWrite/1.0 (web-search)", forHTTPHeaderField: "User-Agent")
+
+        do {
+            let (data, _) = try await searchSession.data(for: request)
+            guard let html = String(data: data, encoding: .utf8) else { return [] }
+            return parseLiteResultURLs(from: html, limit: limit)
+        } catch {
+            return []
+        }
+    }
+
+    private static func parseLiteResultURLs(from html: String, limit: Int) -> [URL] {
+        let patterns = [
+            #"uddg=([^&"'>\s]+)"#,
+            #"href="(https://[^"]+)""#
+        ]
+        var found: [URL] = []
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let range = NSRange(html.startIndex..., in: html)
+            regex.enumerateMatches(in: html, range: range) { match, _, stop in
+                guard found.count < limit,
+                      let match,
+                      match.numberOfRanges > 1,
+                      let capture = Range(match.range(at: 1), in: html)
+                else { return }
+                var raw = String(html[capture])
+                if let decoded = raw.removingPercentEncoding { raw = decoded }
+                guard let url = validatedURL(raw), !found.contains(url) else { return }
+                found.append(url)
+                if found.count >= limit { stop.pointee = true }
+            }
+            if found.count >= limit { break }
+        }
+        return found
+    }
+
+    private static func validatedURL(_ raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https"
+        else { return nil }
+        do {
+            try WebFetchPolicy.validate(url)
+            return url
+        } catch {
+            return nil
+        }
+    }
+}
+
 // MARK: - Service
 
 struct WebFetchService: Sendable {
@@ -346,20 +523,35 @@ struct WebFetchService: Sendable {
         }
     }
 
+    /// When Web is enabled and the user did not paste a link, search then return fetchable HTTPS URLs.
+    func resolveSearchURLs(for query: String, limit: Int = AISafetyLimits.maxWebURLsPerMessage) async -> [URL] {
+        await WebSearchResolver.searchURLs(for: query, limit: limit)
+    }
+
     func fetchPages(urls: [URL]) async -> [WebPageSnapshot] {
-        var snapshots: [WebPageSnapshot] = []
-        for url in urls {
-            let host = url.host ?? url.absoluteString
-            do {
-                let page = try await fetchPage(url: url)
-                WebFetchPolicy.logFetchFinished(host: host, byteCount: page.text.utf8.count)
-                snapshots.append(page)
-            } catch {
-                let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                WebFetchPolicy.logFetchFailed(host: host, reason: String(reason.prefix(120)))
+        guard !urls.isEmpty else { return [] }
+        return await withTaskGroup(of: WebPageSnapshot?.self) { group in
+            for url in urls {
+                group.addTask {
+                    let host = url.host ?? url.absoluteString
+                    do {
+                        let page = try await self.fetchPage(url: url)
+                        WebFetchPolicy.logFetchFinished(host: host, byteCount: page.text.utf8.count)
+                        return page
+                    } catch {
+                        let reason = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                        WebFetchPolicy.logFetchFailed(host: host, reason: String(reason.prefix(120)))
+                        return nil
+                    }
+                }
             }
+            var snapshots: [WebPageSnapshot] = []
+            snapshots.reserveCapacity(urls.count)
+            for await page in group {
+                if let page { snapshots.append(page) }
+            }
+            return snapshots
         }
-        return snapshots
     }
 
     func fetchPage(url: URL) async throws -> WebPageSnapshot {
@@ -428,7 +620,8 @@ struct WebFetchService: Sendable {
                 url: url,
                 finalURL: current,
                 title: title,
-                text: text
+                text: text,
+                fetchedAt: .now
             )
         }
     }

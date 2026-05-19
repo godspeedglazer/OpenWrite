@@ -8,6 +8,8 @@ struct RAGContext: Sendable {
     var visionImageAttachments: [ChatAttachment] = []
     /// Server-fetched page text (safe web lookup); injected into system context, not indexed.
     var webPages: [WebPageSnapshot] = []
+    /// Chunked excerpts from `webPages` for `[web:UUID]` citations.
+    var webChunks: [WebCorpusChunk] = []
 
     var allHits: [RetrievalHit] {
         hits + attachmentHits
@@ -45,13 +47,14 @@ struct RAGAnswer: Sendable {
     var hits: [RetrievalHit]
 }
 
-/// Retrieval-augmented generation over the local vault.
+/// Retrieval-augmented generation over local notes.
 protocol RAGService: Sendable {
     func buildContext(
         query: String,
         agent: AgentConfig,
         attachments: [ChatAttachment],
-        webPages: [WebPageSnapshot]
+        webPages: [WebPageSnapshot],
+        webChunks: [WebCorpusChunk]
     ) async throws -> RAGContext
     func streamAnswer(
         context: RAGContext,
@@ -68,7 +71,7 @@ protocol RAGService: Sendable {
 
 extension RAGService {
     func buildContext(query: String, agent: AgentConfig) async throws -> RAGContext {
-        try await buildContext(query: query, agent: agent, attachments: [], webPages: [])
+        try await buildContext(query: query, agent: agent, attachments: [], webPages: [], webChunks: [])
     }
 
     func buildContext(
@@ -76,7 +79,16 @@ extension RAGService {
         agent: AgentConfig,
         attachments: [ChatAttachment]
     ) async throws -> RAGContext {
-        try await buildContext(query: query, agent: agent, attachments: attachments, webPages: [])
+        try await buildContext(query: query, agent: agent, attachments: attachments, webPages: [], webChunks: [])
+    }
+
+    func buildContext(
+        query: String,
+        agent: AgentConfig,
+        attachments: [ChatAttachment],
+        webPages: [WebPageSnapshot]
+    ) async throws -> RAGContext {
+        try await buildContext(query: query, agent: agent, attachments: attachments, webPages: webPages, webChunks: [])
     }
 
     func streamAnswer(context: RAGContext, agent: AgentConfig) -> AsyncThrowingStream<RAGStreamEvent, Error> {
@@ -104,16 +116,21 @@ struct LiveRAGService: RAGService {
         query: String,
         agent: AgentConfig,
         attachments: [ChatAttachment] = [],
-        webPages: [WebPageSnapshot] = []
+        webPages: [WebPageSnapshot] = [],
+        webChunks: [WebCorpusChunk] = []
     ) async throws -> RAGContext {
         let visionImages = attachments.filter { $0.kind == .image }
+        let resolvedChunks = webChunks.isEmpty && !webPages.isEmpty
+            ? WebCorpusChunker.chunks(from: webPages)
+            : webChunks
         guard let sanitized = AIInput.sanitizeQuery(query) else {
             return RAGContext(
                 query: query,
                 hits: [],
                 attachmentHits: ChatAttachmentStore.retrievalHits(from: attachments),
                 visionImageAttachments: visionImages,
-                webPages: webPages
+                webPages: webPages,
+                webChunks: resolvedChunks
             )
         }
         let attachmentHits = ChatAttachmentStore.retrievalHits(from: attachments)
@@ -124,7 +141,8 @@ struct LiveRAGService: RAGService {
                 hits: [],
                 attachmentHits: attachmentHits,
                 visionImageAttachments: visionImages,
-                webPages: webPages
+                webPages: webPages,
+                webChunks: resolvedChunks
             )
         }
         let hits = try await retrieval.search(
@@ -136,7 +154,8 @@ struct LiveRAGService: RAGService {
             hits: hits,
             attachmentHits: attachmentHits,
             visionImageAttachments: visionImages,
-            webPages: webPages
+            webPages: webPages,
+            webChunks: resolvedChunks
         )
     }
 
@@ -273,7 +292,7 @@ struct LiveRAGService: RAGService {
 
     private static func systemAndCitations(context: RAGContext, agent: AgentConfig) -> (String, [UUID]) {
         let (excerptBlock, ids) = excerptBlock(context: context, agent: agent)
-        var parts = [agent.systemPrompt]
+        var parts = [OpenWriteProductContext.systemPreamble, agent.systemPrompt]
         if !agent.answerInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             parts.append("")
             parts.append(agent.answerInstructions)
@@ -284,7 +303,7 @@ struct LiveRAGService: RAGService {
         }
         if !context.webPages.isEmpty {
             parts.append("")
-            parts.append(webExcerptBlock(pages: context.webPages))
+            parts.append(webExcerptBlock(pages: context.webPages, chunks: context.webChunks))
         }
         if !context.visionImageAttachments.isEmpty {
             parts.append("")
@@ -298,21 +317,40 @@ struct LiveRAGService: RAGService {
         return (parts.joined(separator: "\n"), ids)
     }
 
-    private static func webExcerptBlock(pages: [WebPageSnapshot]) -> String {
+    private static func webExcerptBlock(pages: [WebPageSnapshot], chunks: [WebCorpusChunk]) -> String {
         var lines = [
-            "Web pages fetched for this turn (supporting evidence only; cite URLs when used):",
+            "Web sources fetched for this turn (verified pages only; cite with [web:UUID] or the URL):",
+            "Ignore pages about unrelated products named OpenWrite (e.g. github.com/ilrein/openwrite) — they are not this macOS app.",
+            "Prefer facts directly supported by an excerpt. If coverage is thin, say what is missing instead of inventing events.",
             ""
         ]
         var usedTokens = AISafetyLimits.systemPromptReservedTokens
-        for (index, page) in pages.enumerated() {
-            let titleLine = page.title.map { " — \($0)" } ?? ""
-            let header = "\(index + 1). \(page.finalURL.absoluteString)\(titleLine)"
-            let body = AIInput.sanitizeSnippet(page.text, maxChars: AISafetyLimits.maxWebTextChars / max(1, pages.count))
-            let block = "\(header)\n\(body)"
-            let blockTokens = AIInput.estimatedTokenCount(for: block)
-            if usedTokens + blockTokens > AISafetyLimits.maxEstimatedPromptTokens { break }
-            usedTokens += blockTokens
-            lines.append(block)
+        let excerptChunks = chunks.isEmpty ? WebCorpusChunker.chunks(from: pages) : chunks
+        if !excerptChunks.isEmpty {
+            for (index, chunk) in excerptChunks.enumerated() {
+                let title = chunk.pageTitle.map { " — \($0)" } ?? ""
+                let header = "[web:\(chunk.id.uuidString)] \(chunk.pageURL.absoluteString)\(title)"
+                let body = AIInput.sanitizeSnippet(chunk.text, maxChars: AISafetyLimits.maxWebChunkChars)
+                let block = "\(index + 1). \(header)\n\(body)"
+                let blockTokens = AIInput.estimatedTokenCount(for: block)
+                if usedTokens + blockTokens > AISafetyLimits.maxEstimatedPromptTokens { break }
+                usedTokens += blockTokens
+                lines.append(block)
+            }
+        } else {
+            for (index, page) in pages.enumerated() {
+                let titleLine = page.title.map { " — \($0)" } ?? ""
+                let header = "\(index + 1). \(page.finalURL.absoluteString)\(titleLine)"
+                let body = AIInput.sanitizeSnippet(page.text, maxChars: AISafetyLimits.maxWebTextChars / max(1, pages.count))
+                let block = "\(header)\n\(body)"
+                let blockTokens = AIInput.estimatedTokenCount(for: block)
+                if usedTokens + blockTokens > AISafetyLimits.maxEstimatedPromptTokens { break }
+                usedTokens += blockTokens
+                lines.append(block)
+            }
+        }
+        if pages.isEmpty {
+            lines.append("(No readable web pages were fetched.)")
         }
         return lines.joined(separator: "\n\n")
     }
@@ -322,6 +360,10 @@ struct LiveRAGService: RAGService {
             "Reference excerpts (supporting evidence only; optional):",
             ""
         ]
+        if let hint = temporalRetrievalHint(for: context.query) {
+            lines.append(hint)
+            lines.append("")
+        }
         var ids: [UUID] = []
         var usedTokens = AISafetyLimits.systemPromptReservedTokens
         let maxSnippet = agent.snippetCharsPerChunk
@@ -371,6 +413,19 @@ struct LiveRAGService: RAGService {
         return Double(matched) / Double(terms.count) < 0.25
     }
 
+    private static func temporalRetrievalHint(for query: String) -> String? {
+        let lower = query.lowercased()
+        let markers = [
+            "yesterday", "today", "tonight", "last week", "last month", "this week",
+            "recent", "latest", "news", "daily", "what happened"
+        ]
+        guard markers.contains(where: { lower.contains($0) }) else { return nil }
+        return """
+        Time-relative query: weigh excerpts whose "Updated …" date matches the timeframe. \
+        If no excerpt covers the period, say what is missing — do not fabricate events.
+        """
+    }
+
     private static func significantQueryTerms(_ query: String) -> [String] {
         let stop: Set<String> = [
             "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
@@ -393,18 +448,23 @@ struct PlaceholderRAGService: RAGService {
         query: String,
         agent: AgentConfig,
         attachments: [ChatAttachment] = [],
-        webPages: [WebPageSnapshot] = []
+        webPages: [WebPageSnapshot] = [],
+        webChunks: [WebCorpusChunk] = []
     ) async throws -> RAGContext {
         let limit = agent.toolFlags.useVaultRetrieval ? agent.effectiveChunkLimit : 0
         let hits = limit > 0
             ? try await retrieval.search(query: query, limit: limit)
             : []
+        let resolvedChunks = webChunks.isEmpty && !webPages.isEmpty
+            ? WebCorpusChunker.chunks(from: webPages)
+            : webChunks
         return RAGContext(
             query: query,
             hits: hits,
             attachmentHits: ChatAttachmentStore.retrievalHits(from: attachments),
             visionImageAttachments: attachments.filter { $0.kind == .image },
-            webPages: webPages
+            webPages: webPages,
+            webChunks: resolvedChunks
         )
     }
 

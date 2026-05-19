@@ -3,6 +3,7 @@ import SwiftUI
 /// Inserts NDL blocks after the focused row (or at the end of the note).
 struct EditorBlockInsertMenu: View {
     let onInsert: (NoteBlock) -> Void
+    var onInsertImageFile: (URL) -> Void = { _ in }
 
     var body: some View {
         Menu {
@@ -31,11 +32,7 @@ struct EditorBlockInsertMenu: View {
                 Button("Image…") {
                     ImagePasteSupport.presentImagePicker { url in
                         guard let url else { return }
-                        Task {
-                            if let block = await ImagePasteSupport.finalizeImage(at: url) {
-                                await MainActor.run { onInsert(block) }
-                            }
-                        }
+                        onInsertImageFile(url)
                     }
                 }
             }

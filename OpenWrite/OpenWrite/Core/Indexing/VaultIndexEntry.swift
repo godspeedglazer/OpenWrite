@@ -6,4 +6,6 @@ struct VaultIndexEntry: Sendable {
     let title: String
     let blocks: [NoteBlock]
     let sourceFilename: String?
+    /// Page or file modification time — embedded in chunk text for time-relative RAG.
+    let documentUpdatedAt: Date?
 }

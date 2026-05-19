@@ -85,19 +85,42 @@ struct ChatPipelineStep: Identifiable, Hashable {
 /// Theme-aware vertical stepper. Uses a single ZStack rail per group so dots are visually connected —
 /// previous per-row `VStack { dot, connector }` design left ~16pt gap between connector end and next dot.
 struct OWChatStatusStepper: View {
-    let steps: [ChatPipelineStep]
-    /// When true, animated dots appear only on the active **respond** step.
-    var showsStreamingDots: Bool = false
+    enum Layout {
+        /// Chat transcript — single-line labels beside a compact rail.
+        case chat
+        /// Refine left rail — wider rail, two-line labels, dots under title (avoids divider clip).
+        case refineRail
+    }
 
-    private let railWidth: CGFloat = 16
-    private let dotSize: CGFloat = 10
+    let steps: [ChatPipelineStep]
+    /// When true, animated dots appear on the active step (chat: **respond**; refine: **model**).
+    var showsStreamingDots: Bool = false
+    var layout: Layout = .chat
+
+    private var railWidth: CGFloat {
+        switch layout {
+        case .chat: return 26
+        case .refineRail: return 30
+        }
+    }
+
+    private var dotSize: CGFloat { 10 }
+
+    /// Frame larger than stroke so active rings are not clipped by narrow parents.
+    private var dotFrameSize: CGFloat {
+        layout == .refineRail ? 16 : 14
+    }
+
     private let connectorWidth: CGFloat = 2
 
     private var rowHeight: CGFloat {
-        max(
-            dotSize + DesignTokens.Spacing.spacing2,
-            ceil(OWTypography.Scale.captionLineHeight * OWTypography.dynamicScale) + DesignTokens.Spacing.spacing1
-        )
+        let captionLine = ceil(OWTypography.Scale.captionLineHeight * OWTypography.dynamicScale)
+        switch layout {
+        case .chat:
+            return max(dotFrameSize + DesignTokens.Spacing.spacing1, captionLine + DesignTokens.Spacing.spacing1)
+        case .refineRail:
+            return max(dotFrameSize + 4, captionLine * 2 + 16)
+        }
     }
 
     /// Steps that have started or are next up — hides trailing pending rows that only lengthen the rail.
@@ -131,8 +154,10 @@ struct OWChatStatusStepper: View {
             labelColumn
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.leading, DesignTokens.Spacing.spacing1)
+        .padding(.leading, layout == .refineRail ? DesignTokens.Spacing.spacing2 : DesignTokens.Spacing.spacing2)
+        .padding(.trailing, DesignTokens.Spacing.spacing2)
         .padding(.vertical, DesignTokens.Spacing.spacing1)
+        .compositingGroup()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Response progress")
     }
@@ -155,11 +180,12 @@ struct OWChatStatusStepper: View {
                     ZStack {
                         stepIndicator(step.status)
                     }
-                    .frame(height: rowHeight)
+                    .frame(width: railWidth, height: rowHeight)
                 }
             }
         }
-        .frame(minHeight: totalHeight)
+        .frame(width: railWidth, alignment: .top)
+        .frame(minHeight: totalHeight, alignment: .top)
     }
 
     /// Gradient-aware rail: tints completed prefix with accent, remainder with subtle border tone.
@@ -213,16 +239,30 @@ struct OWChatStatusStepper: View {
 
     @ViewBuilder
     private func stepLabel(_ step: ChatPipelineStep) -> some View {
-        HStack(alignment: .center, spacing: 6) {
-            Text(step.title)
-                .font(OWTypography.caption)
-                .foregroundStyle(labelColor(for: step.status))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .truncationMode(.tail)
-                .multilineTextAlignment(.leading)
-            if step.status == .active, showsStreamingDots {
-                StepperStreamingDots()
+        let title = Text(step.title)
+            .font(OWTypography.caption)
+            .foregroundStyle(labelColor(for: step.status))
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+
+        if layout == .refineRail {
+            VStack(alignment: .leading, spacing: 3) {
+                title
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                if step.status == .active, showsStreamingDots {
+                    StepperStreamingDots()
+                }
+            }
+        } else {
+            HStack(alignment: .center, spacing: 6) {
+                title
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .truncationMode(.tail)
+                if step.status == .active, showsStreamingDots {
+                    StepperStreamingDots()
+                }
             }
         }
     }
@@ -247,7 +287,7 @@ struct OWChatStatusStepper: View {
                     .fill(DesignTokens.Color.warning.opacity(0.85))
             }
         }
-        .frame(width: dotSize, height: dotSize)
+        .frame(width: dotFrameSize, height: dotFrameSize)
         .animation(.easeInOut(duration: 0.32), value: status)
     }
 

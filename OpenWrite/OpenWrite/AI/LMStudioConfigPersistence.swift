@@ -57,7 +57,7 @@ enum LMStudioConfigPersistence {
         let chat = config.chatModel.trimmingCharacters(in: .whitespacesAndNewlines)
         // Clear legacy placeholders so `resolveChatModelID` adopts the first loaded /v1/models entry,
         // rather than asserting a hardcoded id that may not be loaded on this machine.
-        if chat == "local-model" || chat == "gemma-4-e4b" {
+        if chat == "local-model" || chat == "gemma-4-e4b" || chat == "google/gemma-4-e4b" {
             config.chatModel = ""
         }
         return config

@@ -18,6 +18,8 @@ final class BlockEditorPasteCaptureView: NSView {
         self.hostedView = hostedView
         super.init(frame: .zero)
         clipsToBounds = true
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
         layer?.masksToBounds = true
         openWriteSuppressFocusRing()
         hostedView.openWriteSuppressFocusRing()

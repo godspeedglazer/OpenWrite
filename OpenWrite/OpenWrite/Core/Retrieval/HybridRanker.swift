@@ -69,11 +69,12 @@ struct HybridRanker: Sendable {
     func keywordHits(
         query: String,
         in pool: [IndexChunk],
-        limit: Int
+        limit: Int,
+        expandedTokens: [String] = []
     ) -> [(chunk: IndexChunk, score: Double)] {
         var hits: [(chunk: IndexChunk, score: Double)] = []
         for chunk in pool {
-            let score = keywordScore(query: query, content: chunk.text)
+            let score = keywordScore(query: query, chunk: chunk, expandedTokens: expandedTokens)
             if score > 0 {
                 hits.append((chunk, score))
             }
@@ -82,10 +83,51 @@ struct HybridRanker: Sendable {
         return Array(hits.prefix(limit))
     }
 
+    func keywordScore(
+        query: String,
+        chunk: IndexChunk,
+        expandedTokens: [String] = []
+    ) -> Double {
+        let keywords = expandedTokens.isEmpty
+            ? TextChunker.keywordTokens(from: query)
+            : expandedTokens
+        guard !keywords.isEmpty else { return 0 }
+
+        var score = regexMatchCount(keywords: keywords, in: chunk.text)
+        if score == 0 { return 0 }
+
+        let titleLower = chunk.documentTitle.lowercased()
+        let headerLine = chunk.text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
+            .first.map(String.init) ?? ""
+        let filenameLower = chunk.sourceFilename?.lowercased() ?? ""
+
+        for keyword in keywords {
+            if titleLower.contains(keyword) {
+                score += AISafetyLimits.titleKeywordBoostMultiplier
+            }
+            if headerLine.lowercased().contains(keyword) {
+                score += 1
+            }
+            if filenameLower.contains(keyword) {
+                score += AISafetyLimits.titleKeywordBoostMultiplier
+            }
+            if chunk.isTitleLeadChunk {
+                score += 0.5
+            }
+            if let path = chunk.headingPath?.lowercased(), path.contains(keyword) {
+                score += 1
+            }
+        }
+        return score
+    }
+
     func keywordScore(query: String, content: String) -> Double {
         let keywords = TextChunker.keywordTokens(from: query)
         guard !keywords.isEmpty else { return 0 }
+        return regexMatchCount(keywords: keywords, in: content)
+    }
 
+    private func regexMatchCount(keywords: [String], in content: String) -> Double {
         let escaped = keywords.map { NSRegularExpression.escapedPattern(for: $0) }
         let pattern = "\\b(\(escaped.joined(separator: "|")))\\b"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {

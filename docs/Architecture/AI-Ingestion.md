@@ -1,9 +1,9 @@
 # AI Ingestion Pipeline
 
-**Last updated:** 2026-05-17  
+**Last updated:** 2026-05-18  
 **Related:** [AI-Pipeline.md](./AI-Pipeline.md) · [adr/0003-reor-rag-in-swift.md](../adr/0003-reor-rag-in-swift.md) · `OpenWrite/AI/ReorPortNotes.md`
 
-OpenWrite ingests vault content into a **local vector index** for hybrid retrieval and RAG. Ingestion is user-visible, cancellable, and runs entirely on-device (embeddings default to LM Studio with a hash fallback).
+OpenWrite ingests note content into a **local vector index** for hybrid retrieval and RAG. Ingestion is user-visible, cancellable, and runs entirely on-device (embeddings default to LM Studio with a hash fallback).
 
 ---
 
@@ -57,6 +57,27 @@ flowchart TB
 | `InMemoryVectorStore` | `Core/Indexing/InMemoryVectorStore.swift` | Cosine search + JSON persistence stub |
 | `OpenWriteAIServices` | `AI/OpenWriteAIServices.swift` | Wires pipeline, reindex, cancel, disk bootstrap |
 | `TextChunker` | `Core/Indexing/IndexChunk.swift` | Heading-bounded chunks (AGPL — Reor `chunking.ts`) |
+| `RetrievalQueryAnalysis` | `Core/Retrieval/RetrievalQueryAnalysis.swift` | Local query expansion, temporal detection, diversity cap |
+
+### Chunk shape (index v3)
+
+Each embedded chunk includes:
+
+1. **Title-lead chunk** — page title, filename, first-paragraph preview, wikilink names (high recall for “find this note”).
+2. **Section chunks** — `Page: Title · Updated …` header, optional `Section: H1 > H2` breadcrumb, body text.
+3. **Metadata on disk** — `headingPath`, `documentUpdatedAt`, `isTitleLeadChunk` (JSON format version `3`).
+
+Code blocks are omitted from embed text. Cross-section **150-character** overlap bridges adjacent heading groups; recursive splits use the same overlap budget.
+
+### Retrieval (post-ingest)
+
+`HybridRetrievalService` ranks a larger candidate pool (`rerankCandidateCount`), then:
+
+- **Title / filename keyword boost** on top of body matches
+- **Recency boost** when the query is temporal (“yesterday”, “latest”, …)
+- **Per-document cap** (max 2 chunks per note in top-k)
+
+Probe locally: `./scripts/openwrite-cli.sh test-queries --reindex`
 
 ---
 
@@ -82,9 +103,9 @@ Progress fields: `documentsCompleted` / `documentsTotal`, `chunksCompleted` / `c
 
 Vectors and chunk metadata serialize to:
 
-`~/Library/Application Support/OpenWrite/vector_index.json`
+`~/Library/Application Support/openwrite/index.json`
 
-Format version `1`. On launch, `OpenWriteAIServices` loads the snapshot if present; a corrupt file is ignored and the vault can be reindexed.
+Format version `3` (legacy `OpenWrite/vector_index.json` v1–2 still load; reindex to pick up title-lead chunks and section breadcrumbs). On launch, `OpenWriteAIServices` loads the snapshot if present; a corrupt file is ignored and the vault can be reindexed.
 
 Future: LanceDB / SQLite FTS parity with Reor `vector-database` layout — see [ReorPortNotes.md](../../OpenWrite/OpenWrite/AI/ReorPortNotes.md).
 

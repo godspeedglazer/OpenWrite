@@ -162,20 +162,28 @@ enum ImagePasteSupport {
         imageFromPasteboard() != nil || imageFileURLFromPasteboard() != nil
     }
 
-    /// Plain text on the pasteboard — text fields should paste this instead of ingesting an image.
-    static var pasteboardPrefersPlainText: Bool {
+    /// Substantive plain text on the pasteboard (not merely a file path echo of an image URL).
+    static var pasteboardHasSubstantivePlainText: Bool {
         let pasteboard = NSPasteboard.general
-        if let string = pasteboard.string(forType: .string)?
+        guard let string = pasteboard.string(forType: .string)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
-           !string.isEmpty {
-            return true
+              !string.isEmpty else {
+            return false
         }
-        return pasteboard.canReadObject(forClasses: [NSString.self], options: nil)
+        if let imageURL = imageFileURLFromPasteboard() {
+            if string == imageURL.path || string == imageURL.absoluteString {
+                return false
+            }
+            if string.hasPrefix("file://"), URL(string: string) == imageURL {
+                return false
+            }
+        }
+        return true
     }
 
     /// Image ingest for block editor / chat when the user is not pasting prose.
     static var shouldIngestImageFromPasteboard: Bool {
-        pasteboardHasIngestibleImage && !pasteboardPrefersPlainText
+        pasteboardHasIngestibleImage && !pasteboardHasSubstantivePlainText
     }
 
     static func imageFileURLFromPasteboard() -> URL? {
@@ -361,7 +369,10 @@ enum ImagePasteSupport {
               let image = NSImage(contentsOf: url) else {
             return false
         }
-        NSPasteboard.general.clearContents()
-        return NSPasteboard.general.writeObjects([image])
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        var writers: [NSPasteboardWriting] = [image]
+        writers.append(url as NSURL)
+        return pasteboard.writeObjects(writers)
     }
 }
