@@ -5,6 +5,8 @@ enum AISafetyLimits {
     static let maxQueryCharacters = 500
     static let maxChatMessageCharacters = 2000
     static let prefilterCandidateCount = 32
+    /// Cap corpus scan during timeout fallback keyword search.
+    static let keywordSearchMaxChunks = 256
     static let rerankCandidateCount = 24
     /// Upper bound for per-agent `chunkLimit` (summarizer may request more than Q&A).
     static let maxContextChunks = 20

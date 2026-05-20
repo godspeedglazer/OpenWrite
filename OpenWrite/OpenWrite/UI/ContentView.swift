@@ -57,8 +57,13 @@ struct ContentView: View {
         .task {
             _ = try? VaultLocationPreferences.ensureDefaultVaultLayout()
             await aiServices.startFilesystemIngestionWatch()
-            markdownVaultWatcher.start {
-                scheduleDebouncedReindex()
+            markdownVaultWatcher.start { changedURLs in
+                Task {
+                    if !changedURLs.isEmpty {
+                        await aiServices.ingestMarkdownFiles(at: changedURLs)
+                    }
+                    scheduleDebouncedReindex()
+                }
             }
             // Resolve the loaded chat model from /v1/models before the user opens the chat panel,
             // so the composer caption never shows a stale id like "gemma-4-e4b · not checked".

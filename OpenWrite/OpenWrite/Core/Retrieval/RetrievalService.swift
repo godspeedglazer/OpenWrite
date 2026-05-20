@@ -110,8 +110,11 @@ struct HybridRetrievalService: RetrievalService {
     func keywordSearch(query: String, limit: Int) async throws -> [RetrievalHit] {
         guard let sanitized = AIInput.sanitizeQuery(query) else { return [] }
         let analysis = RetrievalQueryAnalysis.analyze(sanitized)
-        let pool = await vectorStore.allChunks()
+        var pool = await vectorStore.allChunks()
         guard !pool.isEmpty else { return [] }
+        if pool.count > AISafetyLimits.keywordSearchMaxChunks {
+            pool = Array(pool.prefix(AISafetyLimits.keywordSearchMaxChunks))
+        }
         let hits = ranker.keywordHits(
             query: sanitized,
             in: pool,

@@ -75,6 +75,10 @@ actor IngestionPipeline {
         await withHealth { $0.markWatching() }
     }
 
+    func enqueueFilesystemChange(at path: URL) async {
+        await fsevents.enqueueChanged(path: path)
+    }
+
     func processPendingFilesystemEvents(
         defaultPageType: PageType = .note
     ) async throws {

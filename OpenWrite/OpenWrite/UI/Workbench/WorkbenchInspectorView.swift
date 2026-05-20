@@ -28,7 +28,7 @@ struct WorkbenchInspectorView: View {
             Group {
                 switch workbench.inspectorTab {
                 case .chat:
-                    ChatPanelView()
+                    ChatPanelView(model: workbench.chatPanel)
                 case .related:
                     RelatedNotesView()
                 case .pastWrites:

@@ -742,6 +742,7 @@ struct EditorView: View {
             noteTitle: noteTitle,
             plainText: excerpt
         )
+        aiServices.scheduleIndex(documentID: documentID, vaultStore: vaultStore)
     }
 
     private func ensureEditableBodyBlocks(_ blocks: [NoteBlock]) -> [NoteBlock] {

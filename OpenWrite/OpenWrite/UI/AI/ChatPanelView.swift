@@ -675,7 +675,7 @@ final class ChatPanelModel: ObservableObject {
             steps.append(ChatPipelineStep(id: "web", title: webTitle, status: .pending))
         }
         if searchesVault {
-            steps.append(ChatPipelineStep(id: "search", title: "Searching vault…", status: .pending))
+            steps.append(ChatPipelineStep(id: "search", title: "Searching notes…", status: .pending))
             steps.append(ChatPipelineStep(id: "sources", title: "Found sources", status: .pending))
         }
         steps.append(ChatPipelineStep(id: "connect", title: "Connecting to model…", status: .pending))
@@ -974,7 +974,11 @@ struct ChatPanelView: View {
     @EnvironmentObject private var aiServices: OpenWriteAIServices
     @EnvironmentObject private var workbench: WorkbenchState
     @Environment(\.agentsWorkbenchPresentation) private var agentsWorkbench
-    @StateObject private var model = ChatPanelModel()
+    @ObservedObject var model: ChatPanelModel
+
+    init(model: ChatPanelModel) {
+        _model = ObservedObject(wrappedValue: model)
+    }
     /// True when the transcript bottom sentinel is visible — auto-scroll only while pinned.
     @State private var chatPinnedToBottom = true
     /// Measured height of the bottom composer chrome (drives transcript scroll padding).
@@ -988,7 +992,11 @@ struct ChatPanelView: View {
     }
 
     private var showsConversationHeader: Bool {
-        !agentsWorkbench && !showsEmbeddedAssistStripChrome
+        agentsWorkbench || !showsEmbeddedAssistStripChrome
+    }
+
+    private var conversationHeaderTitle: String {
+        agentsWorkbench ? "Agents" : "Ask notes"
     }
 
     /// Composer sits in `safeAreaInset`; only a small slack gap is needed above it.
@@ -1126,17 +1134,19 @@ struct ChatPanelView: View {
 
     private var conversationHeader: some View {
         OWAIPanelHeader(
-            title: "Ask vault",
+            title: conversationHeaderTitle,
             canGoBack: showsInPanelBack,
             backAccessibilityLabel: "Back to agents",
             onBack: showsInPanelBack ? { navigation.closeChatThread() } : nil,
             compact: true,
             center: {
                 VStack(alignment: .leading, spacing: 2) {
-                Text("Ask vault")
+                Text(conversationHeaderTitle)
                     .font(OWTypography.calloutEmphasis)
                         .foregroundStyle(DesignTokens.Color.textPrimary)
-                    AgentPickerView(selectedAgentID: $aiServices.selectedAgentID)
+                    if !agentsWorkbench {
+                        AgentPickerView(selectedAgentID: $aiServices.selectedAgentID)
+                    }
                 }
             },
             trailing: {

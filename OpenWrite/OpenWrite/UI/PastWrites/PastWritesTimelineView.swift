@@ -40,7 +40,7 @@ struct PastChatSessionsView: View {
     private func chatRow(_ thread: SavedChatThread) -> some View {
         Button {
             workbench.archivedChatThreadIDToOpen = thread.id
-            workbench.aiAssistExpanded = true
+            workbench.showAgents()
             workbench.persistChromePreferences()
         } label: {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {

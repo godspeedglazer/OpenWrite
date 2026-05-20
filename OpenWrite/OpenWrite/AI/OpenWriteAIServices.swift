@@ -96,6 +96,7 @@ final class OpenWriteAIServices: ObservableObject {
     private(set) var lastPreparedVaultSignature: Int?
     /// Per-document content fingerprints for incremental `index(document:)` after edits.
     private var indexedDocumentFingerprints: [UUID: Int] = [:]
+    private var documentIndexTasks: [UUID: Task<Void, Never>] = [:]
 
     /// True after a successful connection check (`lmStatus` begins with "Connected").
     var isLMStudioConnected: Bool {
@@ -659,6 +660,36 @@ final class OpenWriteAIServices: ObservableObject {
         } catch {
             ingestionHealth.recordError(error.localizedDescription)
             lmStatus = "Index error: \(error.localizedDescription)"
+        }
+    }
+
+    /// Debounced incremental index after editor saves (avoids waiting for the 2s vault-wide reindex).
+    func scheduleIndex(documentID: UUID, vaultStore: VaultStore) {
+        documentIndexTasks[documentID]?.cancel()
+        documentIndexTasks[documentID] = Task { [weak self, weak vaultStore] in
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled, let self, let vaultStore else { return }
+            guard let document = vaultStore.documents.first(where: { $0.id == documentID }) else { return }
+            await self.index(document: document)
+        }
+    }
+
+    /// Ingest changed on-disk markdown through the FSEvents pipeline path.
+    func ingestMarkdownFiles(at urls: [URL]) async {
+        guard let pipeline = ingestionPipeline, !urls.isEmpty else { return }
+        for url in urls {
+            await pipeline.enqueueFilesystemChange(at: url)
+        }
+        do {
+            try await pipeline.processPendingFilesystemEvents()
+            indexedChunkCount = await vectorStore.chunkCount
+            ingestionHealth.updateIndexedChunkCount(indexedChunkCount)
+        } catch is CancellationError {
+            ingestionHealth.markCancelled()
+        } catch IngestionPipelineError.cancelled {
+            ingestionHealth.markCancelled()
+        } catch {
+            ingestionHealth.recordError(error.localizedDescription)
         }
     }
 

@@ -86,7 +86,7 @@ struct AIAssistStripView: View {
         case .root:
             rootTabContent
         case .chatThread:
-            ChatPanelView()
+            ChatPanelView(model: workbench.chatPanel)
         case .relatedDetail(let hit):
             RelatedNoteDetailView(hit: hit)
         }
@@ -96,7 +96,7 @@ struct AIAssistStripView: View {
     private var rootTabContent: some View {
         switch workbench.inspectorTab {
         case .chat:
-            ChatPanelView()
+            ChatPanelView(model: workbench.chatPanel)
         case .related:
             RelatedNotesView()
         case .pastWrites:

@@ -32,7 +32,7 @@ struct AgentsWorkbenchView: View {
             agentsCanvas
             VStack(spacing: 0) {
                 agentsTopChrome
-                ChatPanelView()
+                ChatPanelView(model: workbench.chatPanel)
                     .environment(\.agentsWorkbenchPresentation, true)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

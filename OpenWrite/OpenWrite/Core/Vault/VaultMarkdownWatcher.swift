@@ -1,14 +1,14 @@
 import Foundation
 
-/// Lightweight vault markdown watcher — scans on launch and when the vault root changes.
+/// Lightweight notes-folder watcher — scans on launch and on an interval for `.md` changes.
 @MainActor
 final class VaultMarkdownWatcher: ObservableObject {
     private var watchTask: Task<Void, Never>?
     private var lastSnapshot: [String: Date] = [:]
-    private var onVaultChanged: (() -> Void)?
+    private var onMarkdownChanged: (([URL]) -> Void)?
 
-    func start(onChange: @escaping () -> Void) {
-        onVaultChanged = onChange
+    func start(onMarkdownChanged handler: @escaping ([URL]) -> Void) {
+        onMarkdownChanged = handler
         watchTask?.cancel()
         watchTask = Task { [weak self] in
             guard let self else { return }
@@ -41,10 +41,32 @@ final class VaultMarkdownWatcher: ObservableObject {
             }
             return snapshot
         }.value
-        let changed = force || snapshot != lastSnapshot
+
+        let changedURLs = changedMarkdownURLs(
+            root: root,
+            snapshot: snapshot,
+            previous: lastSnapshot,
+            treatAllAsChanged: force
+        )
         lastSnapshot = snapshot
-        if changed {
-            onVaultChanged?()
+        guard !changedURLs.isEmpty else { return }
+        onMarkdownChanged?(changedURLs)
+    }
+
+    private func changedMarkdownURLs(
+        root: URL,
+        snapshot: [String: Date],
+        previous: [String: Date],
+        treatAllAsChanged: Bool
+    ) -> [URL] {
+        if treatAllAsChanged {
+            return snapshot.keys.sorted().map { root.appendingPathComponent($0) }
         }
+        var urls: [URL] = []
+        urls.reserveCapacity(snapshot.count)
+        for (relative, modified) in snapshot where previous[relative] != modified {
+            urls.append(root.appendingPathComponent(relative))
+        }
+        return urls
     }
 }

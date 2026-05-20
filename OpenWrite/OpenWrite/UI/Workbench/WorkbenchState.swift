@@ -22,6 +22,8 @@ final class WorkbenchState: ObservableObject {
     /// Set from chat when the user taps Apply on parsed `ow` actions; consumed by `EditorView`.
     @Published var chatOWActionsApplyToken: UUID?
     @Published var chatOWActionsToApply: [OWAction] = []
+    /// Single chat session shared by Agents tab and the sideline assist strip.
+    let chatPanel = ChatPanelModel()
 
     func requestApplyChatOWActions(_ actions: [OWAction]) {
         guard !actions.isEmpty else { return }
