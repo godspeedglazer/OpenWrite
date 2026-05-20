@@ -1,49 +1,44 @@
 # OpenWrite
 
-Native macOS local-first writer: on-disk notes, Note Design Language (NDL), and LM Studio–backed AI research.
+Native macOS local-first writer: on-disk notes, block editor (NDL), hybrid search, and LM Studio–backed AI.
 
+**Bundle ID:** `com.openwrite.app` · **Requires:** macOS 14+, Xcode 15+
 
-## Requirements
+## Build
 
-- macOS 14.0+
-- Xcode 15+
+```bash
+cd OpenWrite
+xcodebuild -scheme OpenWrite -configuration Debug -destination 'platform=macOS' build
+```
 
-## Documentation
+Open `OpenWrite/OpenWrite.xcodeproj` in Xcode and run the **OpenWrite** target.
 
-**Start at the [documentation hub](docs/README.md)** — master index for architecture, NDL, design, ADRs, features, and contribution standards.
+## Install (app + CLI)
 
-| Document | Description |
-|----------|-------------|
-| [docs/README.md](docs/README.md) | Master index (link to all docs) |
-| [docs/OpenWriteMasterPlan.md](docs/OpenWriteMasterPlan.md) | Product vision, competitors, phased roadmap |
-| [docs/Architecture/Overview.md](docs/Architecture/Overview.md) | Layers, Swift module map, data flows |
-| [docs/Architecture/DataModel.md](docs/Architecture/DataModel.md) | Vault, `.owdoc`, typed pages, index |
-| [docs/Architecture/AI-Pipeline.md](docs/Architecture/AI-Pipeline.md) | Index → embed → retrieve → RAG |
-| [docs/NDL/Specification.md](docs/NDL/Specification.md) | NDL v0 grammar and examples |
-| [docs/RoadmapEpics.md](docs/RoadmapEpics.md) | Phase 2 epics (E-01–E-10) |
-| [docs/Glossary.md](docs/Glossary.md) | Terminology |
-| [docs/GitWorkflow.md](docs/GitWorkflow.md) | Branches, commits, tracked paths |
-| [docs/Contributing/DocumentationStandards.md](docs/Contributing/DocumentationStandards.md) | Doc every feature PR; ADRs for architecture |
+Release builds embed CLI tools in `OpenWrite.app/Contents/Helpers/`.
+
+```bash
+./scripts/install-openwrite.sh
+```
+
+The app also installs `openwrite` into `~/.local/bin` on first launch (Settings → AI → **Install CLI tools**).
+
+## Command-line tools
+
+```bash
+cd Tools/OpenWriteCLI && make install
+openwrite index
+openwrite query "your question" --limit 5
+```
+
+See [Tools/OpenWriteCLI/README.md](Tools/OpenWriteCLI/README.md).
 
 ## Repository layout
 
 | Path | Description |
 |------|-------------|
-| `docs/` | Documentation hub ([README](docs/README.md)) |
-| `docs/OpenWriteMasterPlan.md` | Product vision (authoritative; link, don’t duplicate) |
-| `docs/ProductPhilosophy.md` | Principles: local-only, dual-generator AI, simplicity |
-| `docs/design/` | UI/UX design language |
-| `docs/adr/` | Architecture decision records (0001–0003) |
-| `docs/RoadmapEpics.md` | Phase 2 implementation epics (E-01–E-10) |
-| `OpenWrite/` | Xcode project and Swift sources |
-| `reor-main/`, `logseq-master/`, `massCode-main/` | Reference clones (AGPL — code may be ported to Swift with link/comply) |
-| `AFFiNE-canary/`, `rem-main/` | Reference clones (MIT — may port with attribution) |
-| `anytype-ts-develop/` | Reference clone (ASAL — inspiration only, no code copy) |
+| `OpenWrite/` | Xcode app (SwiftUI, editor, indexing, RAG, shell) |
+| `Tools/OpenWriteCLI/` | `openwrite`, `openwrite-index`, `openwrite-query`, `openwrite-stats` |
+| `scripts/` | Release embed + `/Applications` installer |
 
-## Bundle ID
-
-`com.openwrite.app`
-
-## Status
-
-Phase 1 scaffold — buildable shell with core type stubs. See [docs/OpenWriteMasterPlan.md](docs/OpenWriteMasterPlan.md) for MVP → v2 scope and [docs/RoadmapEpics.md](docs/RoadmapEpics.md) for Phase 2 delivery.
+Planning docs under `docs/` are kept **local only** (not on GitHub).

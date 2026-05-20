@@ -26,11 +26,13 @@ OpenWrite/Assets.xcassets/
 # Cursor / agent swarm (local only — not product code)
 .cursor/
 
-# Agent orchestration docs (local planning)
-docs/SWARM.md
-docs/MajorPlan-*.md
+# Product docs stay local (GitHub is app + CLI only)
+docs/
+
+# Agent orchestration (local planning)
 AGENT_PROMPT*.md
 **/AGENT_PROMPT*.md
+HANDOFF.md
 
 # --- Secrets & environment ---
 .env
