@@ -63,6 +63,18 @@ struct OpenWriteApp: App {
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
             }
+            CommandMenu("Extras") {
+                Button("Morning Paper…") {
+                    NotificationCenter.default.post(name: .openWriteShowMorningPaper, object: nil)
+                }
+                Button("Research Digest…") {
+                    NotificationCenter.default.post(name: .openWriteShowResearchDigest, object: nil)
+                }
+                Divider()
+                Button("Import Obsidian Folder…") {
+                    NotificationCenter.default.post(name: .openWriteShowObsidianImport, object: nil)
+                }
+            }
             CommandGroup(replacing: .undoRedo) {
                 Button("Undo") {
                     NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)

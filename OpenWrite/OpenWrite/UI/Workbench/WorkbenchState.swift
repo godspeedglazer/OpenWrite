@@ -25,6 +25,11 @@ final class WorkbenchState: ObservableObject {
     /// Single chat session shared by Agents tab and the sideline assist strip.
     let chatPanel = ChatPanelModel()
 
+    /// Phase 2 extras (hidden menus — not main chrome).
+    @Published var showMorningPaperSheet = false
+    @Published var showResearchDigestSheet = false
+    @Published var showObsidianImportSheet = false
+
     func requestApplyChatOWActions(_ actions: [OWAction]) {
         guard !actions.isEmpty else { return }
         chatOWActionsToApply = actions

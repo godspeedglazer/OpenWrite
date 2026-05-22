@@ -95,6 +95,36 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openWriteToggleFocusMode)) { _ in
             workbench.toggleEditorFocusMode()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openWriteShowMorningPaper)) { _ in
+            workbench.showMorningPaperSheet = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openWriteShowResearchDigest)) { _ in
+            workbench.showResearchDigestSheet = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openWriteShowObsidianImport)) { _ in
+            workbench.showObsidianImportSheet = true
+        }
+        .sheet(isPresented: $workbench.showMorningPaperSheet) {
+            MorningPaperSheet { workbench.showMorningPaperSheet = false }
+                .environmentObject(vaultStore)
+                .environmentObject(aiServices)
+                .openWriteThemeAppearance()
+                .openWriteSheetPresentationChrome()
+        }
+        .sheet(isPresented: $workbench.showResearchDigestSheet) {
+            ResearchDigestSheet { workbench.showResearchDigestSheet = false }
+                .environmentObject(vaultStore)
+                .environmentObject(aiServices)
+                .openWriteThemeAppearance()
+                .openWriteSheetPresentationChrome()
+        }
+        .sheet(isPresented: $workbench.showObsidianImportSheet) {
+            ObsidianImportSheet { workbench.showObsidianImportSheet = false }
+                .environmentObject(vaultStore)
+                .environmentObject(aiServices)
+                .openWriteThemeAppearance()
+                .openWriteSheetPresentationChrome()
+        }
     }
 
     /// Changes when the active vault or its member pages change (vault switch does not mutate `documents`).

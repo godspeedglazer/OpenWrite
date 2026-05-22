@@ -56,7 +56,8 @@ enum VaultMarkdownCatalog {
 
     static func loadBlocks(from file: VaultMarkdownFile) throws -> [NoteBlock] {
         let markdown = try String(contentsOf: file.fileURL, encoding: .utf8)
-        return importer.importString(markdown)
+        let normalized = ObsidianMarkdownNormalizer.normalize(markdown)
+        return importer.importString(normalized)
     }
 
     static func stableDocumentID(relativePath: String) -> UUID {

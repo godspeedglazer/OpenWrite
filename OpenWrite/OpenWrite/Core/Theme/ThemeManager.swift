@@ -5,6 +5,9 @@ extension Notification.Name {
     static let openWriteThemeDidChange = Notification.Name("com.openwrite.themeDidChange")
     /// Hides sidebar + assist for distraction-free writing (menu / shortcut only — not tied to fullscreen).
     static let openWriteToggleFocusMode = Notification.Name("com.openwrite.toggleFocusMode")
+    static let openWriteShowMorningPaper = Notification.Name("com.openwrite.extras.morningPaper")
+    static let openWriteShowResearchDigest = Notification.Name("com.openwrite.extras.researchDigest")
+    static let openWriteShowObsidianImport = Notification.Name("com.openwrite.extras.obsidianImport")
 }
 
 // MARK: - Environment
