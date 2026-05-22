@@ -31,6 +31,7 @@ for rel in \
   NoteDSL/RefinePrompts.swift \
   AI/OWActionScript.swift \
   Import/RichPasteImporter.swift \
+  Import/ObsidianMarkdownNormalizer.swift \
   UI/Editor/BlockKeyboardEditing.swift
 do
   link "$rel"
