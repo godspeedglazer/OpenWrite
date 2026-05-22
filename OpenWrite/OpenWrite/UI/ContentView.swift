@@ -56,6 +56,7 @@ struct ContentView: View {
         .background(DesignTokens.Color.shellChrome)
         .task {
             _ = try? VaultLocationPreferences.ensureDefaultVaultLayout()
+            vaultStore.syncCanonicalWelcomeFromDisk()
             await aiServices.startFilesystemIngestionWatch()
             markdownVaultWatcher.start { changedURLs in
                 Task {

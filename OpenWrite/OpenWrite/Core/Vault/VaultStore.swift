@@ -16,7 +16,7 @@ final class VaultStore: ObservableObject {
 
     init(encryption: EncryptionService = NoOpEncryptionService()) {
         self.encryption = encryption
-        documents = [.welcomeSample]
+        documents = []
         selectedDocumentID = nil
         databases = []
         databaseEntries = []
@@ -277,7 +277,43 @@ final class VaultStore: ObservableObject {
     // MARK: - Vault switching & demo seed
 
     /// First launch: install demo once. Safe to call on every launch — skips when already seeded.
+    /// `Welcome.md` on disk is canonical; in-memory sample is fallback until seed exists.
+    @discardableResult
+    func syncCanonicalWelcomeFromDisk() -> Bool {
+        let root = VaultLocationPreferences.resolvedVaultRootURL()
+        let welcomeURL = root.appendingPathComponent("Welcome.md")
+        guard FileManager.default.fileExists(atPath: welcomeURL.path) else {
+            if !documents.contains(where: { $0.id == VaultDocument.welcomeDocumentID }) {
+                documents.insert(VaultDocument.welcomeSample, at: 0)
+            }
+            return false
+        }
+        guard let source = try? String(contentsOf: welcomeURL, encoding: .utf8) else { return false }
+        let (properties, bodyBlocks) = NDLParser.parseDocument(
+            source: source,
+            pageType: .note,
+            title: "Welcome to OpenWrite"
+        )
+        let resolvedTitle: String = {
+            if case .text(let value)? = properties[.title], !value.isEmpty { return value }
+            return "Welcome to OpenWrite"
+        }()
+        var welcome = VaultDocument(
+            id: VaultDocument.welcomeDocumentID,
+            title: resolvedTitle,
+            pageType: .note,
+            properties: properties,
+            rootBlocks: bodyBlocks
+        )
+        welcome.pageIcon = "openwrite-logo"
+        welcome.assignVault(activeVaultID)
+        documents.removeAll { $0.id == VaultDocument.welcomeDocumentID }
+        documents.insert(welcome, at: 0)
+        return true
+    }
+
     func bootstrapOnLaunch() {
+        syncCanonicalWelcomeFromDisk()
         let shouldOfferFirstLaunchDemo = !VaultLaunchPreferences.didSeedDemoOnFirstLaunch
         if shouldOfferFirstLaunchDemo {
             VaultLaunchPreferences.didSeedDemoOnFirstLaunch = true

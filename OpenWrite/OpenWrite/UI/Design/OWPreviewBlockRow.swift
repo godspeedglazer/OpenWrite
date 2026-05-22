@@ -13,6 +13,10 @@ struct OWPreviewBlockRow: View {
     var calloutType: Binding<String>? = nil
     var onSelectionChange: ((String?) -> Void)? = nil
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)? = nil
+    var onSplitAtCursor: ((UUID, Int) -> Void)? = nil
+    var onMergeWithPrevious: ((UUID) -> Void)? = nil
+    var focusRequestNonce: Int = 0
+    var focusRequestBlockID: UUID?
     var previewMode: Bool = false
     var onActivate: (() -> Void)? = nil
 
@@ -390,7 +394,11 @@ struct OWPreviewBlockRow: View {
                     rowHasTextSelection = selected != nil
                     onSelectionChange?(selected)
                 },
-                onRefinePreset: onRefinePreset
+                onRefinePreset: onRefinePreset,
+                onSplitAtCursor: { offset in onSplitAtCursor?(block.id, offset) },
+                onMergeWithPrevious: { onMergeWithPrevious?(block.id) },
+                focusRequestNonce: focusRequestNonce,
+                focusRequestBlockID: focusRequestBlockID
             )
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {

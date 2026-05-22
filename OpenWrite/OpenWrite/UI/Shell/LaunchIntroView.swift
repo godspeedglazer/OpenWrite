@@ -4,6 +4,7 @@ import SwiftUI
 
 enum LaunchIntroStorage {
     static let lastSeenVersionKey = "com.openwrite.launchIntro.lastSeenVersion"
+    static let hasCompletedLaunchIntroKey = "com.openwrite.launchIntro.completed"
 
     static var currentAppVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
@@ -12,15 +13,21 @@ enum LaunchIntroStorage {
     static func shouldShowIntro(lastSeenVersion: String) -> Bool {
         lastSeenVersion != currentAppVersion
     }
+
+    /// Splash only on first launch (or after a version bump if you reset the flag).
+    static var shouldShowIntroOnLaunch: Bool {
+        !UserDefaults.standard.bool(forKey: hasCompletedLaunchIntroKey)
+    }
 }
 
 // MARK: - Root wrapper
 
-/// Brief Anytype-style splash on every launch, then crossfade into the main shell.
+/// Brief splash on first launch (or new app version), then crossfade into the main shell.
 struct LaunchRootView<Main: View>: View {
     @AppStorage(LaunchIntroStorage.lastSeenVersionKey) private var lastSeenIntroVersion = ""
-    @State private var showIntroOverlay = true
-    @State private var mainShellOpacity: Double = 0
+    @AppStorage(LaunchIntroStorage.hasCompletedLaunchIntroKey) private var hasCompletedLaunchIntro = false
+    @State private var showIntroOverlay = false
+    @State private var mainShellOpacity: Double = 1
 
     @ViewBuilder private let main: () -> Main
 
@@ -43,11 +50,19 @@ struct LaunchRootView<Main: View>: View {
     }
 
     private func configureLaunchPresentation() {
-        mainShellOpacity = 0
-        showIntroOverlay = true
+        let showSplash = LaunchIntroStorage.shouldShowIntroOnLaunch
+            || LaunchIntroStorage.shouldShowIntro(lastSeenVersion: lastSeenIntroVersion)
+        if showSplash {
+            mainShellOpacity = 0
+            showIntroOverlay = true
+        } else {
+            mainShellOpacity = 1
+            showIntroOverlay = false
+        }
     }
 
     private func finishIntro() {
+        hasCompletedLaunchIntro = true
         if LaunchIntroStorage.shouldShowIntro(lastSeenVersion: lastSeenIntroVersion) {
             lastSeenIntroVersion = LaunchIntroStorage.currentAppVersion
         }

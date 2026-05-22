@@ -42,6 +42,10 @@ let package = Package(
             name: "openwrite-stats",
             dependencies: ["OpenWriteKit"],
             path: "Sources/openwrite-stats"
+        ),
+        .testTarget(
+            name: "WritingCoreTests",
+            dependencies: ["OpenWriteKit"]
         )
     ]
 )

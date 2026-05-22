@@ -28,14 +28,6 @@ enum InlineRefinePreset: String, CaseIterable, Sendable {
     }
 }
 
-/// Selection snapshot for inline refine; safe to pass across actors.
-struct InlineSelectionSnapshot: Sendable, Equatable {
-    let documentID: UUID
-    let blockID: UUID?
-    let selectedText: String
-    let selectedRange: NSRange
-}
-
 enum InlineAssistPhase: Equatable {
     case idle
     case capturing
@@ -179,21 +171,7 @@ final class InlineAssistController: ObservableObject {
         blocks: inout [NoteBlock],
         fallbackBlockID: UUID? = nil
     ) -> Bool {
-        let trimmed = refinedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return false }
-
-        let targetID = snapshot.blockID ?? fallbackBlockID
-        guard let blockID = targetID,
-              let index = blocks.firstIndex(where: { $0.id == blockID }) else { return false }
-
-        var blockText = blocks[index].text
-        if let range = blockText.range(of: snapshot.selectedText) {
-            blockText.replaceSubrange(range, with: trimmed)
-        } else {
-            blockText = trimmed
-        }
-        blocks[index].text = blockText
-        return true
+        BlockRefinement.apply(refinedText, snapshot: snapshot, blocks: &blocks, fallbackBlockID: fallbackBlockID)
     }
 
     var canRefineSelection: Bool {
@@ -308,9 +286,16 @@ final class InlineAssistController: ObservableObject {
             beginRefineSession()
         }
 
-        let query = Self.refineQuery(
-            for: latestSnapshot!.selectedText,
-            preset: preset,
+        let promptPreset: RefinePromptPreset = {
+            switch preset {
+            case .improve: return .improve
+            case .shorten: return .shorten
+            case .fixGrammar: return .fixGrammar
+            }
+        }()
+        let query = RefinePrompts.buildQuery(
+            selection: latestSnapshot!.selectedText,
+            preset: promptPreset,
             noteExcerpt: noteExcerpt
         )
         let agent = BuiltInAgents.refineProse
@@ -389,34 +374,6 @@ final class InlineAssistController: ObservableObject {
                 phase = .failed(message)
             }
         }
-    }
-
-    private static func refineQuery(
-        for selection: String,
-        preset: InlineRefinePreset,
-        noteExcerpt: String?
-    ) -> String {
-        var body = """
-        Refine the following selected excerpt from my note. Return only the improved text. \
-        Do not wrap in markdown fences unless the selection already uses them.
-        Task: \(preset.instructionSuffix)
-
-        --- SELECTION ---
-        \(selection)
-        --- END SELECTION ---
-
-        \(OWActionScript.systemPromptAppendix())
-        """
-        if let excerpt = noteExcerpt?.trimmingCharacters(in: .whitespacesAndNewlines), !excerpt.isEmpty {
-            body += """
-
-
-            --- NOTE CONTEXT (for tone only; do not quote or summarize) ---
-            \(excerpt)
-            --- END NOTE CONTEXT ---
-            """
-        }
-        return body
     }
 
     private static func runRefineStream(

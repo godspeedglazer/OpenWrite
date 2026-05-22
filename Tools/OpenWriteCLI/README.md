@@ -31,6 +31,8 @@ openwrite stats
 openwrite index --notes ~/Documents/OpenWriteNotes
 openwrite query "ingestion pipeline" --limit 5
 openwrite test-queries --reindex
+openwrite test-writing
+openwrite test-all --reindex
 ```
 
 Fixture regression (from repo):

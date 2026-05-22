@@ -8,6 +8,9 @@ struct AISettingsView: View {
     @State private var baseURLString: String = LMStudioConfig.default.baseURL.absoluteString
     @State private var useCustomEmbeddingID = false
     @State private var allowlistDomains: String = ""
+    @State private var optionalAPIKey: String = UserDefaults.standard.string(
+        forKey: RefineAvailability.optionalAPIKeyUserDefaultsKey
+    ) ?? ""
     @State private var cliInstallMessage: String?
 
     var body: some View {
@@ -47,6 +50,25 @@ struct AISettingsView: View {
                     )
 
                     embeddingModelSection
+                }
+            }
+
+            OWSettingsSection(
+                title: "Refine & search",
+                footer: RefineAvailability.indexOfflineNotice + " " + RefineAvailability.refineRequiresChatModel
+            ) {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.spacing1) {
+                    Text("Optional cloud API key (future)")
+                        .font(DesignTokens.Typography.caption)
+                        .foregroundStyle(DesignTokens.Color.textTertiary)
+                    OWThemedTextField(placeholder: "Not required for local LM Studio", text: $optionalAPIKey) {
+                        let trimmed = optionalAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed.isEmpty {
+                            UserDefaults.standard.removeObject(forKey: RefineAvailability.optionalAPIKeyUserDefaultsKey)
+                        } else {
+                            UserDefaults.standard.set(trimmed, forKey: RefineAvailability.optionalAPIKeyUserDefaultsKey)
+                        }
+                    }
                 }
             }
 

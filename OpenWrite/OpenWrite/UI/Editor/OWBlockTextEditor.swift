@@ -17,6 +17,10 @@ struct OWBlockTextEditor: NSViewRepresentable {
     var strikethrough: Bool = false
     var onSelectionChange: ((String?) -> Void)?
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
+    var onSplitAtCursor: ((Int) -> Void)?
+    var onMergeWithPrevious: (() -> Void)?
+    var focusRequestNonce: Int = 0
+    var focusRequestBlockID: UUID?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -45,6 +49,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
         container.textView = textView
         container.embed(textView)
         context.coordinator.textView = textView
+        context.coordinator.bindKeyboardHandlers(to: textView)
         context.coordinator.applyContent()
         context.coordinator.applySelectionChrome()
         return container
@@ -53,6 +58,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
     func updateNSView(_ container: BlockTextContainerView, context: Context) {
         guard let textView = container.textView else { return }
         context.coordinator.parent = self
+        context.coordinator.bindKeyboardHandlers(to: textView)
         let themeColorsChanged = context.coordinator.themeRevisionChanged(themeRevision)
         context.coordinator.applySelectionChrome()
         let layoutWidth = container.bounds.width
@@ -83,6 +89,7 @@ struct OWBlockTextEditor: NSViewRepresentable {
         if current != markdown || attributesChanged || strikethroughChanged {
             context.coordinator.applyContent(preserveSelection: context.coordinator.isActivelyEditing(textView))
         }
+        context.coordinator.applyFocusRequestIfNeeded()
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BlockTextContainerView, context: Context) -> CGSize? {
@@ -340,6 +347,24 @@ struct OWBlockTextEditor: NSViewRepresentable {
             }
             return parent.basePointSize
         }
+
+        func applyFocusRequestIfNeeded() {
+            guard let textView,
+                  parent.focusRequestBlockID == parent.blockID,
+                  parent.focusRequestNonce > 0 else { return }
+            guard let window = textView.window else { return }
+            window.makeFirstResponder(textView)
+        }
+
+        func bindKeyboardHandlers(to textView: BlockFormattingTextView) {
+            textView.pasteAfterBlockID = parent.blockID
+            textView.onSplitAtCursor = { [weak self] offset in
+                self?.parent.onSplitAtCursor?(offset)
+            }
+            textView.onMergeWithPrevious = { [weak self] in
+                self?.parent.onMergeWithPrevious?()
+            }
+        }
     }
 }
 
@@ -383,16 +408,56 @@ final class BlockTextContainerView: NSView {
 extension Notification.Name {
     /// Block editor paste host ingests clipboard images when a block field receives ⌘V.
     static let openWriteIngestPastedImage = Notification.Name("openwrite.ingestPastedImage")
+    /// Rich paste produced multiple blocks — insert after `userInfo["afterBlockID"]`.
+    static let openWritePasteBlocks = Notification.Name("openwrite.pasteBlocks")
+}
+
+enum OpenWritePasteNotificationKey {
+    static let blocks = "openwrite.paste.blocks"
+    static let afterBlockID = "openwrite.paste.afterBlockID"
 }
 
 final class BlockFormattingTextView: NSTextView {
     weak var formattingCoordinator: OWBlockTextEditor.Coordinator?
+    var onSplitAtCursor: ((Int) -> Void)?
+    var onMergeWithPrevious: (() -> Void)?
+    var pasteAfterBlockID: UUID?
 
     override var isOpaque: Bool { false }
+
+    override func insertNewline(_ sender: Any?) {
+        if NSEvent.modifierFlags.contains(.shift) {
+            super.insertNewline(sender)
+            return
+        }
+        let offset = selectedRange().location
+        if let onSplitAtCursor {
+            onSplitAtCursor(offset)
+            return
+        }
+        super.insertNewline(sender)
+    }
+
+    override func deleteBackward(_ sender: Any?) {
+        let range = selectedRange()
+        if range.length == 0, range.location == 0, let onMergeWithPrevious {
+            onMergeWithPrevious()
+            return
+        }
+        super.deleteBackward(sender)
+    }
 
     override func paste(_ sender: Any?) {
         if ImagePasteSupport.shouldIngestImageFromPasteboard {
             NotificationCenter.default.post(name: .openWriteIngestPastedImage, object: nil)
+            return
+        }
+        if let blocks = RichPasteImporter.blocksFromPasteboard(), blocks.count > 1 {
+            var info: [AnyHashable: Any] = [OpenWritePasteNotificationKey.blocks: blocks]
+            if let after = pasteAfterBlockID {
+                info[OpenWritePasteNotificationKey.afterBlockID] = after
+            }
+            NotificationCenter.default.post(name: .openWritePasteBlocks, object: nil, userInfo: info)
             return
         }
         super.paste(sender)

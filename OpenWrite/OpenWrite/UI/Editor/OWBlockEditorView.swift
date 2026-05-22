@@ -11,6 +11,10 @@ struct OWBlockEditorView: View {
     var onActivateBlock: ((UUID) -> Void)? = nil
     var onSelectionChange: ((String?) -> Void)? = nil
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)? = nil
+    var onSplitAtCursor: ((UUID, Int) -> Void)? = nil
+    var onMergeWithPrevious: ((UUID) -> Void)? = nil
+    var focusRequestNonce: Int = 0
+    var focusRequestBlockID: UUID?
     /// Notifies the outer `OpenWriteThemedScrollView` when AppKit remeasures block stack height.
     var onLaidOutHeightChange: ((CGFloat) -> Void)? = nil
     /// Insert pasted / dropped images after this block (nil → end of note).
@@ -30,6 +34,10 @@ struct OWBlockEditorView: View {
             onActivateBlock: onActivateBlock,
             onSelectionChange: onSelectionChange,
             onRefinePreset: onRefinePreset,
+            onSplitAtCursor: onSplitAtCursor,
+            onMergeWithPrevious: onMergeWithPrevious,
+            focusRequestNonce: focusRequestNonce,
+            focusRequestBlockID: focusRequestBlockID,
             onLaidOutHeightChange: onLaidOutHeightChange,
             onBlocksStructureChange: onBlocksStructureChange
         )
@@ -46,6 +54,10 @@ private struct BlockEditorHostedContent: View {
     var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
+    var onSplitAtCursor: ((UUID, Int) -> Void)?
+    var onMergeWithPrevious: ((UUID) -> Void)?
+    var focusRequestNonce: Int
+    var focusRequestBlockID: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Layout.editorBlockStackSpacing) {
@@ -70,6 +82,10 @@ private struct BlockEditorHostedContent: View {
                 checked: todoCheckedBinding(block),
                 onSelectionChange: onSelectionChange,
                 onRefinePreset: onRefinePreset,
+                onSplitAtCursor: onSplitAtCursor,
+                onMergeWithPrevious: onMergeWithPrevious,
+                focusRequestNonce: focusRequestNonce,
+                focusRequestBlockID: focusRequestBlockID,
                 onActivate: activate
             )
         case .callout:
@@ -80,6 +96,10 @@ private struct BlockEditorHostedContent: View {
                 calloutType: attributeBinding(block, key: "callout"),
                 onSelectionChange: onSelectionChange,
                 onRefinePreset: onRefinePreset,
+                onSplitAtCursor: onSplitAtCursor,
+                onMergeWithPrevious: onMergeWithPrevious,
+                focusRequestNonce: focusRequestNonce,
+                focusRequestBlockID: focusRequestBlockID,
                 onActivate: activate
             )
         case .code:
@@ -90,6 +110,10 @@ private struct BlockEditorHostedContent: View {
                 language: attributeBinding(block, key: "language"),
                 onSelectionChange: onSelectionChange,
                 onRefinePreset: onRefinePreset,
+                onSplitAtCursor: onSplitAtCursor,
+                onMergeWithPrevious: onMergeWithPrevious,
+                focusRequestNonce: focusRequestNonce,
+                focusRequestBlockID: focusRequestBlockID,
                 onActivate: activate
             )
         case .heading1, .heading2, .heading3, .paragraph, .bullet, .quote, .wikilink:
@@ -99,6 +123,10 @@ private struct BlockEditorHostedContent: View {
                 blockAttributes: attributesBinding(block),
                 onSelectionChange: onSelectionChange,
                 onRefinePreset: onRefinePreset,
+                onSplitAtCursor: onSplitAtCursor,
+                onMergeWithPrevious: onMergeWithPrevious,
+                focusRequestNonce: focusRequestNonce,
+                focusRequestBlockID: focusRequestBlockID,
                 onActivate: activate
             )
         case .image:
@@ -156,6 +184,10 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
     var onActivateBlock: ((UUID) -> Void)?
     var onSelectionChange: ((String?) -> Void)?
     var onRefinePreset: ((InlineRefinePreset, String) -> Void)?
+    var onSplitAtCursor: ((UUID, Int) -> Void)?
+    var onMergeWithPrevious: ((UUID) -> Void)?
+    var focusRequestNonce: Int = 0
+    var focusRequestBlockID: UUID?
     var onLaidOutHeightChange: ((CGFloat) -> Void)?
     var onBlocksStructureChange: (() -> Void)?
 
@@ -175,7 +207,11 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             columnWidth: layoutWidth,
             onActivateBlock: onActivateBlock,
             onSelectionChange: onSelectionChange,
-            onRefinePreset: onRefinePreset
+            onRefinePreset: onRefinePreset,
+            onSplitAtCursor: onSplitAtCursor,
+            onMergeWithPrevious: onMergeWithPrevious,
+            focusRequestNonce: focusRequestNonce,
+            focusRequestBlockID: focusRequestBlockID
         )
         let hosting = NSHostingView(rootView: hosted)
         hosting.openWriteSuppressFocusRing()
@@ -197,6 +233,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         context.coordinator.installImagePasteObserver { [weak coordinator = context.coordinator] in
             coordinator?.ingestPastedImage()
         }
+        context.coordinator.installRichPasteObserver()
         context.coordinator.authoritativeColumnWidth = max(columnWidth, 320)
         let initialWidth = context.coordinator.resolvedLayoutWidth()
         let initialRevision = context.coordinator.blocksContentRevision(blocks)
@@ -247,7 +284,11 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
                 columnWidth: layoutWidth,
                 onActivateBlock: onActivateBlock,
                 onSelectionChange: { context.coordinator.onSelectionChange?($0) },
-                onRefinePreset: { context.coordinator.onRefinePreset?($0, $1) }
+                onRefinePreset: { context.coordinator.onRefinePreset?($0, $1) },
+                onSplitAtCursor: onSplitAtCursor,
+                onMergeWithPrevious: onMergeWithPrevious,
+                focusRequestNonce: focusRequestNonce,
+                focusRequestBlockID: focusRequestBlockID
             )
             host.invalidateMeasurementCache()
             let structureRevision = context.coordinator.blocksStructureRevision(blocks)
@@ -337,6 +378,7 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
         private var pendingLayoutWidth: CGFloat?
         private var pendingContentRevision: UInt64 = 0
         private var imagePasteObserver: NSObjectProtocol?
+        private var richPasteObserver: NSObjectProtocol?
 
         init(
             blocks: Binding<[NoteBlock]>,
@@ -355,6 +397,9 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
             if let imagePasteObserver {
                 NotificationCenter.default.removeObserver(imagePasteObserver)
             }
+            if let richPasteObserver {
+                NotificationCenter.default.removeObserver(richPasteObserver)
+            }
         }
 
         func installImagePasteObserver(handler: @escaping () -> Void) {
@@ -365,6 +410,29 @@ private struct BlockEditorPasteHost: NSViewRepresentable {
                 queue: .main
             ) { _ in
                 handler()
+            }
+        }
+
+        func installRichPasteObserver() {
+            guard richPasteObserver == nil else { return }
+            richPasteObserver = NotificationCenter.default.addObserver(
+                forName: .openWritePasteBlocks,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let self,
+                      let pasted = notification.userInfo?[OpenWritePasteNotificationKey.blocks] as? [NoteBlock],
+                      !pasted.isEmpty else { return }
+                let after = (notification.userInfo?[OpenWritePasteNotificationKey.afterBlockID] as? UUID)
+                    ?? self.insertAfterBlockID
+                var draft = self.blocks.wrappedValue
+                var index = BlockDocumentEditing.insertionIndex(in: draft, after: after)
+                for block in pasted {
+                    draft.insert(block, at: index)
+                    index += 1
+                }
+                self.blocks.wrappedValue = draft
+                self.onBlocksStructureChange?()
             }
         }
 

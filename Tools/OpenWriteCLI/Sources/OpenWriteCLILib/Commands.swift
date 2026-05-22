@@ -21,6 +21,11 @@ public enum OpenWriteCLIRunner {
                 try await runQuery(args: args)
             case "test-queries":
                 try await runQueryTests(args: args)
+            case "test-writing":
+                try runWritingTests(args: args)
+            case "test-all":
+                try runWritingTests(args: args)
+                try await runQueryTests(args: args)
             default:
                 fputs("Unknown command: \(command)\n", stderr)
                 printUsage(toolName: currentToolName(fallback: "openwrite"))
@@ -48,6 +53,11 @@ public enum OpenWriteCLIRunner {
             case "query":
                 try await runQuery(args: args)
             case "test-queries":
+                try await runQueryTests(args: args)
+            case "test-writing":
+                try runWritingTests(args: args)
+            case "test-all":
+                try runWritingTests(args: args)
                 try await runQueryTests(args: args)
             default:
                 fputs("Unknown tool: \(fixedCommand)\n", stderr)
@@ -78,6 +88,8 @@ public enum OpenWriteCLIRunner {
                   openwrite index [--notes PATH] [--index PATH]
                   openwrite query "…" [--limit N] [--keyword-only] [--index PATH]
                   openwrite test-queries [--notes PATH] [--index PATH] [--reindex] [--keyword-only]
+                  openwrite test-writing [--filter SUBSTRING]
+                  openwrite test-all [--notes PATH] [--index PATH] [--reindex] [--filter SUBSTRING]
 
                 Dedicated tools (same flags):
                   openwrite-stats   openwrite-index   openwrite-query
@@ -162,6 +174,34 @@ public enum OpenWriteCLIRunner {
             indexURL: paths.indexURL
         )
         printHits(query: query, hits: hits)
+    }
+
+    private static func runWritingTests(args: [String]) throws {
+        var filter: String?
+        if let i = args.firstIndex(of: "--filter"), i + 1 < args.count {
+            filter = args[i + 1]
+        }
+        print("── Writing core tests (L0) ──\n")
+        var passed = 0
+        var failed = 0
+        for test in WritingTestSuite.defaultSuite() {
+            if let filter, !filter.isEmpty,
+               !test.id.localizedCaseInsensitiveContains(filter),
+               !test.name.localizedCaseInsensitiveContains(filter) {
+                continue
+            }
+            do {
+                try test.run()
+                print("[PASS] \(test.id) \(test.name)")
+                passed += 1
+            } catch {
+                print("[FAIL] \(test.id) \(test.name)")
+                print("  \(error.localizedDescription)")
+                failed += 1
+            }
+        }
+        print("\n── \(passed) passed, \(failed) failed ──")
+        if failed > 0 { exit(2) }
     }
 
     private static func runQueryTests(args: [String]) async throws {
@@ -364,7 +404,7 @@ enum QueryTestSuite {
         [
             QueryTestCase(
                 name: "Welcome note",
-                query: "local-first writing",
+                query: "Welcome disk retrieval CLI tests start here",
                 limit: 5,
                 expectTopTitleContains: "Welcome"
             ),
@@ -403,6 +443,12 @@ enum QueryTestSuite {
                 query: "Welcome.md",
                 limit: 3,
                 expectTopTitleContains: "Welcome"
+            ),
+            QueryTestCase(
+                name: "Writing sample prose",
+                query: "hemingway iceberg revise draft",
+                limit: 5,
+                expectTopTitleContains: "Writing"
             )
         ]
     }

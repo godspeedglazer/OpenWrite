@@ -4,6 +4,9 @@ import SwiftUI
 /// Tracks the focused block editor and applies formatting to the active `NSTextView`.
 final class BlockFormattingState: ObservableObject {
     @Published private(set) var focusedBlockID: UUID?
+    /// Bumped when the editor should move first responder to a block field.
+    @Published private(set) var focusRequestNonce: Int = 0
+    @Published private(set) var focusRequestBlockID: UUID?
     @Published private(set) var hasEditableText = false
     @Published private(set) var formatState = InlineMarkdown.FormatState()
 
@@ -21,6 +24,12 @@ final class BlockFormattingState: ObservableObject {
         hasEditableText = false
         formatState = InlineMarkdown.FormatState()
         onMarkdownChange = nil
+    }
+
+    func requestFocus(blockID: UUID) {
+        focusRequestBlockID = blockID
+        focusRequestNonce += 1
+        focusedBlockID = blockID
     }
 
     func register(

@@ -429,7 +429,7 @@ struct EditorView: View {
                     OWBlockEditorView(
                         blocks: $editingBlocks,
                         columnWidth: resolvedBlockColumnWidth,
-                        onActivateBlock: nil,
+                        onActivateBlock: { blockFormatting.requestFocus(blockID: $0) },
                         onSelectionChange: { selectedText in
                             inlineAssist.scheduleSelectionCapture(
                                 documentID: document.id,
@@ -444,6 +444,14 @@ struct EditorView: View {
                                 selectedText: selectedText
                             )
                         },
+                        onSplitAtCursor: { blockID, offset in
+                            handleBlockSplit(blockID: blockID, cursorOffset: offset, document: document)
+                        },
+                        onMergeWithPrevious: { blockID in
+                            handleBlockMerge(blockID: blockID, document: document)
+                        },
+                        focusRequestNonce: blockFormatting.focusRequestNonce,
+                        focusRequestBlockID: blockFormatting.focusRequestBlockID,
                         onLaidOutHeightChange: { height in
                             let rounded = floor(height + 0.5)
                             guard abs(blockStackLaidOutHeight - rounded) > 0.5 else { return }
@@ -615,25 +623,25 @@ struct EditorView: View {
     private static func refineLMUnavailableMessage(
         connectionState: OpenWriteAIServices.LMConnectionState
     ) -> String? {
-        switch connectionState {
-        case .offline:
-            return """
-            Start LM Studio on this Mac, load a chat model, then try Refine again. \
-            Open Settings → AI to verify the server URL and chat model.
-            """
-        case .notChecked, .checking, .connecting:
-            return """
-            Could not verify LM Studio yet. Confirm the server is running and a chat model is loaded, \
-            then try Refine again.
-            """
-        case .noModelLoaded:
-            return """
-            LM Studio is reachable but no chat model is loaded. Load a model in LM Studio, \
-            then try Refine again.
-            """
-        case .connected:
-            return nil
+        RefineAvailability.refineBlockedMessage(connectionState: connectionState)
+    }
+
+    private func handleBlockSplit(blockID: UUID, cursorOffset: Int, document: VaultDocument) {
+        guard let result = BlockKeyboardEditing.split(
+            blocks: &editingBlocks,
+            blockID: blockID,
+            cursorOffset: cursorOffset
+        ) else { return }
+        blockFormatting.requestFocus(blockID: result.focusBlockID)
+        commitBlocks(document: document, blocks: editingBlocks)
+    }
+
+    private func handleBlockMerge(blockID: UUID, document: VaultDocument) {
+        guard let result = BlockKeyboardEditing.mergeWithPrevious(blocks: &editingBlocks, blockID: blockID) else {
+            return
         }
+        blockFormatting.requestFocus(blockID: result.focusBlockID)
+        commitBlocks(document: document, blocks: editingBlocks)
     }
 
     private func insertBlock(_ block: NoteBlock) {

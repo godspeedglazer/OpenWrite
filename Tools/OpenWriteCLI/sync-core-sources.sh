@@ -26,7 +26,12 @@ for rel in \
   Import/MarkdownImporter.swift \
   Models/PageType.swift \
   Models/PageProperties.swift \
-  NoteDSL/NDLParser.swift
+  NoteDSL/NDLParser.swift \
+  NoteDSL/BlockRefinement.swift \
+  NoteDSL/RefinePrompts.swift \
+  AI/OWActionScript.swift \
+  Import/RichPasteImporter.swift \
+  UI/Editor/BlockKeyboardEditing.swift
 do
   link "$rel"
 done

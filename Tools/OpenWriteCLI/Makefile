@@ -4,7 +4,7 @@ BINDIR ?= $(PREFIX)/bin
 CLI_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 BUILD_DIR := $(CLI_DIR).build/release
 
-.PHONY: sync build install uninstall test-queries query stats index
+.PHONY: sync build install uninstall test-queries test-writing test-all query stats index
 
 sync:
 	@$(CLI_DIR)sync-core-sources.sh
@@ -31,6 +31,12 @@ RUN := $(BUILD_DIR)/openwrite
 
 test-queries: build
 	@$(RUN) test-queries --reindex
+
+test-writing: build
+	@$(RUN) test-writing
+
+test-all: build
+	@$(RUN) test-all --reindex
 
 query: build
 	@$(RUN) query $(ARGS)
